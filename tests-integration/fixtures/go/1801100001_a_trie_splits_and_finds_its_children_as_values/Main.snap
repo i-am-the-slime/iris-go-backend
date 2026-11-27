@@ -1,0 +1,254 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Map/Internal/internal.go
+package internal
+
+import "fixture/Data/Maybe"
+
+type Map struct {
+	Node3 Node
+	Node4 *Map
+	Node5 *Map
+	Node0 int
+	Node1 int
+	Node2 int
+}
+
+var SharedMapLeaf = &Map{}
+
+type Node struct {
+	Children *Map
+	Passing  int
+}
+
+type MaybeTrie struct {
+	Just Node
+	Tag  uint8
+}
+
+type Split struct {
+	First  MaybeTrie
+	Second *Map
+	Third  *Map
+}
+
+var NoTrie = MaybeTrie{Tag: maybe.TagNothing}
+
+func JustTrie(just Node) MaybeTrie {
+	return MaybeTrie{Tag: maybe.TagJust, Just: just}
+}
+
+func NodeMap(node0 int, node1 int, node2 int, node3 Node, node4 *Map, node5 *Map) *Map {
+	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+func UnsafeBalancedNode(k int, v Node, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return NodeMap(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+		}
+		if r.Node0 > 1 {
+			return UnsafeBalancedNodeRotateLeft(k, v, l, r.Node2, r.Node3, r.Node4, r.Node5)
+		}
+		return UnsafeNode(k, v, l, r)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapLeaf {
+		rh := r.Node0
+		if rh > lh+1 {
+			return UnsafeBalancedNodeRotateLeft(k, v, l, r.Node2, r.Node3, r.Node4, r.Node5)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	if r == SharedMapLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	return UnsafeNode(k, v, l, r)
+}
+
+func UnsafeNode(k int, v Node, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return NodeMap(1, 1, k, v, l, r)
+		}
+		return NodeMap(1+r.Node0, 1+r.Node1, k, v, l, r)
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapLeaf {
+		return NodeMap(1+h1, 1+s1, k, v, l, r)
+	}
+	h2 := r.Node0
+	result := max(h1, h2)
+	return NodeMap(1+result, 1+s1+r.Node1, k, v, l, r)
+}
+
+func UnsafeSplitCompare(k int, m *Map) Split {
+	if m == SharedMapLeaf {
+		return Split{First: NoTrie, Second: SharedMapLeaf, Third: SharedMapLeaf}
+	}
+	mk := m.Node2
+	mv := m.Node3
+	ml := m.Node4
+	mr := m.Node5
+	if k < mk {
+		scrutinee := UnsafeSplitCompare(k, ml)
+		return Split{First: scrutinee.First, Second: scrutinee.Second, Third: UnsafeBalancedNode(mk, mv, scrutinee.Third, mr)}
+	}
+	if k == mk {
+		return Split{First: JustTrie(mv), Second: ml, Third: mr}
+	}
+	scrutinee2 := UnsafeSplitCompare(k, mr)
+	return Split{First: scrutinee2.First, Second: UnsafeBalancedNode(mk, mv, ml, scrutinee2.Second), Third: scrutinee2.Third}
+}
+
+func UnsafeBalancedNodeRotateLeft(k int, v Node, l *Map, rk int, rv Node, rl *Map, rr *Map) *Map {
+	if rl != SharedMapLeaf {
+		var result int
+		if rr == SharedMapLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if rl.Node0 > result {
+			return UnsafeNode(rl.Node2, rl.Node3, UnsafeNode(k, v, l, rl.Node4), UnsafeNode(rk, rv, rl.Node5, rr))
+		}
+	}
+	return UnsafeNode(rk, rv, UnsafeNode(k, v, l, rl), rr)
+}
+
+func UnsafeBalancedNodeRotateRight(k int, v Node, lk int, lv Node, ll *Map, lr *Map, r *Map) *Map {
+	if lr != SharedMapLeaf {
+		var result int
+		if ll == SharedMapLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= lr.Node0 {
+			return UnsafeNode(lr.Node2, lr.Node3, UnsafeNode(lk, lv, ll, lr.Node4), UnsafeNode(k, v, lr.Node5, r))
+		}
+	}
+	return UnsafeNode(lk, lv, ll, UnsafeNode(k, v, lr, r))
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	function := func(trie internal.Node) func(int) internal.Node {
+		return func(key int) internal.Node {
+			return bump(trie, key)
+		}
+	}
+	mapped := make([]int, 1000)
+	for index := range 1000 {
+		value := 1 + index
+		mapped[index] = prim.IntModPositive(value, 26)
+	}
+	trie2 := array.Foldl(func(trie internal.Node, i int) internal.Node {
+		return function(trie)(i)
+	}, emptyTrie, mapped)
+	scrutinee := mainGo(trie2.Children)
+	var result int
+	if scrutinee.Tag == maybe.TagJust {
+		result = scrutinee.Just.Passing
+	} else {
+		result = 0
+	}
+	scrutinee2 := mainGo2(trie2.Children)
+	var result2 int
+	if scrutinee2.Tag == maybe.TagJust {
+		result2 = scrutinee2.Just.Passing
+	} else {
+		result2 = 0
+	}
+	return result + result2
+}
+
+func bump(trie internal.Node, key int) internal.Node {
+	updated := trie
+	scrutinee := internal.UnsafeSplitCompare(key, trie.Children)
+	var child internal.Node
+	switch scrutinee.First.Tag {
+	case maybe.TagNothing:
+		child = emptyTrie
+	default: // maybe.TagJust
+		child = scrutinee.First.Just
+	}
+	child.Passing += 1
+	updated.Children = internal.UnsafeBalancedNode(key, child, scrutinee.Second, scrutinee.Third)
+	return updated
+}
+
+var emptyTrie internal.Node = internal.Node{Passing: 0, Children: internal.SharedMapLeaf}
+
+func mainGo(value *internal.Map) internal.MaybeTrie {
+	for {
+		if value == internal.SharedMapLeaf {
+			return internal.NoTrie
+		}
+		mk := value.Node2
+		mv := value.Node3
+		ml := value.Node4
+		mr := value.Node5
+		if 3 < mk {
+			value = ml
+			continue
+		}
+		if 3 == mk {
+			return internal.JustTrie(mv)
+		}
+		value = mr
+	}
+}
+
+func mainGo2(value *internal.Map) internal.MaybeTrie {
+	for {
+		if value == internal.SharedMapLeaf {
+			return internal.NoTrie
+		}
+		mk := value.Node2
+		mv := value.Node3
+		ml := value.Node4
+		mr := value.Node5
+		if 30 < mk {
+			value = ml
+			continue
+		}
+		if 30 == mk {
+			return internal.JustTrie(mv)
+		}
+		value = mr
+	}
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}

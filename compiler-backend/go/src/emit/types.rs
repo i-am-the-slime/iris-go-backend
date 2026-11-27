@@ -687,6 +687,7 @@ where
     fn reaches_itself(&mut self, data: &DataType, through_arrays: bool) -> GoResult<bool> {
         let mut pending: Vec<MonotypeId> = vec![];
         let mut visited: FxHashSet<DataType> = FxHashSet::default();
+        let mut unfolded: FxHashSet<DataType> = FxHashSet::default();
         visited.insert(data.clone());
         pending.extend(self.constructor_fields(data)?);
         while let Some(monotype) = pending.pop() {
@@ -700,7 +701,14 @@ where
                 Monotype::Record(fields) => {
                     pending.extend(fields.iter().map(|field| field.monotype))
                 }
-                Monotype::Recursive(_) => return Ok(true),
+                // A recursive newtype reaches the data type only if its unfolding does: a
+                // `Maybe Trie`, where `Trie` recurses through a `Map` of its own, holds no
+                // `Maybe Trie` and can be a value.
+                Monotype::Recursive(inner) => {
+                    if unfolded.insert(inner.clone()) {
+                        pending.push(self.unfold(&inner)?);
+                    }
+                }
                 Monotype::Array(element) | Monotype::MutableArray(element) if through_arrays => {
                     pending.push(element)
                 }
