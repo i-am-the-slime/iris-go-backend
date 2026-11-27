@@ -56,24 +56,8 @@ func Nub(xs []float64) []float64 {
 			}
 		}
 		performed := shared.Frozen(array2)
-		array := direct.SortBy(performed, func(x tuple.TupleNumber, y tuple.TupleNumber) int {
-			i := x.First
-			i2 := y.First
-			var result ordering.Ordering
-			if i < i2 {
-				result = ordering.OrderingLT
-			} else if i == i2 {
-				result = ordering.OrderingEQ
-			} else {
-				result = ordering.OrderingGT
-			}
-			switch result {
-			case ordering.OrderingLT:
-				return -1
-			case ordering.OrderingGT:
-				return 1
-			}
-			return 0
+		array := shared.SortByKey(performed, func(x tuple.TupleNumber) int {
+			return x.First
 		})
 		mapped2 := make([]float64, len(array))
 		for index := range array {
@@ -230,7 +214,6 @@ import (
 	"fixture/Data/Tuple"
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
@@ -241,14 +224,8 @@ func main() {
 	mainRecord(shown, show.ArrayChar(arraypkg.NubComparable([]rune{'x', 'y', 'x'})))
 	mainRecord(shown, show.ArrayBoolean(arraypkg.NubComparable([]bool{true, false, true})))
 	mainRecord(shown, show.ArrayNumber(dataarray.Nub([]float64{1.5, 0.5, 1.5})))
-	indexedAndSorted := direct.SortBy([]tuple.TupleInt{{First: 0, Second: 1}, {First: 1, Second: 4}, {First: 2, Second: 2}, {First: 3, Second: 5}, {First: 4, Second: 3}}, func(x tuple.TupleInt, y tuple.TupleInt) int {
-		switch mainComp(x.Second, y.Second) {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
+	indexedAndSorted := shared.SortByKey([]tuple.TupleInt{{First: 0, Second: 1}, {First: 1, Second: 4}, {First: 2, Second: 2}, {First: 3, Second: 5}, {First: 4, Second: 3}}, func(x tuple.TupleInt) int {
+		return prim.IntModPositive(x.Second, 3)
 	})
 	var result []int
 	if len(indexedAndSorted) > 0 {
@@ -268,24 +245,8 @@ func main() {
 			}
 		}
 		performed := shared.Frozen(array2)
-		array := direct.SortBy(performed, func(x tuple.TupleInt, y tuple.TupleInt) int {
-			i := x.First
-			i2 := y.First
-			var result2 ordering.Ordering
-			if i < i2 {
-				result2 = ordering.OrderingLT
-			} else if i == i2 {
-				result2 = ordering.OrderingEQ
-			} else {
-				result2 = ordering.OrderingGT
-			}
-			switch result2 {
-			case ordering.OrderingLT:
-				return -1
-			case ordering.OrderingGT:
-				return 1
-			}
-			return 0
+		array := shared.SortByKey(performed, func(x tuple.TupleInt) int {
+			return x.First
 		})
 		mapped := make([]int, len(array))
 		for index := range array {
@@ -335,6 +296,55 @@ package shared
 
 type Ref[T any] struct {
 	Value T
+}
+
+type SortByKeyOrdered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
+
+type SortByKeyEntry[K SortByKeyOrdered] struct {
+	key   K
+	index int
+}
+
+func SortByKey[T any, K SortByKeyOrdered](xs []T, key func(T) K) []T {
+	entries := make([]SortByKeyEntry[K], len(xs))
+	for index, x := range xs {
+		entries[index] = SortByKeyEntry[K]{key: key(x), index: index}
+	}
+	if len(xs) > 1 {
+		scratch := make([]SortByKeyEntry[K], len(xs))
+		copy(scratch, entries)
+		SortByKeyMerge(entries, scratch, 0, len(xs))
+	}
+	sorted := make([]T, len(xs))
+	for index, entry := range entries {
+		sorted[index] = xs[entry.index]
+	}
+	return sorted
+}
+
+func SortByKeyMerge[K SortByKeyOrdered](into []SortByKeyEntry[K], from []SortByKeyEntry[K], low int, high int) {
+	middle := low + (high-low)>>1
+	if middle-low > 1 {
+		SortByKeyMerge(from, into, low, middle)
+	}
+	if high-middle > 1 {
+		SortByKeyMerge(from, into, middle, high)
+	}
+	i, j, k := low, middle, low
+	for i < middle && j < high {
+		if from[j].key < from[i].key {
+			into[k] = from[j]
+			j++
+		} else {
+			into[k] = from[i]
+			i++
+		}
+		k++
+	}
+	k += copy(into[k:], from[i:middle])
+	copy(into[k:], from[j:high])
 }
 
 func Frozen[T any](elements []T) []T {

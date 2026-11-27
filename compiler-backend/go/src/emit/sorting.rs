@@ -5,7 +5,7 @@ use super::{Emitter, binary, call, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{Comparison, Foreign, GoFunction, GoPackage, Operator};
 use crate::lift::collect_binders;
-use crate::monomorphic::traversal::{for_each_child_mut, visit};
+use crate::monomorphic::traversal::{for_each_binder_mut, for_each_child_mut, visit};
 use crate::monomorphic::{
     Expression, ExpressionKind, Guarded, Literal, Local, LocalId, PatternKind,
 };
@@ -378,7 +378,7 @@ where
         if free[0].contains(&second) || free[1].contains(&first) {
             return None;
         }
-        (renamed(&keys[1], second, first) == keys[0]).then_some(Ordering {
+        same_but_for_binders(&keys[0], renamed(&keys[1], second, first)).then_some(Ordering {
             parameters,
             keys,
             primitive,
@@ -537,6 +537,27 @@ fn rename(expression: &mut Expression, from: LocalId, to: LocalId) {
         *id = to;
     }
     for_each_child_mut(expression, &mut |child| rename(child, from, to));
+}
+
+/// Whether two keys are one expression but for the locals each binds inside, as the field that
+/// `snd x` and `snd y` take apart from their pairs.
+fn same_but_for_binders(key: &Expression, mut other: Expression) -> bool {
+    let mut ours = vec![];
+    for_each_binder_mut(&mut key.clone(), &mut |local| ours.push(local.clone()));
+    let mut theirs = vec![];
+    for_each_binder_mut(&mut other, &mut |local| theirs.push(local.id));
+    if ours.len() != theirs.len() {
+        return false;
+    }
+    for (from, to) in theirs.into_iter().zip(ours) {
+        rename(&mut other, from, to.id);
+        for_each_binder_mut(&mut other, &mut |local| {
+            if local.id == from {
+                *local = to.clone();
+            }
+        });
+    }
+    other == *key
 }
 
 fn free_locals(expression: &Expression) -> Vec<LocalId> {
