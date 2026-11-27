@@ -379,7 +379,7 @@ impl<'p> Webs<'p> {
             },
             ExpressionKind::Apply { function, arguments } => {
                 if let Some(operation) = self.operation(function, arguments) {
-                    return self.operation_value(function, operation, arguments);
+                    return self.operation_value(expression, function, operation, arguments);
                 }
                 if let Some(id) = self.called(function, arguments.len()) {
                     self.arguments(id, arguments);
@@ -426,23 +426,37 @@ impl<'p> Webs<'p> {
 
     fn operation_value(
         &mut self,
+        call: &Expression,
         function: &Expression,
         operation: MapOperation,
         arguments: &'p [Expression],
     ) -> Node {
-        let node = self.operation_node(operation, arguments);
+        let node = self.operation_node(call, operation, arguments);
         if let ExpressionKind::Function(id) = function.kind {
             self.calls.push((id, node));
         }
         node
     }
 
-    fn operation_node(&mut self, operation: MapOperation, arguments: &'p [Expression]) -> Node {
+    /// The node of the map a map operation works on. A map of a type that no operation of the
+    /// program builds an entry of has no [`MapShape`] and is a tree.
+    fn operation_node(
+        &mut self,
+        call: &Expression,
+        operation: MapOperation,
+        arguments: &'p [Expression],
+    ) -> Node {
         let map = operation.map_position();
+        let made = map.map_or(call.monotype, |position| arguments[position].monotype);
+        let shaped = self.is_map(made);
         for (position, argument) in arguments.iter().enumerate() {
-            if Some(position) != map && !(operation == MapOperation::Difference && position == 1) {
+            let taken_away = operation == MapOperation::Difference && position == 1;
+            if !shaped || (Some(position) != map && !taken_away) {
                 self.expression(argument);
             }
+        }
+        if !shaped {
+            return self.fresh(true);
         }
         let Some(position) = map else { return self.fresh(false) };
         let node = self.value(&arguments[position]);
@@ -546,7 +560,7 @@ impl<'p> Webs<'p> {
             ExpressionKind::Function(id) => self.opaque_function(*id),
             ExpressionKind::Apply { function, arguments } => {
                 if let Some(operation) = self.operation(function, arguments) {
-                    self.operation_value(function, operation, arguments);
+                    self.operation_value(expression, function, operation, arguments);
                     return;
                 }
                 if let Some(id) = self.called(function, arguments.len()) {

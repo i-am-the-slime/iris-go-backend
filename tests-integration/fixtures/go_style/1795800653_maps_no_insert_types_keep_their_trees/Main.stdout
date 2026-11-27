@@ -1,0 +1,2 @@
+-- a map of a type that nothing inserts into is only read, as a tree
+(fromFoldable [(Tuple 1 1.0),(Tuple 2 0.5),(Tuple 3 0.0)])
