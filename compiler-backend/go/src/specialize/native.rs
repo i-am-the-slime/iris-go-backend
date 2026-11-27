@@ -276,8 +276,11 @@ fn boxed_reason(
     let Some(declaration) = declaration else {
         return Some(format!("its Go declares no generic `{go_name}`"));
     };
+    // Go infers the type parameters after the quantified ones from the arguments.
     if let Some(quantifiers) = quantifiers
-        && quantifiers != declaration.parameters.len()
+        && !declaration.parameters.get(quantifiers..).is_some_and(|extra| {
+            extra.iter().all(|parameter| declaration.inferred.contains(parameter))
+        })
     {
         let parameters = declaration.parameters.len();
         return Some(format!(

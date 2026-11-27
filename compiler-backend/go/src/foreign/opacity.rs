@@ -36,6 +36,9 @@ pub enum ForeignShape {
 pub struct OpaqueDeclaration {
     pub name: String,
     pub parameters: Vec<String>,
+    /// The type parameters that the types of a function's value parameters name, which Go
+    /// infers from its arguments.
+    pub inferred: Vec<String>,
     pub escapes: Vec<Escape>,
 }
 
@@ -408,7 +411,43 @@ impl TypeParameter {
             _ => false,
         }
     }
+
+    /// Whether the constraint's type set holds only Go's basic types (`cmp.Ordered`,
+    /// `~int | ~string`), whose values are the same in every convention: the function can only
+    /// compare and order them, and an instantiation at any other type does not compile.
+    fn admits_only_basic_values(&self) -> bool {
+        let terms = split_top(&self.constraint, "|");
+        !terms.is_empty() && terms.into_iter().all(is_basic_type_term)
+    }
 }
+
+fn is_basic_type_term(term: &[Token]) -> bool {
+    match term {
+        [package, dot, name] if dot.is(".") => {
+            let spelled = format!("{}.{}", package.word().unwrap_or_default(), name.word().unwrap_or_default());
+            BASIC_CONSTRAINTS.contains(&spelled.as_str())
+        }
+        [tilde, name] if tilde.is("~") => name.word().is_some_and(|name| BASIC_TYPES.contains(&name)),
+        [name] => name.word().is_some_and(|name| BASIC_TYPES.contains(&name)),
+        _ => false,
+    }
+}
+
+/// Go's predeclared types whose values every convention represents as themselves.
+const BASIC_TYPES: &[&str] = &[
+    "bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32",
+    "uint64", "uintptr", "byte", "rune", "float32", "float64", "string",
+];
+
+/// Constraints of the standard library and `x/exp` whose type sets hold only basic types.
+const BASIC_CONSTRAINTS: &[&str] = &[
+    "cmp.Ordered",
+    "constraints.Ordered",
+    "constraints.Integer",
+    "constraints.Signed",
+    "constraints.Unsigned",
+    "constraints.Float",
+];
 
 struct Function {
     name: String,
@@ -548,11 +587,13 @@ impl Package {
         let functions = self.functions.iter().map(|function| OpaqueDeclaration {
             name: function.name.clone(),
             parameters: parameter_names(&function.type_parameters),
+            inferred: inferred_names(function),
             escapes: surroundings.escapes(function),
         });
         let types = self.types.iter().map(|declaration| OpaqueDeclaration {
             name: declaration.name.clone(),
             parameters: parameter_names(&declaration.type_parameters),
+            inferred: vec![],
             escapes: type_escapes(declaration, &escaping),
         });
         Opacity {
@@ -812,6 +853,38 @@ fn parameter_names(parameters: &[TypeParameter]) -> Vec<String> {
     parameters.iter().map(|parameter| parameter.name.clone()).collect()
 }
 
+/// The result of calling a value of a function type, `R` in `func(A) R`.
+fn called_result(function: &[Token]) -> Option<&[Token]> {
+    let [keyword, open, ..] = function else { return None };
+    if !keyword.is_word("func") || !open.is("(") {
+        return None;
+    }
+    let result = &function[closing(function, 1)? + 1..];
+    match result {
+        [open, inner @ .., close] if open.is("(") && closing(result, 0)? == result.len() - 1 => {
+            (split_top(inner, ",").len() == 1 && close.is(")")).then_some(inner)
+        }
+        _ => Some(result),
+    }
+}
+
+/// The type of an element of a map, slice or array type, `V` in `map[K]V`.
+fn element_type(container: &[Token]) -> Option<&[Token]> {
+    let open = match container {
+        [keyword, open, ..] if keyword.is_word("map") && open.is("[") => 1,
+        [open, ..] if open.is("[") => 0,
+        _ => return None,
+    };
+    let element = &container[closing(container, open)? + 1..];
+    (!element.is_empty()).then_some(element)
+}
+
+fn inferred_names(function: &Function) -> Vec<String> {
+    let mut names = parameter_names(&function.type_parameters);
+    names.retain(|name| mentions(&function.parameters, name));
+    names
+}
+
 fn value_parameter_names(parameters: &[Token]) -> Vec<&str> {
     split_top(parameters, ",")
         .into_iter()
@@ -862,7 +935,9 @@ fn called_name(tokens: &[Token], open: usize) -> Option<&str> {
 }
 
 fn constraint_escapes(parameters: &[TypeParameter]) -> Vec<Escape> {
-    let constrained = parameters.iter().filter(|parameter| !parameter.is_unconstrained());
+    let constrained = parameters.iter().filter(|parameter| {
+        !parameter.is_unconstrained() && !parameter.admits_only_basic_values()
+    });
     let escapes = constrained.map(|parameter| Escape {
         parameter: Some(parameter.name.clone()),
         reason: format!("is constrained by `{}`", spelled(&parameter.constraint)),
@@ -1315,6 +1390,13 @@ impl<'f> Flow<'f> {
                 index = body_close + 1;
                 continue;
             }
+            if let Some((after, read)) = self.read_through(index, range.end) {
+                if mentions(read, self.parameter) {
+                    return true;
+                }
+                index = after;
+                continue;
+            }
             if let Some(word) = tokens[index].word() {
                 let selected = index > 0 && tokens[index - 1].is(".");
                 let counted = !selected
@@ -1331,6 +1413,27 @@ impl<'f> Flow<'f> {
             index += 1;
         }
         false
+    }
+
+    /// A local read through the calls and indexes its declared type spells out, as in
+    /// `pair(key)(value)` or `entries[key]`: what it reads has the type they leave, whatever the
+    /// arguments and keys hold. The position after the reads, and that type.
+    fn read_through(&self, start: usize, end: usize) -> Option<(usize, &'f [Token])> {
+        let tokens = self.tokens;
+        let name = tokens[start].word()?;
+        if start > 0 && tokens[start - 1].is(".") {
+            return None;
+        }
+        let mut read = *self.declared.get(name)?;
+        let mut index = start + 1;
+        while index < end && (tokens[index].is("(") || tokens[index].is("[")) {
+            read = match tokens[index].is("(") {
+                true => called_result(read)?,
+                false => element_type(read)?,
+            };
+            index = closing(tokens, index)? + 1;
+        }
+        (index > start + 1).then_some((index, read))
     }
 
     /// The braces around the body of the function literal starting at the `func` keyword. A
@@ -1807,6 +1910,87 @@ func AtomicModifyIORefImpl[A, B, T any](first func(T) A, second func(T) B, f fun
         for name in ["IORef", "ioref", "NewIORefImpl", "ReadIORefImpl", "AtomicModifyIORefImpl"] {
             assert_eq!(escapes(source, name), Vec::<String>::new(), "{name}");
         }
+    }
+
+    #[test]
+    fn a_constraint_that_admits_only_basic_types_looks_into_nothing() {
+        let source = "package ffi
+
+import \"cmp\"
+
+type Table[K cmp.Ordered, V any] = map[K]V
+
+func Smaller[A cmp.Ordered](left A, right A) A { return min(left, right) }
+
+func Sum[N ~int | ~float64](left N, right N) N { return left + right }
+
+func Same[A comparable](left A, right A) bool { return left == right }
+
+func Shown[A interface{ String() string }](value A) string { return value.String() }
+";
+        assert_eq!(escapes(source, "Table"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Smaller"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Sum"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Same"), ["type parameter A is constrained by `comparable`"]);
+        assert_eq!(
+            escapes(source, "Shown"),
+            ["type parameter A is constrained by `interface{String()string}`"]
+        );
+    }
+
+    #[test]
+    fn a_value_read_through_a_callback_or_an_index_has_the_type_they_leave() {
+        let source = "package ffi
+
+import (
+	\"cmp\"
+	\"maps\"
+	\"slices\"
+)
+
+func Values[K cmp.Ordered, V any](entries map[K]V) []V {
+	sorted := make([]V, 0, len(entries))
+	for _, key := range slices.Sorted(maps.Keys(entries)) {
+		sorted = append(sorted, entries[key])
+	}
+	return sorted
+}
+
+func Entries[K cmp.Ordered, V, T any](pair func(K) func(V) T, entries map[K]V) []T {
+	sorted := make([]T, 0, len(entries))
+	for _, key := range slices.Sorted(maps.Keys(entries)) {
+		sorted = append(sorted, pair(key)(entries[key]))
+	}
+	return sorted
+}
+
+func Keys[K cmp.Ordered, V any](same func(K) K, entries map[K]V) []V {
+	kept := make([]V, 0, len(entries))
+	for key := range entries {
+		kept = append(kept, same(key))
+	}
+	return kept
+}
+";
+        assert_eq!(escapes(source, "Values"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Entries"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Keys"), ["type parameter K assigns a value to `kept`"]);
+    }
+
+    #[test]
+    fn go_infers_the_type_parameters_its_value_parameters_name() {
+        let source = "package ffi
+
+func LookupImpl[K comparable, V, M any](just func(V) M, nothing M, key K, entries map[K]V) M {
+	return nothing
+}
+
+func Empty[K comparable, V, M any]() map[K]V { return map[K]V{} }
+";
+        let opacity = foreign_opacity(&[source]);
+        let inferred = |name: &str| opacity.function(name).map(|function| function.inferred.clone());
+        assert_eq!(inferred("LookupImpl"), Some(vec!["K".into(), "V".into(), "M".into()]));
+        assert_eq!(inferred("Empty"), Some(vec![]));
     }
 
     #[test]
