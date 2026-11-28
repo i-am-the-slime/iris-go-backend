@@ -205,8 +205,9 @@ mod tests {
     #[test]
     fn leaves_a_go_mod_that_already_requires_as_much_untouched() {
         let go_mod = "module m\n\nrequire (\n\ta.example/x v1.2.0\n\tb.example/y v0.3.0\n)\n";
-        let added =
-            [required("a.example/x", "v1.1.9", false), required("b.example/y", "v0.3.0", true)];
+        let older = required("a.example/x", "v1.1.9", false);
+        let already_required = required("b.example/y", "v0.3.0", true);
+        let added = [older, already_required];
         assert_eq!(with_requirements(go_mod, &added), None);
     }
 

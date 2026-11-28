@@ -193,9 +193,8 @@ where
         (file_id, term): (FileId, TermItemId),
     ) -> GoResult<bool> {
         let module = self.context.module(file_id)?;
-        let IndexedTermItemKind::Constructor { type_id: Some(type_item), .. } =
-            module.indexed.items[term].kind
-        else {
+        let item = &module.indexed.items[term];
+        let IndexedTermItemKind::Constructor { type_id: Some(type_item), .. } = item.kind else {
             return Ok(false);
         };
         Ok(matches!(
@@ -204,30 +203,18 @@ where
         ))
     }
 
-    pub(super) fn checked_binder_source(
-        &self,
-        scope: &Scope,
-        binder: tree::BinderId,
-    ) -> LocalSource {
-        match scope.module.checked.tree[binder].source {
-            tree::BinderSource::Binder(source) => LocalSource::Binder(source),
-            _ => LocalSource::Checked(binder),
-        }
-    }
-
     pub(super) fn scheme_construction(
         &mut self,
         scope: &mut Scope,
         id: tree::ExpressionId,
     ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
-        let closed =
-            self.context.types.substitute(module.checked.tree[id].type_id, &scope.substitution);
+        let type_id = module.checked.tree[id].type_id;
+        let closed = self.context.types.substitute(type_id, &scope.substitution);
         let Some(scheme) = constrained_scheme(&mut self.context, closed)? else {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct { construct: "constrained higher-rank arguments" },
-            ));
+            return Err(scope.unsupported(UnsupportedState::Construct {
+                construct: "constrained higher-rank arguments",
+            }));
         };
         let mut binders = vec![];
         let mut body = id;
@@ -238,18 +225,17 @@ where
             body = expression;
         }
         if binders.len() != scheme.constraints.len() {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct { construct: "constrained higher-rank arguments" },
-            ));
+            return Err(scope.unsupported(UnsupportedState::Construct {
+                construct: "constrained higher-rank arguments",
+            }));
         }
         let monotype = self.closed_monotype(scope, closed)?;
         self.note_construction(&scheme.key);
         let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
         let mut fields = Vec::with_capacity(instantiations.len());
         for instantiation in instantiations {
-            let (parameters, dictionaries) =
-                self.reified_parameters(scope, &scheme, &instantiation)?;
+            let reified = self.reified_parameters(scope, &scheme, &instantiation)?;
+            let (parameters, dictionaries) = reified;
             let substitution = scope.substitution.clone();
             let givens = scope.givens.clone();
             scope
@@ -297,7 +283,7 @@ where
         };
         let Some(scheme) = scheme else {
             if !dictionaries.is_empty() {
-                return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+                return Err(scope.unsupported(UnsupportedState::UnabstractedEvidence));
             }
             return Ok(local);
         };
@@ -309,9 +295,7 @@ where
                 return Ok(local);
             }
             let variable = self.variable_text(name)?;
-            return Err(
-                self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
-            );
+            return Err(scope.unsupported(UnsupportedState::UninstantiatedVariable { variable }));
         }
         let types: Vec<TypeId> = scheme.names.iter().map(|name| instantiations[name]).collect();
         let instantiated = scheme.instantiate(&self.context, &types);
@@ -363,14 +347,14 @@ where
                 continue;
             };
             let Some(constraint) = reified.next() else {
-                return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+                return Err(scope.unsupported(UnsupportedState::UnboundEvidence));
             };
             let monotype = match reified_value(&mut self.context, constraint)? {
                 Some(ReifiedValue::Symbol) => self.monotypes.intern(Monotype::String),
                 Some(ReifiedValue::Reflected(reflected)) => {
                     self.closed_monotype(scope, reflected)?
                 }
-                None => return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence)),
+                None => return Err(scope.unsupported(UnsupportedState::UnboundEvidence)),
             };
             let parameter = self.fresh_local(SmolStr::new_static("reified"), monotype);
             let value = parameter.expression();
@@ -400,7 +384,7 @@ where
     ) -> GoResult<()> {
         if self.grows_construction(&key, &types) {
             let Some(owner) = self.monotypes.schemes.rank_n_owner(&key) else {
-                return Err(self.unsupported(scope, UnsupportedState::GrowingEvidence));
+                return Err(scope.unsupported(UnsupportedState::GrowingEvidence));
             };
             self.growing_owners.push(owner.to_string());
             self.grown = true;
@@ -409,10 +393,9 @@ where
         let known = self.monotypes.schemes.get(&key);
         let labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
         if labels.len() >= SCHEME_INSTANTIATION_LIMIT {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::SpecializationLimit { limit: SCHEME_INSTANTIATION_LIMIT },
-            ));
+            return Err(scope.unsupported(UnsupportedState::SpecializationLimit {
+                limit: SCHEME_INSTANTIATION_LIMIT,
+            }));
         }
         let label = match preferred.filter(|preferred| !labels.contains(preferred)) {
             Some(preferred) => preferred,
@@ -447,8 +430,8 @@ where
         for &type_id in types {
             self.instantiation_suffix(type_id, &mut suffix)?;
         }
-        let base: String =
-            suffix.chars().filter(|character| character.is_ascii_alphanumeric()).collect();
+        let base = suffix.chars().filter(|character| character.is_ascii_alphanumeric());
+        let base: String = base.collect();
         let base = if base.is_empty() { String::from("Instance") } else { base };
         let mut label = SmolStr::from(&base);
         let mut index = 1;
@@ -645,7 +628,7 @@ where
             if !instantiations.contains_key(name) {
                 let variable = self.variable_text(*name)?;
                 return Err(
-                    self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
+                    scope.unsupported(UnsupportedState::UninstantiatedVariable { variable })
                 );
             }
         }
@@ -684,5 +667,12 @@ where
             return Ok(body);
         }
         Ok(self.context.queries.intern_type(Type::Function(argument, stripped)))
+    }
+}
+
+pub(super) fn checked_binder_source(scope: &Scope, binder: tree::BinderId) -> LocalSource {
+    match scope.module.checked.tree[binder].source {
+        tree::BinderSource::Binder(source) => LocalSource::Binder(source),
+        _ => LocalSource::Checked(binder),
     }
 }

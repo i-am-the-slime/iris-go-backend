@@ -42,8 +42,8 @@ impl<'n> NestedResults<'n> {
             }
         }
         loop {
-            let mut uses =
-                NestedUses { functions: &mut self.functions, owner: None, changed: false };
+            let functions = &mut self.functions;
+            let mut uses = NestedUses { functions, owner: None, changed: false };
             for declaration in declarations.iter_mut() {
                 if let GoDeclaration::Written { source, .. } = declaration {
                     let written: Vec<String> = uses
@@ -184,22 +184,23 @@ impl<'n> NestedResults<'n> {
                 then: self.block(then, own, names, changed),
                 otherwise: self.block(otherwise, own, names, changed),
             }),
-            GoStatement::Switch { value, cases, default } => out.push(GoStatement::Switch {
-                value,
-                cases: cases
-                    .into_iter()
-                    .map(|case| GoCase {
-                        values: case.values,
-                        body: self.block(case.body, own, names, changed),
-                        line: case.line,
-                    })
-                    .collect(),
-                default: default.map(|default| GoDefault {
-                    covers: default.covers,
-                    body: self.block(default.body, own, names, changed),
-                    line: default.line,
-                }),
-            }),
+            GoStatement::Switch { value, cases, default } => {
+                let cases = cases.into_iter().map(|case| GoCase {
+                    values: case.values,
+                    body: self.block(case.body, own, names, changed),
+                    line: case.line,
+                });
+                let cases = cases.collect();
+                out.push(GoStatement::Switch {
+                    value,
+                    cases,
+                    default: default.map(|default| GoDefault {
+                        covers: default.covers,
+                        body: self.block(default.body, own, names, changed),
+                        line: default.line,
+                    }),
+                })
+            }
             GoStatement::IfAssert { name, value, type_, then } => out.push(GoStatement::IfAssert {
                 name,
                 value,

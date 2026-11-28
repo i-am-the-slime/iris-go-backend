@@ -31,16 +31,16 @@ where
         let values = self.hoist(values, "values", out);
         let units = self.temporary("units");
         let array_type = self.go_type(monotype)?;
-        let count =
-            binary(GoBinaryOperator::Multiply, length(functions.clone()), length(values.clone()));
+        let functions_length = length(functions.clone());
+        let count = binary(GoBinaryOperator::Multiply, functions_length, length(values.clone()));
         let made = builtin_call(GoBuiltin::Make, vec![GoExpression::Type(array_type), count]);
         out.push(GoStatement::Define { names: vec![units.clone()], values: vec![made] });
         let function = self.temporary("function");
         let value = self.temporary("value");
         let callable = self.value_callable(identifier_expression(&function), function_monotype);
         let mut body = vec![];
-        let application =
-            self.apply_arguments(callable, vec![identifier_expression(&value)], &mut body)?;
+        let argument = identifier_expression(&value);
+        let application = self.apply_arguments(callable, vec![argument], &mut body)?;
         body.push(GoStatement::Expression(application));
         let inner = GoStatement::Range { index: None, element: value, iterable: values, body };
         out.push(GoStatement::Range {

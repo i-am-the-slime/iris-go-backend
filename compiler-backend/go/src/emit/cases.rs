@@ -1,5 +1,6 @@
 //! Pattern matching: cases compiled to `if` chains and `switch` statements.
 
+use super::maybe::{constructor_field, maybe_boolean_test};
 use super::{
     DataKind, DataLayout, Emitter, Exit, GuardChain, Mode, Sink, binary, breaks_to, builtin_call,
     conjunction, ends_in_panic, field, guarded_local_uses, identifier_expression, lines,
@@ -55,8 +56,8 @@ where
                 paths.push(value);
                 continue;
             }
-            let base =
-                bound_name(alternatives, position).unwrap_or_else(|| super::scrutinee_name(&value));
+            let bound = bound_name(alternatives, position);
+            let base = bound.unwrap_or_else(|| super::scrutinee_name(&value));
             paths.push(self.hoist(value, &base, out));
         }
         if let Some(first) = alternatives.first()
@@ -220,13 +221,13 @@ where
             let last = position + 1 == count;
             let line = self.branch_line(alternative.position)?;
             let mut block = vec![];
+            let body = &alternative.body;
             self.bind_pattern_locals(
                 &bindings,
-                |local| guarded_local_uses(&alternative.body, local),
+                |local| guarded_local_uses(body, local),
                 &mut block,
             )?;
-            let terminates =
-                self.guarded_sequential(&alternative.body, mode, exit, last, &mut block)?;
+            let terminates = self.guarded_sequential(body, mode, exit, last, &mut block)?;
             lines::attribute_branch(line.as_ref(), 0, &mut block);
             let condition = if last { None } else { conjunction(tests) };
             match condition {
@@ -341,8 +342,8 @@ where
         let mut block = evaluation;
         bindings.extend(guard_bindings);
         self.guard_chain(rest, tests, bindings, body, chain, &mut block)?;
-        let condition =
-            conjunction(conditions).expect("invariant violated: conditions are pending");
+        let conjoined = conjunction(conditions);
+        let condition = conjoined.expect("invariant violated: conditions are pending");
         let branch = GoStatement::If { condition, then: block, otherwise: vec![] };
         lines::push_at(line.cloned(), branch, out);
         Ok(false)
@@ -525,7 +526,7 @@ where
         tests: &mut Vec<GoExpression>,
         bindings: &mut Bindings,
     ) -> GoResult<()> {
-        if let Some(test) = self.maybe_boolean_test(layout, arguments, path.clone()) {
+        if let Some(test) = maybe_boolean_test(layout, arguments, path.clone()) {
             tests.push(test);
             return Ok(());
         }
@@ -533,7 +534,7 @@ where
             tests.push(test);
         }
         for (position, argument) in arguments.iter().enumerate() {
-            let read = self.constructor_field(layout, constructor, position, path.clone());
+            let read = constructor_field(layout, constructor, position, path.clone());
             self.pattern_tests(argument, read, tests, bindings)?;
         }
         Ok(())

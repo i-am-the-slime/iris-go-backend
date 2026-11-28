@@ -505,13 +505,13 @@ fn reads_before_write(carried: Carried<'_>, expression: &Expression) -> usize {
         | ExpressionKind::EffectBind { .. }
         | ExpressionKind::EffectEach { .. } => reads(carried, expression),
         ExpressionKind::If { condition, then, otherwise } => {
-            let branches =
-                reads_before_write(carried, then).max(reads_before_write(carried, otherwise));
+            let then_reads = reads_before_write(carried, then);
+            let branches = then_reads.max(reads_before_write(carried, otherwise));
             reads_before_write(carried, condition) + branches
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
-            let scrutinised: usize =
-                scrutinees.iter().map(|scrutinee| reads_before_write(carried, scrutinee)).sum();
+            let scrutinee_reads = |scrutinee: &Expression| reads_before_write(carried, scrutinee);
+            let scrutinised: usize = scrutinees.iter().map(scrutinee_reads).sum();
             let branches = alternatives
                 .iter()
                 .map(|alternative| match &alternative.body {

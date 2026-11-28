@@ -47,7 +47,7 @@ where
             };
             let [field] = fields.as_slice() else { return Ok(None) };
             let shown_field = self.shown_field(scope, show, field, value.expression(), text)?;
-            let body = self.constructor_text(name, vec![shown_field], text);
+            let body = constructor_text(name, vec![shown_field], text);
             return Ok(Some(self.lambda(vec![value], body)));
         };
         let declared = self
@@ -66,8 +66,8 @@ where
             let mut texts = vec![];
             for (&field, dictionary) in declared.fields.iter().zip(&shown.fields) {
                 let local = self.fresh_local(self.monotypes.value_name(field), field);
-                let shown_field =
-                    self.shown_field(scope, show, dictionary, local.expression(), text)?;
+                let field_value = local.expression();
+                let shown_field = self.shown_field(scope, show, dictionary, field_value, text)?;
                 texts.push(shown_field);
                 patterns.push(Pattern { kind: PatternKind::Variable(local), monotype: field });
             }
@@ -77,7 +77,7 @@ where
                 arguments: patterns,
             };
             let pattern = Pattern { kind, monotype: argument };
-            let body = self.constructor_text(&shown.name, texts, text);
+            let body = constructor_text(&shown.name, texts, text);
             let body = Guarded::Unconditional(body);
             alternatives.push(Alternative { patterns: vec![pattern], body, position: None });
         }
@@ -138,10 +138,9 @@ where
             return Ok(None);
         };
         let module = self.context.module(file_id)?;
-        let member =
-            module.indexed.items.iter_terms().find_map(|(item, indexed)| {
-                (indexed.name.as_deref() == Some("show")).then_some(item)
-            });
+        let mut term_items = module.indexed.items.iter_terms();
+        let member = term_items
+            .find_map(|(item, indexed)| (indexed.name.as_deref() == Some("show")).then_some(item));
         Ok(member.map(|member| (file_id, member)))
     }
 
@@ -165,33 +164,28 @@ where
         let kind = ExpressionKind::Apply { function: Box::new(function), arguments: vec![field] };
         Ok(Expression::new(kind, text))
     }
+}
 
-    fn constructor_text(
-        &mut self,
-        name: &str,
-        fields: Vec<Expression>,
-        text: MonotypeId,
-    ) -> Expression {
-        let constant = |value: &str| {
-            Expression::new(ExpressionKind::Literal(Literal::String(value.to_string())), text)
-        };
-        if fields.is_empty() {
-            return constant(name);
-        }
-        let append = Foreign::Operator(Operator::StringAppend).interned();
-        let mut parts = vec![constant("("), constant(name)];
-        for field in fields {
-            parts.push(constant(" "));
-            parts.push(field);
-        }
-        parts.push(constant(")"));
-        parts
-            .into_iter()
-            .reduce(|left, right| {
-                let kind =
-                    ExpressionKind::Foreign { foreign: append, arguments: vec![left, right] };
-                Expression::new(kind, text)
-            })
-            .expect("invariant violated: a constructor's text has parts")
+fn constructor_text(name: &str, fields: Vec<Expression>, text: MonotypeId) -> Expression {
+    let constant = |value: &str| {
+        Expression::new(ExpressionKind::Literal(Literal::String(value.to_string())), text)
+    };
+    if fields.is_empty() {
+        return constant(name);
     }
+    let append = Foreign::Operator(Operator::StringAppend).interned();
+    let mut parts = vec![constant("("), constant(name)];
+    for field in fields {
+        parts.push(constant(" "));
+        parts.push(field);
+    }
+    parts.push(constant(")"));
+    parts
+        .into_iter()
+        .reduce(|left, right| {
+            let arguments = vec![left, right];
+            let kind = ExpressionKind::Foreign { foreign: append, arguments };
+            Expression::new(kind, text)
+        })
+        .expect("invariant violated: a constructor's text has parts")
 }

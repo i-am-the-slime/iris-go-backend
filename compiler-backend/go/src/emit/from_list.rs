@@ -54,8 +54,8 @@ where
             names: vec![elements.clone()],
             values: vec![GoExpression::Composite { type_: array_type, fields: vec![] }],
         });
-        let appended =
-            builtin_call(GoBuiltin::Append, vec![identifier_expression(&elements), head]);
+        let arguments = vec![identifier_expression(&elements), head];
+        let appended = builtin_call(GoBuiltin::Append, arguments);
         let body = vec![
             GoStatement::If {
                 condition: negated(&is_cons),

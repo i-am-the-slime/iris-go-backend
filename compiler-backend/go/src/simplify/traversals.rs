@@ -2,6 +2,7 @@ use rustc_hash::FxHashSet;
 
 use super::Simplifier;
 use super::choice::operation;
+use super::constants::int;
 use crate::foreign::{Comparison, Foreign, Iteration, Operator};
 use crate::monomorphic::traversal::{for_each_child_mut, mentions_local};
 use crate::monomorphic::{
@@ -112,10 +113,10 @@ impl Simplifier<'_> {
                     return Err(arguments);
                 };
                 let element = first.clone();
-                let [_, initial, array] =
-                    <[Expression; 3]>::try_from(arguments).unwrap_or_else(|_| {
-                        unreachable!("invariant violated: a fold has three arguments")
-                    });
+                let arguments = <[Expression; 3]>::try_from(arguments);
+                let [_, initial, array] = arguments.unwrap_or_else(|_| {
+                    unreachable!("invariant violated: a fold has three arguments")
+                });
                 let each = ExpressionKind::EffectEach {
                     array: Box::new(array),
                     element,
@@ -130,16 +131,15 @@ impl Simplifier<'_> {
                 let ExpressionKind::EffectBind { action, local, body: step } = &body.kind else {
                     return Err(arguments);
                 };
-                let performs_accumulator =
-                    matches!(action.kind, ExpressionKind::Local(id) if id == first.id);
-                if !performs_accumulator || mentions_local(step, first.id) {
+                let ExpressionKind::Local(performed) = action.kind else { return Err(arguments) };
+                if performed != first.id || mentions_local(step, first.id) {
                     return Err(arguments);
                 }
                 let (element, state, step) = (second.clone(), local.clone(), (**step).clone());
-                let [_, initial, array] =
-                    <[Expression; 3]>::try_from(arguments).unwrap_or_else(|_| {
-                        unreachable!("invariant violated: a fold has three arguments")
-                    });
+                let arguments = <[Expression; 3]>::try_from(arguments);
+                let [_, initial, array] = arguments.unwrap_or_else(|_| {
+                    unreachable!("invariant violated: a fold has three arguments")
+                });
                 let accumulation = Accumulation { initial, array, element, state, step };
                 Ok(self.accumulate(accumulation, monotype))
             }
@@ -224,8 +224,7 @@ impl Simplifier<'_> {
         let Propagation { failed, succeeded, value, mut step } = propagation;
         let integer = self.monotypes.intern(Monotype::Int);
         let boolean = self.monotypes.intern(Monotype::Boolean);
-        let literal =
-            |value| Expression::new(ExpressionKind::Literal(Literal::Int(value)), integer);
+        let literal = |value| int(value, integer);
         snoc_appends(&mut step, &self.appenders, value.id);
         let pure_step = without_effects(&step, state.monotype);
         let is_pure = pure_step.is_some();
@@ -353,9 +352,8 @@ impl Simplifier<'_> {
             return;
         }
         let (monotype, position) = (expression.monotype, expression.position);
-        let ExpressionKind::Apply { function, arguments } =
-            std::mem::replace(&mut expression.kind, ExpressionKind::Unit)
-        else {
+        let kind = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
+        let ExpressionKind::Apply { function, arguments } = kind else {
             unreachable!("invariant violated: the expression was just matched as an application")
         };
         let fuel = std::mem::replace(&mut self.fuel, 1);
@@ -371,14 +369,14 @@ impl Simplifier<'_> {
             self.apply_sequenced_reader(expression);
             return;
         }
-        if let ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments } =
-            &mut expression.kind
+        if let ExpressionKind::Foreign { foreign, arguments } = &mut expression.kind
+            && matches!(foreign, Foreign::RunEffect)
             && let [performed] = arguments.as_mut_slice()
             && let ExpressionKind::EffectPure(value) = &mut performed.kind
         {
             let monotype = value.monotype;
-            let value =
-                std::mem::replace(&mut **value, Expression::new(ExpressionKind::Unit, monotype));
+            let placeholder = Expression::new(ExpressionKind::Unit, monotype);
+            let value = std::mem::replace(&mut **value, placeholder);
             *expression = value;
             return;
         }
@@ -387,8 +385,8 @@ impl Simplifier<'_> {
             && !mentions_local(body, local.id)
         {
             let monotype = body.monotype;
-            let body =
-                std::mem::replace(&mut **body, Expression::new(ExpressionKind::Unit, monotype));
+            let placeholder = Expression::new(ExpressionKind::Unit, monotype);
+            let body = std::mem::replace(&mut **body, placeholder);
             *expression = body;
             return;
         }
@@ -397,9 +395,8 @@ impl Simplifier<'_> {
             return;
         }
         let (monotype, position) = (expression.monotype, expression.position);
-        let ExpressionKind::Foreign { arguments, .. } =
-            std::mem::replace(&mut expression.kind, ExpressionKind::Unit)
-        else {
+        let kind = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
+        let ExpressionKind::Foreign { arguments, .. } = kind else {
             unreachable!("invariant violated: the expression was just matched as a foreign")
         };
         *expression = match self.sequenced_fold(foreign, arguments, monotype) {
@@ -439,7 +436,7 @@ impl Simplifier<'_> {
         let next = self.named_local("next", state.monotype);
         let start = self.named_local("start", state.monotype);
 
-        let read = self.read_reference(&accumulator, monotype);
+        let read = read_reference(&accumulator, monotype);
         let written = ExpressionKind::Foreign {
             foreign: &Foreign::ReferenceWrite,
             arguments: vec![next.expression(), accumulator.expression()],
@@ -454,7 +451,7 @@ impl Simplifier<'_> {
             results: Results::Discarded,
         };
         let each = Expression::new(each, performed_unit);
-        let result = self.read_reference(&accumulator, monotype);
+        let result = read_reference(&accumulator, monotype);
         let folded = self.effect_bind(each, finished, result, monotype);
         let create = ExpressionKind::Foreign {
             foreign: &Foreign::ReferenceNew,
@@ -471,14 +468,14 @@ impl Simplifier<'_> {
             _ => unreachable!("invariant violated: an array traversal traverses an array"),
         }
     }
+}
 
-    fn read_reference(&self, reference: &Local, monotype: MonotypeId) -> Expression {
-        let read = ExpressionKind::Foreign {
-            foreign: &Foreign::ReferenceRead,
-            arguments: vec![reference.expression()],
-        };
-        Expression::new(read, monotype)
-    }
+fn read_reference(reference: &Local, monotype: MonotypeId) -> Expression {
+    let read = ExpressionKind::Foreign {
+        foreign: &Foreign::ReferenceRead,
+        arguments: vec![reference.expression()],
+    };
+    Expression::new(read, monotype)
 }
 
 fn performed_before(
@@ -524,13 +521,11 @@ fn performed_before(
         ExpressionKind::Case { scrutinees, alternatives }
             if !scrutinees.iter().any(|scrutinee| mentions_local(scrutinee, continuation)) =>
         {
-            let alternatives = alternatives
-                .iter()
-                .map(|alternative| {
-                    let body = guarded_before(&alternative.body, continuation, finished)?;
-                    Some(Alternative { body, ..alternative.clone() })
-                })
-                .collect::<Option<Vec<Alternative>>>()?;
+            let alternatives = alternatives.iter().map(|alternative| {
+                let body = guarded_before(&alternative.body, continuation, finished)?;
+                Some(Alternative { body, ..alternative.clone() })
+            });
+            let alternatives = alternatives.collect::<Option<Vec<Alternative>>>()?;
             ExpressionKind::Case { scrutinees: scrutinees.clone(), alternatives }
         }
         _ => return None,
@@ -548,17 +543,14 @@ fn guarded_before(
             Some(Guarded::Unconditional(performed_before(body, continuation, finished)?))
         }
         Guarded::Guards(branches) => {
-            let branches = branches
-                .iter()
-                .map(|branch| {
-                    if branch.guards.iter().any(|guard| mentions_local(guard.value(), continuation))
-                    {
-                        return None;
-                    }
-                    let body = performed_before(&branch.body, continuation, finished)?;
-                    Some(GuardedBranch { guards: branch.guards.clone(), body })
-                })
-                .collect::<Option<Vec<GuardedBranch>>>()?;
+            let branches = branches.iter().map(|branch| {
+                if branch.guards.iter().any(|guard| mentions_local(guard.value(), continuation)) {
+                    return None;
+                }
+                let body = performed_before(&branch.body, continuation, finished)?;
+                Some(GuardedBranch { guards: branch.guards.clone(), body })
+            });
+            let branches = branches.collect::<Option<Vec<GuardedBranch>>>()?;
             Some(Guarded::Guards(branches))
         }
     }
@@ -656,8 +648,8 @@ fn single_field(alternative: &Alternative) -> Option<(Constructed, Local, &Expre
         return None;
     };
     let Guarded::Unconditional(body) = &alternative.body else { return None };
-    let constructed =
-        Constructed { data: data.clone(), constructor: *constructor, field: *monotype };
+    let constructor = *constructor;
+    let constructed = Constructed { data: data.clone(), constructor, field: *monotype };
     Some((constructed, local.clone(), body))
 }
 /// The step with the appender a traversal threads, `append values x`, as `snoc values x`: the
@@ -697,17 +689,15 @@ fn without_effects(expression: &Expression, monotype: MonotypeId) -> Option<Expr
             otherwise: Box::new(without_effects(otherwise, monotype)?),
         },
         ExpressionKind::Case { scrutinees, alternatives } => {
-            let alternatives = alternatives
-                .iter()
-                .map(|alternative| {
-                    let Guarded::Unconditional(body) = &alternative.body else { return None };
-                    Some(Alternative {
-                        patterns: alternative.patterns.clone(),
-                        body: Guarded::Unconditional(without_effects(body, monotype)?),
-                        position: alternative.position,
-                    })
+            let alternatives = alternatives.iter().map(|alternative| {
+                let Guarded::Unconditional(body) = &alternative.body else { return None };
+                Some(Alternative {
+                    patterns: alternative.patterns.clone(),
+                    body: Guarded::Unconditional(without_effects(body, monotype)?),
+                    position: alternative.position,
                 })
-                .collect::<Option<Vec<_>>>()?;
+            });
+            let alternatives = alternatives.collect::<Option<Vec<_>>>()?;
             ExpressionKind::Case { scrutinees: scrutinees.clone(), alternatives }
         }
         _ => return None,

@@ -125,11 +125,8 @@ impl Simplifier<'_> {
         alternatives: &[Alternative],
         monotype: MonotypeId,
     ) -> Option<Expression> {
-        let ExpressionKind::Foreign { foreign: Foreign::Call { boundary, .. }, arguments } =
-            &scrutinee.kind
-        else {
-            return None;
-        };
+        let ExpressionKind::Foreign { foreign, arguments } = &scrutinee.kind else { return None };
+        let Foreign::Call { boundary, .. } = foreign else { return None };
         if !boundary.three_way {
             return None;
         }
@@ -209,8 +206,8 @@ impl Simplifier<'_> {
                 }
             }
         }
-        let possible =
-            branches.iter().fold(NONE, |possible, (outcomes, _, _)| possible.or(*outcomes));
+        let outcomes = branches.iter().map(|(outcomes, _, _)| *outcomes);
+        let possible = outcomes.fold(NONE, Outcomes::or);
         let mut bindings = vec![];
         let left = self.shared_operand(left.clone(), "compared", &mut bindings);
         let right = self.shared_operand(right.clone(), "compared", &mut bindings);
@@ -247,8 +244,8 @@ impl Simplifier<'_> {
                 None => branches.push((outcomes, body.clone(), None)),
             }
         };
-        let (mut comparison, mut then, mut otherwise, mut swapped) =
-            (comparison, then, otherwise, false);
+        let (mut comparison, mut then, mut otherwise) = (comparison, then, otherwise);
+        let mut swapped = false;
         loop {
             let outcomes = Outcomes::of(comparison);
             let outcomes = if swapped { outcomes.swapped() } else { outcomes };
@@ -260,9 +257,8 @@ impl Simplifier<'_> {
             else {
                 break;
             };
-            let Some((next, next_native, next_left, next_right)) =
-                self.native_comparison(condition)
-            else {
+            let next_comparison = self.native_comparison(condition);
+            let Some((next, next_native, next_left, next_right)) = next_comparison else {
                 break;
             };
             swapped = match (
@@ -328,9 +324,10 @@ impl Simplifier<'_> {
     ) -> Expression {
         let Comparands { native, left, right } = comparands;
         if let Some(outcome) = constant_outcome(native, left, right) {
-            let chosen = branches.iter().find(|(outcomes, _, _)| outcomes.and(outcome) != NONE);
-            let (_, body, _) =
-                chosen.expect("invariant violated: the branches cover every outcome");
+            let (_, body, _) = branches
+                .iter()
+                .find(|(outcomes, _, _)| outcomes.and(outcome) != NONE)
+                .expect("invariant violated: the branches cover every outcome");
             return body.clone();
         }
         let [(outcomes, body, position), rest @ ..] = branches else {

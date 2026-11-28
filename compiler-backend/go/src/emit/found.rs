@@ -207,8 +207,8 @@ where
             out.push(GoStatement::Define { names, values: vec![called] });
             return Ok(found);
         }
-        let names: Vec<String> =
-            fields.iter().map(|field| self.temporary(&identifier(&field.label))).collect();
+        let names = fields.iter().map(|field| self.temporary(&identifier(&field.label)));
+        let names: Vec<String> = names.collect();
         let results = names.iter().cloned().chain([found.clone()]).collect();
         out.push(GoStatement::Define { names: results, values: vec![called] });
         let values = fields

@@ -63,8 +63,8 @@ impl InPlace {
 /// `array` is neither rebound nor reassigned there. A body reading more than a couple of the
 /// element's fields keeps its copy, which reads better than `array[index]` at each of them.
 fn reads_in_place(body: &mut Vec<GoStatement>, element: &str, array: &str) -> bool {
-    let mut check =
-        Check { element, array, fields: FxHashSet::default(), refused: false, closure: false };
+    let fields = FxHashSet::default();
+    let mut check = Check { element, array, fields, refused: false, closure: false };
     check.block(body);
     !check.refused && !check.fields.is_empty() && check.fields.len() <= FIELDS_READ_IN_PLACE
 }

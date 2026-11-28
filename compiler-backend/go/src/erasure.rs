@@ -153,8 +153,8 @@ impl Census {
     }
 
     pub fn rows(&self) -> Vec<(Erasure, usize)> {
-        let mut rows: Vec<(Erasure, usize)> =
-            self.counts.iter().map(|(&erasure, &count)| (erasure, count)).collect();
+        let rows = self.counts.iter().map(|(&erasure, &count)| (erasure, count));
+        let mut rows: Vec<(Erasure, usize)> = rows.collect();
         rows.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
         rows
     }

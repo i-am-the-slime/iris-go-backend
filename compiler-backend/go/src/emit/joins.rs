@@ -46,13 +46,11 @@ fn is_only_assignment(branch: &[GoStatement]) -> bool {
 
 fn assigned_names(statement: &GoStatement) -> Option<Vec<String>> {
     let GoStatement::Assign { targets, .. } = statement else { return None };
-    targets
-        .iter()
-        .map(|target| match target {
-            GoExpression::Identifier(name) => Some(name.clone()),
-            _ => None,
-        })
-        .collect()
+    let names = targets.iter().map(|target| match target {
+        GoExpression::Identifier(name) => Some(name.clone()),
+        _ => None,
+    });
+    names.collect()
 }
 
 fn joined_value(
@@ -68,13 +66,11 @@ fn joined_value(
     if targets.len() != values.len() {
         return None;
     }
-    let names: Vec<&str> = targets
-        .iter()
-        .map(|target| match target {
-            GoExpression::Identifier(name) => Some(name.as_str()),
-            _ => None,
-        })
-        .collect::<Option<_>>()?;
+    let names = targets.iter().map(|target| match target {
+        GoExpression::Identifier(name) => Some(name.as_str()),
+        _ => None,
+    });
+    let names: Vec<&str> = names.collect::<Option<_>>()?;
     let position = names.iter().position(|name| *name == target)?;
     let value = &values[position];
     if matches!(value, GoExpression::Identifier(name) if name == target) {

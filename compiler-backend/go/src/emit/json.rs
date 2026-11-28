@@ -13,6 +13,7 @@
 
 use smol_str::SmolStr;
 
+use super::maybe::constructor_field;
 use super::names::{NamePart, PendingSpelling};
 use super::{Emitter, Mode, Sink, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
@@ -94,8 +95,8 @@ where
             )],
         });
         let (data, constructor) = self.constructor_named(result, success)?;
-        let succeeded =
-            self.construct(&data, constructor, vec![identifier_expression(&decoded)])?;
+        let decoded_value = identifier_expression(&decoded);
+        let succeeded = self.construct(&data, constructor, vec![decoded_value])?;
         let sink = match sink {
             Sink::Define(name) => {
                 let type_ = self.go_type(result)?;
@@ -136,8 +137,9 @@ where
         if !global {
             out.extend(computed);
             let value = self.value(errors, out)?;
-            let names =
-                ShownErrors { shown: self.temporary("shown"), cell: self.temporary("cell") };
+            let shown = self.temporary("shown");
+            let cell = self.temporary("cell");
+            let names = ShownErrors { shown, cell };
             return self.shown_errors(show, value, errors.monotype, &names, out);
         }
         let name = match self.foreign_error_shows.get(&errors.monotype) {
@@ -527,7 +529,7 @@ where
                             let test = self
                                 .constructor_test(&layout, just, member.clone())
                                 .expect("invariant violated: Just is one of two constructors");
-                            let inner = self.constructor_field(&layout, just, 0, member);
+                            let inner = constructor_field(&layout, just, 0, member);
                             (payload, Some((inner, test)))
                         }
                         None => (field.monotype, None),
@@ -589,8 +591,8 @@ where
                 let key = locals.fresh("key");
                 let member = locals.fresh("member");
                 let mut body = vec![];
-                let mut written =
-                    vec![discard(method(ENCODER, "Key", vec![identifier_expression(&key)]))];
+                let write_key = discard(method(ENCODER, "Key", vec![identifier_expression(&key)]));
+                let mut written = vec![write_key];
                 let maybe = match self.monotypes.get(element).clone() {
                     Monotype::Data(data) => self.maybe_payload(&data)?,
                     _ => None,
@@ -603,7 +605,7 @@ where
                         let test = self
                             .constructor_test(&layout, just, member.clone())
                             .expect("invariant violated: Just is one of two constructors");
-                        let inner = self.constructor_field(&layout, just, 0, member);
+                        let inner = constructor_field(&layout, just, 0, member);
                         self.json_encode(payload, inner, locals, &mut written)?;
                         body.push(GoStatement::If {
                             condition: test,
@@ -662,7 +664,7 @@ where
             };
             let mut body = vec![];
             raw(&mut body, &format!("{{{}:", json_string(&constructor.name)));
-            let field = self.constructor_field(&layout, index, 0, value.clone());
+            let field = constructor_field(&layout, index, 0, value.clone());
             self.json_encode(payload, field, locals, &mut body)?;
             raw(&mut body, "}");
             cases.push((index, body));
@@ -671,14 +673,12 @@ where
             out.append(body);
             return Ok(());
         }
-        let cases = cases
-            .into_iter()
-            .map(|(index, body)| GoCase {
-                values: vec![identifier_expression(&layout.constructors[index].tag)],
-                body,
-                line: None,
-            })
-            .collect();
+        let cases = cases.into_iter().map(|(index, body)| GoCase {
+            values: vec![identifier_expression(&layout.constructors[index].tag)],
+            body,
+            line: None,
+        });
+        let cases = cases.collect();
         let tag = super::field(value, "Tag");
         out.push(GoStatement::Switch { value: Some(tag), cases, default: None });
         Ok(())
@@ -731,7 +731,7 @@ where
                 let test = self
                     .constructor_test(&layout, just, optional.clone())
                     .expect("invariant violated: Just is one of two constructors");
-                let inner = self.constructor_field(&layout, just, 0, optional);
+                let inner = constructor_field(&layout, just, 0, optional);
                 let mut present = vec![];
                 self.json_encode(payload, inner, locals, &mut present)?;
                 out.push(GoStatement::If {
@@ -792,8 +792,8 @@ where
                 self.json_name_parts(payload, full, parts)?;
             }
             Monotype::Record(fields) => {
-                let labels: String =
-                    fields.iter().map(|field| capitalise(&lower_camel(&field.label))).collect();
+                let labels = fields.iter().map(|field| capitalise(&lower_camel(&field.label)));
+                let labels: String = labels.collect();
                 full.push_str(&labels);
                 parts.push(NamePart::Record { monotype, labels });
             }
@@ -882,8 +882,8 @@ fn raw_statement(text: &str) -> GoStatement {
 
 /// Writes text that is already JSON, joined to the text the statement before writes.
 fn raw(out: &mut Vec<GoStatement>, text: &str) {
-    if let Some(GoStatement::Expression(GoExpression::Call { function, arguments })) =
-        out.last_mut()
+    let last = out.last_mut();
+    if let Some(GoStatement::Expression(GoExpression::Call { function, arguments })) = last
         && let GoExpression::Field { value, name } = function.as_ref()
         && name == "Raw"
         && matches!(value.as_ref(), GoExpression::Identifier(receiver) if receiver == ENCODER)

@@ -25,7 +25,7 @@ where
 {
     pub(super) fn with_floating_scope<T>(
         &mut self,
-        specialize: impl FnOnce(&mut Self) -> GoResult<T>,
+        specialize: impl FnOnce(&mut Specializer<'q, Q>) -> GoResult<T>,
     ) -> GoResult<T> {
         let depth = self.floating.len();
         let specialized = specialize(self);

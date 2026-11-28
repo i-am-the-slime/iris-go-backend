@@ -13,7 +13,6 @@ use crate::error::UnsupportedState;
 
 impl Monotypes {
     pub(super) fn hash_map<Q>(
-        &mut self,
         context: &mut Context<'_, Q>,
         (file_id, item): (FileId, TypeItemId),
         arguments: &[TypeId],

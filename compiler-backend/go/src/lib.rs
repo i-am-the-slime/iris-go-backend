@@ -112,14 +112,12 @@ pub fn compile_program(
         let directives = foreign_packages.line_directives.as_ref()?;
         Some(std::path::Path::new(&directives.go_directory).join(path))
     };
-    let mut files: Vec<(String, String)> = files
-        .into_iter()
-        .map(|file| {
-            let path = go_path(&file.path);
-            let (source, _) = file.file.render_at(path.as_deref(), coverage.unwrap_or_default());
-            (file.path, source)
-        })
-        .collect();
+    let files = files.into_iter().map(|file| {
+        let path = go_path(&file.path);
+        let (source, _) = file.file.render_at(path.as_deref(), coverage.unwrap_or_default());
+        (file.path, source)
+    });
+    let mut files: Vec<(String, String)> = files.collect();
     files.sort();
     let notes = runtime_dictionary_notes.into_iter().chain(notes).collect();
     Ok(GoProgram { files, functions, notes })

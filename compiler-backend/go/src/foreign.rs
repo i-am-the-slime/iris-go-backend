@@ -350,8 +350,9 @@ const UNIT_VALUES: Boundary = Boundary { unit_values: true, ..PLAIN };
 
 const RECORD: Boundary = Boundary { record_result: true, ..PLAIN };
 
-const CONS_LIST_ACCUMULATOR: Boundary =
-    Boundary { accumulator: Some(Accumulator { parameter: 0, element: 1 }), ..PLAIN };
+const CONS_LIST: Accumulator = Accumulator { parameter: 0, element: 1 };
+
+const CONS_LIST_ACCUMULATOR: Boundary = Boundary { accumulator: Some(CONS_LIST), ..PLAIN };
 
 const fn maybe(just: usize, nothing: usize) -> Boundary {
     let constructors = MaybeConstructors { just, nothing, witness: None, elements: false };
@@ -372,8 +373,8 @@ const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundar
 /// A search that returns its `nothing` argument or one of the callback's results,
 /// whose Maybe is the foreign's result type.
 const fn maybe_search(nothing: usize, is_just: usize) -> Boundary {
-    let constructors =
-        MaybeConstructors { just: usize::MAX, nothing, witness: None, elements: false };
+    let just = usize::MAX;
+    let constructors = MaybeConstructors { just, nothing, witness: None, elements: false };
     Boundary { maybe: Some(constructors), is_just: Some(is_just), ..PLAIN }
 }
 

@@ -254,10 +254,13 @@ pub(crate) fn does_no_work(known: &impl KnownFunctions, expression: &Expression)
 
 pub(crate) fn is_trivial(expression: &Expression) -> bool {
     match &expression.kind {
-        ExpressionKind::Literal(_) | ExpressionKind::Unit | ExpressionKind::Local(_) => true,
-        ExpressionKind::Function(_) => true,
-        ExpressionKind::Foreign { arguments, .. } => arguments.is_empty(),
-        ExpressionKind::Construct { arguments, .. } => arguments.is_empty(),
+        ExpressionKind::Literal(_)
+        | ExpressionKind::Unit
+        | ExpressionKind::Local(_)
+        | ExpressionKind::Function(_) => true,
+        ExpressionKind::Foreign { arguments, .. } | ExpressionKind::Construct { arguments, .. } => {
+            arguments.is_empty()
+        }
         ExpressionKind::Lambda { parameters, body } => is_foreign_wrapper(parameters, body),
         _ => false,
     }

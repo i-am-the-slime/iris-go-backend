@@ -87,8 +87,8 @@ fn initial_literals(
     positions: &[usize],
 ) -> Vec<Option<Literal>> {
     let arity = program.function(id).parameters.len();
-    let jumps: Vec<*const Expression> =
-        tail_calls.iter().map(|arguments| arguments.as_ptr()).collect();
+    let jumps = tail_calls.iter().map(|arguments| arguments.as_ptr());
+    let jumps: Vec<*const Expression> = jumps.collect();
     let mut references = 0;
     let mut entries: Vec<Vec<Option<Literal>>> = vec![];
     for function in &program.functions {

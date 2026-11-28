@@ -55,8 +55,8 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
-        let saturated =
-            !function.parameters.is_empty() && arguments.len() >= function.parameters.len();
+        let arity = function.parameters.len();
+        let saturated = arity > 0 && arguments.len() >= arity;
         let evaluable = saturated
             && arguments.iter().all(is_constant)
             && self.builds_functions(function.result, 2)
@@ -174,7 +174,7 @@ impl Simplifier<'_> {
             return Err(arguments);
         }
         if foreign.calls(ARRAY_APPEND) {
-            return self.appended(arguments, monotype);
+            return appended(arguments, monotype);
         }
         if foreign.calls(ARRAY_REPLICATE) {
             return replicated(arguments, monotype);
@@ -205,22 +205,6 @@ impl Simplifier<'_> {
             Some(Iteration::MapWithIndex) => self.mapped(arguments, monotype, true),
             _ => Err(arguments),
         }
-    }
-
-    fn appended(
-        &mut self,
-        arguments: Vec<Expression>,
-        monotype: MonotypeId,
-    ) -> Result<Expression, Vec<Expression>> {
-        let [left, right] = arguments.as_slice() else { return Err(arguments) };
-        let (Some(left), Some(right)) = (literal_elements(left), literal_elements(right)) else {
-            return Err(arguments);
-        };
-        if left.len() + right.len() > LITERAL_ELEMENTS {
-            return Err(arguments);
-        }
-        let elements = left.iter().chain(right).cloned().collect();
-        Ok(Expression::new(ExpressionKind::Array(elements), monotype))
     }
 
     /// `updateAt index value array`, with the index a literal and the array one too.
@@ -266,8 +250,8 @@ impl Simplifier<'_> {
             return Err(arguments);
         }
         let original = arguments.clone();
-        let [step, initial, array]: [Expression; 3] =
-            arguments.try_into().unwrap_or_else(|_| unreachable!("a fold has three arguments"));
+        let [step, initial, array] = <[Expression; 3]>::try_from(arguments)
+            .unwrap_or_else(|_| unreachable!("a fold has three arguments"));
         let ExpressionKind::Array(elements) = array.kind else { unreachable!("matched above") };
         let mut accumulated = initial;
         let steps: Box<dyn Iterator<Item = Expression>> = match direction {
@@ -303,21 +287,18 @@ impl Simplifier<'_> {
         };
         let original = arguments.clone();
         let integer = self.monotypes.intern(Monotype::Int);
-        let [callback, array]: [Expression; 2] =
-            arguments.try_into().unwrap_or_else(|_| unreachable!("a map has two arguments"));
+        let [callback, array] = <[Expression; 2]>::try_from(arguments)
+            .unwrap_or_else(|_| unreachable!("a map has two arguments"));
         let ExpressionKind::Array(elements) = array.kind else { unreachable!("matched above") };
-        let elements = elements
-            .into_iter()
-            .enumerate()
-            .map(|(index, element)| {
-                let callback = self.renamed(&callback);
-                let operands = match indexed {
-                    true => vec![int(index as i64, integer), element],
-                    false => vec![element],
-                };
-                self.apply(callback, operands, produced)
-            })
-            .collect();
+        let elements = elements.into_iter().enumerate().map(|(index, element)| {
+            let callback = self.renamed(&callback);
+            let operands = match indexed {
+                true => vec![int(index as i64, integer), element],
+                false => vec![element],
+            };
+            self.apply(callback, operands, produced)
+        });
+        let elements = elements.collect();
         within_copied(Expression::new(ExpressionKind::Array(elements), monotype), original)
     }
 
@@ -339,7 +320,7 @@ impl Simplifier<'_> {
         let ordering = self.monotypes.result_after(comparison.monotype, 2);
         let (comparison, ordering_to_int) = (comparison.clone(), ordering_to_int.clone());
         let elements = elements.to_vec();
-        let mut after = |simplifier: &mut Self, left: usize, right: usize| {
+        let mut after = |simplifier: &mut Simplifier<'_>, left: usize, right: usize| {
             let compare = simplifier.renamed(&comparison);
             let operands = vec![elements[left].clone(), elements[right].clone()];
             let compared = simplifier.apply(compare, operands, ordering);
@@ -384,8 +365,8 @@ impl Simplifier<'_> {
         let ExpressionKind::Array(elements) = array.kind else { unreachable!("matched above") };
         let unit = self.monotypes.intern(Monotype::Unit);
         let ran = self.monotypes.effect_result(body.monotype).unwrap_or(unit);
-        let mut sequence =
-            Expression::new(ExpressionKind::EffectPure(Box::new(unit_value(unit))), monotype);
+        let pure_unit = ExpressionKind::EffectPure(Box::new(unit_value(unit)));
+        let mut sequence = Expression::new(pure_unit, monotype);
         for value in elements.into_iter().rev() {
             let mut renaming = FxHashMap::default();
             let local = self.rename_binder(&element, &mut renaming);
@@ -410,6 +391,21 @@ impl Simplifier<'_> {
     }
 }
 
+fn appended(
+    arguments: Vec<Expression>,
+    monotype: MonotypeId,
+) -> Result<Expression, Vec<Expression>> {
+    let [left, right] = arguments.as_slice() else { return Err(arguments) };
+    let (Some(left), Some(right)) = (literal_elements(left), literal_elements(right)) else {
+        return Err(arguments);
+    };
+    if left.len() + right.len() > LITERAL_ELEMENTS {
+        return Err(arguments);
+    }
+    let elements = left.iter().chain(right).cloned().collect();
+    Ok(Expression::new(ExpressionKind::Array(elements), monotype))
+}
+
 /// The positions in the order a stable merge sort puts them, as `Data.Array.sortBy` does: `after`
 /// says whether the element at the first position goes after the one at the second, or `None`
 /// when that is not known, which stops the sort.
@@ -426,8 +422,8 @@ fn merge_sorted<S>(
     let left = merge_sorted(state, left, after)?;
     let right = merge_sorted(state, right, after)?;
     let mut merged = Vec::with_capacity(left.len() + right.len());
-    let (mut from_left, mut from_right) =
-        (left.into_iter().peekable(), right.into_iter().peekable());
+    let mut from_left = left.into_iter().peekable();
+    let mut from_right = right.into_iter().peekable();
     while let (Some(&first), Some(&second)) = (from_left.peek(), from_right.peek()) {
         match after(state, first, second)? {
             true => merged.extend(from_right.next()),
@@ -584,7 +580,7 @@ fn int_literal(expression: &Expression) -> Option<i64> {
     }
 }
 
-fn int(value: i64, monotype: MonotypeId) -> Expression {
+pub(super) fn int(value: i64, monotype: MonotypeId) -> Expression {
     Expression::new(ExpressionKind::Literal(Literal::Int(value)), monotype)
 }
 
@@ -760,8 +756,8 @@ fn needed_bindings(bindings: &[Binding], expression: &Expression) -> Vec<Binding
     let mentions = |expression: &Expression, binding: &Binding| {
         occurrences_up_to(expression, binding.local.id, 1).total > 0
     };
-    let mut needed: Vec<bool> =
-        bindings.iter().map(|binding| mentions(expression, binding)).collect();
+    let needed = bindings.iter().map(|binding| mentions(expression, binding));
+    let mut needed: Vec<bool> = needed.collect();
     let mut changed = true;
     while changed {
         changed = false;

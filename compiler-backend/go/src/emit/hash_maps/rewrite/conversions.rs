@@ -186,8 +186,8 @@ impl Rewrite<'_> {
         let entries = self.fresh("entries", entries_type);
         let keys = self.fresh("keys", keys_type);
         let values = self.fresh("values", values_type);
-        let sorted =
-            hash_map(HashMapOperation::SortedEntries, vec![table.expression()], entries_type);
+        let arguments = vec![table.expression()];
+        let sorted = hash_map(HashMapOperation::SortedEntries, arguments, entries_type);
         let field = |label: &str, monotype: MonotypeId| {
             let record = Box::new(entries.expression());
             Expression::new(ExpressionKind::Access { record, label: SmolStr::new(label) }, monotype)

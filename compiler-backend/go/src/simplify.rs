@@ -31,6 +31,8 @@ use self::arguments::ArgumentSpecializations;
 use self::call_patterns::CallPatternCopies;
 use self::coverage::{binds_only, decided_guards, reachable};
 use self::fold::shares_branch_with_next;
+use self::lengths::count_lengths_at_source;
+use self::record::updated_record;
 
 mod arguments;
 mod call_patterns;
@@ -259,7 +261,7 @@ struct AdoptedName {
     written_here: bool,
 }
 
-impl Simplifier<'_> {
+impl<'m> Simplifier<'m> {
     /// Notes that `alias` is replaced by `value`: a local `value` whose name the compiler made
     /// up takes the alias's name where that says what the value is. `argv <- args` binds `argv`
     /// to what `args` names after its type, `array`, and the Go variable is `argv`.
@@ -400,11 +402,8 @@ impl Simplifier<'_> {
         };
         let [scrutinee] = scrutinees.as_slice() else { return false };
         let ExpressionKind::Local(looked_up) = scrutinee.kind else { return false };
-        let Some(position) =
-            function.parameters.iter().position(|parameter| parameter.id == looked_up)
-        else {
-            return false;
-        };
+        let position = function.parameters.iter().position(|parameter| parameter.id == looked_up);
+        let Some(position) = position else { return false };
         let text = |expression: &Expression| {
             matches!(expression.kind, ExpressionKind::Literal(Literal::String(_)))
         };
@@ -450,8 +449,8 @@ impl Simplifier<'_> {
             let Some((parameter, inner)) = self.monotypes.function_parts(result) else {
                 return argument;
             };
-            let name =
-                if is_vague(&template.name) { "value".into() } else { template.name.clone() };
+            let vague = is_vague(&template.name);
+            let name = if vague { "value".into() } else { template.name.clone() };
             let template = Local { id: LocalId(0), name, monotype: parameter };
             parameters.push(self.fresh(&template));
             result = inner;
@@ -544,10 +543,9 @@ impl Simplifier<'_> {
                 function.parameters.extend(parameters);
                 function.body = *body;
             } else if !function.parameters.is_empty()
-                && let Some(template) =
-                    chosen_lambda_parameter(&function.body, self.monotypes).cloned()
+                && let Some(template) = chosen_lambda_parameter(&function.body, self.monotypes)
             {
-                let parameter = self.fresh(&template);
+                let parameter = self.fresh(template);
                 let body = std::mem::replace(
                     &mut function.body,
                     Expression::new(ExpressionKind::Unit, parameter.monotype),
@@ -585,7 +583,7 @@ impl Simplifier<'_> {
         &mut self,
         expression: Expression,
         monotype: MonotypeId,
-        chosen: &mut impl FnMut(&mut Self, Expression) -> Expression,
+        chosen: &mut impl FnMut(&mut Simplifier<'m>, Expression) -> Expression,
     ) -> Expression {
         let kind = match expression.kind {
             ExpressionKind::Let { bindings, body } => {
@@ -598,9 +596,8 @@ impl Simplifier<'_> {
                 if then == otherwise && is_discardable(&condition) {
                     return then;
                 }
-                if let Some(joined) =
-                    self.joined_comparisons(&condition, &then, &otherwise, monotype)
-                {
+                let joined = self.joined_comparisons(&condition, &then, &otherwise, monotype);
+                if let Some(joined) = joined {
                     return joined;
                 }
                 if shares_branch_with_next(&condition, &then, &otherwise) {
@@ -610,30 +607,26 @@ impl Simplifier<'_> {
                 ExpressionKind::If { condition, then, otherwise }
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
-                let alternatives = alternatives
-                    .into_iter()
-                    .map(|alternative| {
-                        let body = match alternative.body {
-                            Guarded::Unconditional(body) => {
-                                Guarded::Unconditional(self.map_choices(body, monotype, chosen))
-                            }
-                            Guarded::Guards(branches) => Guarded::Guards(
-                                branches
-                                    .into_iter()
-                                    .map(|branch| GuardedBranch {
-                                        guards: branch.guards,
-                                        body: self.map_choices(branch.body, monotype, chosen),
-                                    })
-                                    .collect(),
-                            ),
-                        };
-                        Alternative {
-                            patterns: alternative.patterns,
-                            body,
-                            position: alternative.position,
+                let alternatives = alternatives.into_iter().map(|alternative| {
+                    let body = match alternative.body {
+                        Guarded::Unconditional(body) => {
+                            Guarded::Unconditional(self.map_choices(body, monotype, chosen))
                         }
-                    })
-                    .collect();
+                        Guarded::Guards(branches) => {
+                            let branches = branches.into_iter().map(|branch| GuardedBranch {
+                                guards: branch.guards,
+                                body: self.map_choices(branch.body, monotype, chosen),
+                            });
+                            Guarded::Guards(branches.collect())
+                        }
+                    };
+                    Alternative {
+                        patterns: alternative.patterns,
+                        body,
+                        position: alternative.position,
+                    }
+                });
+                let alternatives = alternatives.collect();
                 ExpressionKind::Case { scrutinees, alternatives }
             }
             ExpressionKind::Fail(message) => ExpressionKind::Fail(message),
@@ -651,20 +644,18 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Expression {
         let mut bindings = vec![];
-        let arguments: Vec<Expression> = arguments
-            .into_iter()
-            .map(|argument| {
-                if is_trivial(&argument) {
-                    return argument;
-                }
-                let name = self.monotypes.value_name(argument.monotype);
-                let template = Local { id: LocalId(0), name, monotype: argument.monotype };
-                let local = self.fresh(&template);
-                let reference = local.expression();
-                bindings.push(Binding { local, value: argument });
-                reference
-            })
-            .collect();
+        let arguments = arguments.into_iter().map(|argument| {
+            if is_trivial(&argument) {
+                return argument;
+            }
+            let name = self.monotypes.value_name(argument.monotype);
+            let template = Local { id: LocalId(0), name, monotype: argument.monotype };
+            let local = self.fresh(&template);
+            let reference = local.expression();
+            bindings.push(Binding { local, value: argument });
+            reference
+        });
+        let arguments: Vec<Expression> = arguments.collect();
         let applied = self.map_choices(choice, monotype, &mut |simplifier, chosen| {
             simplifier.apply(chosen, arguments.clone(), monotype)
         });
@@ -746,18 +737,16 @@ impl Simplifier<'_> {
                 }
                 ExpressionKind::Function(id)
             }
-            ExpressionKind::Array(elements) => ExpressionKind::Array(
-                elements
-                    .into_iter()
-                    .map(|element| {
-                        // An element is stored, not taken apart: a builder called for one stays a call.
-                        self.stores_built = matches!(element.kind, ExpressionKind::Apply { .. });
-                        let element = self.expression(element);
-                        self.stores_built = false;
-                        element
-                    })
-                    .collect(),
-            ),
+            ExpressionKind::Array(elements) => {
+                let elements = elements.into_iter().map(|element| {
+                    // An element is stored, not taken apart: a builder called for one stays a call.
+                    self.stores_built = matches!(element.kind, ExpressionKind::Apply { .. });
+                    let element = self.expression(element);
+                    self.stores_built = false;
+                    element
+                });
+                ExpressionKind::Array(elements.collect())
+            }
             ExpressionKind::Closure { tag, captures } => ExpressionKind::Closure {
                 tag,
                 captures: captures.into_iter().map(|capture| self.expression(capture)).collect(),
@@ -772,7 +761,7 @@ impl Simplifier<'_> {
             ExpressionKind::Update { record, updates } => {
                 let record = self.expression(*record);
                 let updates = self.updates(updates);
-                return self.updated_record(record, updates, monotype);
+                return updated_record(record, updates, monotype);
             }
             ExpressionKind::Construct { data, constructor, arguments } => {
                 ExpressionKind::Construct {
@@ -793,13 +782,11 @@ impl Simplifier<'_> {
                 };
                 let iterates = iteration.is_some();
                 let binds = iteration == Some(crate::foreign::Iteration::Bind);
-                let arguments: Vec<Expression> = arguments
-                    .into_iter()
-                    .map(|argument| {
-                        let argument = self.expression(argument);
-                        if iterates { self.saturated_callback(argument, binds) } else { argument }
-                    })
-                    .collect();
+                let arguments = arguments.into_iter().map(|argument| {
+                    let argument = self.expression(argument);
+                    if iterates { self.saturated_callback(argument, binds) } else { argument }
+                });
+                let arguments: Vec<Expression> = arguments.collect();
                 let arguments = match self.viewed_object_operation(foreign, arguments, monotype) {
                     Ok(read) => return read,
                     Err(arguments) => arguments,
@@ -813,8 +800,8 @@ impl Simplifier<'_> {
             }
             ExpressionKind::Apply { function, arguments } => {
                 let function = self.expression(*function);
-                let arguments: Vec<Expression> =
-                    arguments.into_iter().map(|argument| self.expression(argument)).collect();
+                let arguments = arguments.into_iter().map(|argument| self.expression(argument));
+                let arguments: Vec<Expression> = arguments.collect();
                 return self.apply(function, arguments, monotype);
             }
             ExpressionKind::Lambda { mut parameters, body } => {
@@ -846,23 +833,20 @@ impl Simplifier<'_> {
                 return self.coerce(value, monotype);
             }
             ExpressionKind::Let { bindings, body } => {
-                let bindings: Vec<Binding> = bindings
-                    .into_iter()
-                    .map(|binding| Binding {
-                        local: binding.local,
-                        value: self.expression(binding.value),
-                    })
-                    .collect();
-                let recursive =
-                    bindings.iter().any(|binding| mentions_any(&binding.value, &bindings));
+                let bindings = bindings.into_iter().map(|binding| Binding {
+                    local: binding.local,
+                    value: self.expression(binding.value),
+                });
+                let bindings: Vec<Binding> = bindings.collect();
+                let mentions_bound = |binding: &Binding| mentions_any(&binding.value, &bindings);
+                let recursive = bindings.iter().any(mentions_bound);
                 let mut bindings = bindings;
                 for binding in &mut bindings {
                     self.remember_record_order(binding);
                     self.remember_unsafely_effectful(binding);
                     if !recursive && occurrences_up_to(&body, binding.local.id, 2).total > 1 {
-                        let placeholder =
-                            Expression::new(ExpressionKind::Unit, binding.value.monotype);
-                        let value = std::mem::replace(&mut binding.value, placeholder);
+                        let unit = Expression::new(ExpressionKind::Unit, binding.value.monotype);
+                        let value = std::mem::replace(&mut binding.value, unit);
                         binding.value = self.shared_view(value);
                         self.remember_record_view(binding);
                     }
@@ -884,30 +868,25 @@ impl Simplifier<'_> {
                 return self.boolean_choice(condition, then, otherwise, monotype);
             }
             ExpressionKind::Case { scrutinees, alternatives } if binds_only(&alternatives) => {
-                let alternative =
-                    alternatives.into_iter().next().expect("invariant violated: binds_only");
+                let first = alternatives.into_iter().next();
+                let alternative = first.expect("invariant violated: binds_only");
                 let Guarded::Unconditional(body) = alternative.body else { unreachable!() };
-                let bindings = alternative
-                    .patterns
-                    .into_iter()
-                    .zip(scrutinees)
-                    .filter_map(|(pattern, value)| match pattern.kind {
-                        // A newtype pattern may bind the wrapped representation of a
-                        // recursive newtype, which the binding keeps.
-                        PatternKind::Variable(local)
-                            if !self
-                                .monotypes
-                                .same_without_causes(local.monotype, value.monotype) =>
-                        {
-                            let monotype = local.monotype;
-                            let value =
-                                Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype);
-                            Some(Binding { local, value })
-                        }
-                        PatternKind::Variable(local) => Some(Binding { local, value }),
-                        _ => None,
-                    })
-                    .collect();
+                let bound = alternative.patterns.into_iter().zip(scrutinees);
+                let bindings = bound.filter_map(|(pattern, value)| match pattern.kind {
+                    // A newtype pattern may bind the wrapped representation of a
+                    // recursive newtype, which the binding keeps.
+                    PatternKind::Variable(local)
+                        if !self.monotypes.same_without_causes(local.monotype, value.monotype) =>
+                    {
+                        let monotype = local.monotype;
+                        let kind = ExpressionKind::Coerce(Box::new(value));
+                        let value = Expression::new(kind, monotype);
+                        Some(Binding { local, value })
+                    }
+                    PatternKind::Variable(local) => Some(Binding { local, value }),
+                    _ => None,
+                });
+                let bindings = bindings.collect();
                 let body = Expression::new(
                     ExpressionKind::Let { bindings, body: Box::new(body) },
                     monotype,
@@ -915,9 +894,8 @@ impl Simplifier<'_> {
                 return self.expression(body);
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
-                let scrutinees: Vec<Expression> =
-                    scrutinees.into_iter().map(|scrutinee| self.expression(scrutinee)).collect();
-                let mut scrutinees = scrutinees;
+                let scrutinees = scrutinees.into_iter().map(|scrutinee| self.expression(scrutinee));
+                let mut scrutinees: Vec<Expression> = scrutinees.collect();
                 if let [scrutinee] = scrutinees.as_mut_slice()
                     && let Some(distributed) = self.distribute(scrutinee, &alternatives, monotype)
                 {
@@ -927,37 +905,30 @@ impl Simplifier<'_> {
                     && (self.is_constant_path(scrutinee) || is_built_record(scrutinee))
                     && let Some(fields) = destructured_fields(&alternatives)
                 {
-                    let bindings = fields
-                        .into_iter()
-                        .map(|(label, local)| Binding {
-                            value: Expression::new(
-                                ExpressionKind::Access {
-                                    record: Box::new(scrutinee.clone()),
-                                    label,
-                                },
-                                local.monotype,
-                            ),
-                            local,
-                        })
-                        .collect();
-                    let Some(Alternative { body: Guarded::Unconditional(body), .. }) =
-                        alternatives.into_iter().next()
-                    else {
+                    let bindings = fields.into_iter().map(|(label, local)| Binding {
+                        value: Expression::new(
+                            ExpressionKind::Access { record: Box::new(scrutinee.clone()), label },
+                            local.monotype,
+                        ),
+                        local,
+                    });
+                    let bindings = bindings.collect();
+                    let first = alternatives.into_iter().next();
+                    let Some(Alternative { body: Guarded::Unconditional(body), .. }) = first else {
                         unreachable!("invariant violated: the one alternative was just matched")
                     };
                     let kind = ExpressionKind::Let { bindings, body: Box::new(body) };
                     return self.expression(Expression::new(kind, monotype));
                 }
-                let (bindings, scrutinees, alternatives) =
-                    self.eliminate_columns(scrutinees, alternatives);
-                let alternatives: Vec<Alternative> = reachable(alternatives)
-                    .into_iter()
-                    .map(|alternative| Alternative {
-                        patterns: alternative.patterns,
-                        body: self.guarded(alternative.body),
-                        position: alternative.position,
-                    })
-                    .collect();
+                let eliminated = self.eliminate_columns(scrutinees, alternatives);
+                let (bindings, scrutinees, alternatives) = eliminated;
+                let reached = reachable(alternatives);
+                let alternatives = reached.into_iter().map(|alternative| Alternative {
+                    patterns: alternative.patterns,
+                    body: self.guarded(alternative.body),
+                    position: alternative.position,
+                });
+                let alternatives: Vec<Alternative> = alternatives.collect();
                 // Guards decided by folding may leave an alternative that shadows the rest.
                 let alternatives = reachable(alternatives);
                 if let [scrutinee] = scrutinees.as_slice()
@@ -979,8 +950,8 @@ impl Simplifier<'_> {
                     Some(Alternative { body: Guarded::Unconditional(_), .. })
                         if scrutinees.is_empty() =>
                     {
-                        let Some(Alternative { body: Guarded::Unconditional(body), .. }) =
-                            alternatives.into_iter().next()
+                        let first = alternatives.into_iter().next();
+                        let Some(Alternative { body: Guarded::Unconditional(body), .. }) = first
                         else {
                             unreachable!()
                         };
@@ -1027,41 +998,32 @@ impl Simplifier<'_> {
     }
 
     fn updates(&mut self, updates: Vec<RecordUpdate>) -> Vec<RecordUpdate> {
-        updates
-            .into_iter()
-            .map(|update| match update {
-                RecordUpdate::Leaf { label, value } => {
-                    RecordUpdate::Leaf { label, value: self.expression(value) }
-                }
-                RecordUpdate::Branch { label, updates } => {
-                    RecordUpdate::Branch { label, updates: self.updates(updates) }
-                }
-            })
-            .collect()
+        let updates = updates.into_iter().map(|update| match update {
+            RecordUpdate::Leaf { label, value } => {
+                RecordUpdate::Leaf { label, value: self.expression(value) }
+            }
+            RecordUpdate::Branch { label, updates } => {
+                RecordUpdate::Branch { label, updates: self.updates(updates) }
+            }
+        });
+        updates.collect()
     }
 
     fn guarded(&mut self, guarded: Guarded) -> Guarded {
         match guarded {
             Guarded::Unconditional(body) => Guarded::Unconditional(self.expression(body)),
             Guarded::Guards(branches) => {
-                let branches = branches
-                    .into_iter()
-                    .map(|branch| GuardedBranch {
-                        guards: branch
-                            .guards
-                            .into_iter()
-                            .map(|guard| match guard {
-                                Guard::Boolean(condition) => {
-                                    Guard::Boolean(self.expression(condition))
-                                }
-                                Guard::Pattern { pattern, value } => {
-                                    Guard::Pattern { pattern, value: self.expression(value) }
-                                }
-                            })
-                            .collect(),
-                        body: self.expression(branch.body),
-                    })
-                    .collect();
+                let branches = branches.into_iter().map(|branch| {
+                    let guards = branch.guards.into_iter().map(|guard| match guard {
+                        Guard::Boolean(condition) => Guard::Boolean(self.expression(condition)),
+                        Guard::Pattern { pattern, value } => {
+                            Guard::Pattern { pattern, value: self.expression(value) }
+                        }
+                    });
+                    let guards = guards.collect();
+                    GuardedBranch { guards, body: self.expression(branch.body) }
+                });
+                let branches = branches.collect();
                 decided_guards(branches)
             }
         }
@@ -1169,8 +1131,8 @@ impl Simplifier<'_> {
         };
         let taken = arguments.len().min(parameters.len());
         if crate::arity::arrows(self.monotypes, coerced) < taken {
-            let lambda =
-                Expression::new(ExpressionKind::Lambda { parameters, body }, lambda.monotype);
+            let kind = ExpressionKind::Lambda { parameters, body };
+            let lambda = Expression::new(kind, lambda.monotype);
             let function = Expression::new(ExpressionKind::Coerce(Box::new(lambda)), coerced);
             let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
             return Expression::new(kind, monotype);
@@ -1251,7 +1213,7 @@ impl Simplifier<'_> {
         for binding in bindings.into_iter().rev() {
             // A cell helper's two uses are told from more.
             let helper = self.is_cell_helper(&binding.value);
-            body = self.count_lengths_at_source(&binding, body);
+            body = count_lengths_at_source(&binding, body);
             let uses = occurrences_up_to(&body, binding.local.id, if helper { 3 } else { 2 });
             // A record of trivial fields, such as a rank-N value's
             // specializations, is copied so that its field accesses resolve.
@@ -1269,11 +1231,11 @@ impl Simplifier<'_> {
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)))
                 || (helper && uses.total == 2 && uses.applied == 2);
             let named_choice = self.is_named_choice(&binding, &body);
-            let materialized_at_each_use =
-                (uses.total > 1 || uses.under_lambda > 0) && self.is_viewed_record(&binding.value);
+            let reused = uses.total > 1 || uses.under_lambda > 0;
+            let materialized_at_each_use = reused && self.is_viewed_record(&binding.value);
             let view_field = uses.total > 0 && self.view_fields.contains(&binding.local.id);
-            let substitutable =
-                substitutable && !named_choice && !materialized_at_each_use && !view_field;
+            let stays_bound = named_choice || materialized_at_each_use || view_field;
+            let substitutable = substitutable && !stays_bound;
             let built_in_place = uses.total == 1
                 && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
                     if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
@@ -1380,8 +1342,8 @@ impl Simplifier<'_> {
     /// it chooses on: Go assigns the choice to a variable either way, and the binding's name
     /// says what it holds, `discount` rather than `result`.
     fn is_named_choice(&self, binding: &Binding, body: &Expression) -> bool {
-        let choice =
-            matches!(binding.value.kind, ExpressionKind::If { .. } | ExpressionKind::Case { .. });
+        let kind = &binding.value.kind;
+        let choice = matches!(kind, ExpressionKind::If { .. } | ExpressionKind::Case { .. });
         choice
             && !is_vague(&binding.local.name)
             && !self.is_made_up(&binding.local.name, binding.local.monotype)
@@ -1398,10 +1360,10 @@ impl Simplifier<'_> {
     fn is_small_applied_lambda(&self, binding: &Binding, body: &Expression) -> bool {
         let ExpressionKind::Lambda { parameters, .. } = &binding.value.kind else { return false };
         let mutable = |monotype: &Monotype| matches!(monotype, Monotype::MutableArray(_));
+        let mutable_parameter = |parameter: &Local| mutable(self.monotypes.get(parameter.monotype));
         // The array may as well be passed, `peekOr0 index array`, when the helper only reads
         // it: a helper that writes a passed array stays a function over its slice.
-        let passed_array =
-            parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
+        let passed_array = parameters.iter().any(mutable_parameter);
         let over_mutable_array = captures_free(&binding.value, self.monotypes, mutable)
             || (passed_array && only_reads_arrays(&binding.value));
         let tiny = is_within_size(&binding.value, TINY_HELPER) && only_computes(&binding.value);
@@ -1438,8 +1400,8 @@ impl Simplifier<'_> {
             return copy;
         }
         for_each_child_mut(&mut body, &mut |child| {
-            let taken =
-                std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
+            let placeholder = Expression::new(ExpressionKind::Unit, child.monotype);
+            let taken = std::mem::replace(child, placeholder);
             *child = self.inline_applied(taken, binding);
         });
         body
@@ -1472,9 +1434,10 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Result<Expression, Expression> {
         let ExpressionKind::Coerce(source) = &record.kind else { return Err(record) };
-        let (Monotype::Record(from), Monotype::Record(_)) =
-            (self.monotypes.get(source.monotype), self.monotypes.get(record.monotype))
-        else {
+        let Monotype::Record(from) = self.monotypes.get(source.monotype) else {
+            return Err(record);
+        };
+        let Monotype::Record(_) = self.monotypes.get(record.monotype) else {
             return Err(record);
         };
         let Some(field) = from.iter().find(|field| field.label == *label) else {
@@ -1661,8 +1624,8 @@ fn substitute_in_place(
         let monotype = expression.monotype;
         *expression = value.clone();
         if !monotypes.same_without_causes(expression.monotype, monotype) {
-            let coerced =
-                std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
+            let placeholder = Expression::new(ExpressionKind::Unit, monotype);
+            let coerced = std::mem::replace(expression, placeholder);
             expression.kind = ExpressionKind::Coerce(Box::new(coerced));
         }
         return;
@@ -1724,8 +1687,8 @@ fn runs_own_loop(expression: &Expression) -> bool {
 fn only_reads_arrays(expression: &Expression) -> bool {
     let mut reads_only = true;
     visit(expression, &mut |node| {
-        if let ExpressionKind::Foreign { foreign: Foreign::Perform { function, .. }, .. } =
-            &node.kind
+        if let ExpressionKind::Foreign { foreign, .. } = &node.kind
+            && let Foreign::Perform { function, .. } = foreign
         {
             reads_only &=
                 function.name.starts_with("Peek") || matches!(function.name, "Within" | "Length");

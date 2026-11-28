@@ -202,9 +202,8 @@ where
             }
             Monotype::Data(_) | Monotype::Record(_) => self.sorted_product_entries(table, key)?,
             _ => {
-                let function =
-                    self.support_function("sortedIntegerEntries", INTEGER_ENTRIES_SOURCE);
-                call(identifier_expression(&function), vec![table])
+                let entries = self.support_function("sortedIntegerEntries", INTEGER_ENTRIES_SOURCE);
+                call(identifier_expression(&entries), vec![table])
             }
         };
         let keys = self.temporary("keys");
@@ -238,8 +237,8 @@ where
         let type_ = self.go_type(key)?;
         let mut arguments = vec![table, compare];
         for (path, _) in &leaves {
-            let leaf =
-                path.iter().fold(identifier_expression("key"), |value, name| field(value, name));
+            let key_parameter = identifier_expression("key");
+            let leaf = path.iter().fold(key_parameter, |value, name| field(value, name));
             arguments.push(GoExpression::Function {
                 parameters: vec![("key".into(), type_.clone())],
                 result: Some(GoType::Named("int64".into())),
@@ -325,12 +324,10 @@ where
             Monotype::Record(fields) if self.single_instantiation(key).is_none() => {
                 let mut fields = fields.to_vec();
                 fields.sort_by(|left, right| left.label.cmp(&right.label));
-                fields
-                    .iter()
-                    .map(|record_field| {
-                        (self.record_field_name(key, &record_field.label), record_field.monotype)
-                    })
-                    .collect()
+                let named_fields = fields.iter().map(|record_field| {
+                    (self.record_field_name(key, &record_field.label), record_field.monotype)
+                });
+                named_fields.collect()
             }
             Monotype::Data(data) => {
                 let layout = self.data_layout(&data)?;

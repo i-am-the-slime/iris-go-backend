@@ -36,30 +36,29 @@ pub(super) fn tail_call_groups(
     let looping = |id: FunctionId| {
         !program.function(id).parameters.is_empty() && !lazy_constants.contains(&id)
     };
-    let successors: Vec<Vec<usize>> = (0..program.functions.len())
-        .map(|index| {
-            let id = FunctionId(index as u32);
-            if !looping(id) {
-                return vec![];
-            }
-            let function = program.function(id);
-            let mode = mode_of(function, monotypes);
-            let mut callees = vec![];
-            tail_callees(&function.body, mode, program, &mut callees);
-            callees.retain(|callee| looping(*callee) && *callee != id);
-            callees.sort_unstable_by_key(|callee| callee.0);
-            callees.dedup();
-            callees.into_iter().map(|callee| callee.0 as usize).collect()
-        })
-        .collect();
-    strongly_connected(&successors)
+    let successors = (0..program.functions.len()).map(|index| {
+        let id = FunctionId(index as u32);
+        if !looping(id) {
+            return vec![];
+        }
+        let function = program.function(id);
+        let mode = mode_of(function, monotypes);
+        let mut callees = vec![];
+        tail_callees(&function.body, mode, program, &mut callees);
+        callees.retain(|callee| looping(*callee) && *callee != id);
+        callees.sort_unstable_by_key(|callee| callee.0);
+        callees.dedup();
+        callees.into_iter().map(|callee| callee.0 as usize).collect()
+    });
+    let successors: Vec<Vec<usize>> = successors.collect();
+    let groups = strongly_connected(&successors)
         .into_iter()
         .filter(|component| component.len() > 1)
         .map(|mut component| {
             component.sort_unstable();
             component.into_iter().map(|index| FunctionId(index as u32)).collect()
-        })
-        .collect()
+        });
+    groups.collect()
 }
 
 fn mode_of(function: &Function, monotypes: &Monotypes) -> Mode {
@@ -120,13 +119,11 @@ where
                 "Group".to_string()
             };
             let name = self.global_name(Spelling::derived("", first, &suffix));
-            let steps = members
-                .iter()
-                .map(|member| {
-                    let parent = self.function_names[member.0 as usize].clone();
-                    self.global_name(Spelling::derived("", parent, "Step"))
-                })
-                .collect();
+            let steps = members.iter().map(|member| {
+                let parent = self.function_names[member.0 as usize].clone();
+                self.global_name(Spelling::derived("", parent, "Step"))
+            });
+            let steps = steps.collect();
             let group = self.tail_groups.len();
             for member in &members {
                 self.tail_group_of.insert(*member, group);
@@ -180,8 +177,8 @@ where
         self.locals.clear();
         self.local_names.clear();
         let slots = self.tail_group_slots(group)?;
-        let member =
-            self.tail_groups[group].members.iter().position(|candidate| *candidate == id).unwrap();
+        let members = &self.tail_groups[group].members;
+        let member = members.iter().position(|candidate| *candidate == id).unwrap();
         let mut parameters = vec![];
         for parameter in &function.parameters {
             let name = self.bind_local(parameter);
@@ -227,24 +224,21 @@ where
         self.local_names.clear();
         let step = self.local_name("step".into());
         let slots = self.tail_group_slots(group)?;
-        let slot_names: Vec<String> =
-            slots.slots.iter().map(|(name, _)| self.local_name(name.clone())).collect();
+        let slot_names = slots.slots.iter().map(|(name, _)| self.local_name(name.clone()));
+        let slot_names: Vec<String> = slot_names.collect();
         let mut parameters = vec![(step.clone(), GoType::Int)];
         for ((_, type_), name) in slots.slots.iter().zip(&slot_names) {
             parameters.push((name.clone(), type_.clone()));
         }
-        let targets: Vec<LoopTarget> = members
-            .iter()
-            .enumerate()
-            .map(|(member, id)| LoopTarget {
-                function: *id,
-                parameters: slots.assignment[member]
-                    .iter()
-                    .map(|slot| identifier_expression(&slot_names[*slot]))
-                    .collect(),
-                step: Some(identifier_expression(&steps[member])),
-            })
-            .collect();
+        let targets = members.iter().enumerate().map(|(member, id)| LoopTarget {
+            function: *id,
+            parameters: slots.assignment[member]
+                .iter()
+                .map(|slot| identifier_expression(&slot_names[*slot]))
+                .collect(),
+            step: Some(identifier_expression(&steps[member])),
+        });
+        let targets: Vec<LoopTarget> = targets.collect();
         let mut reassigned = slot_names.clone();
         reassigned.push(step.clone());
         let first: &Function = self.program.function(members[0]);

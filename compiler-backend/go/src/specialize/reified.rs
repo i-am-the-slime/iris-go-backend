@@ -37,10 +37,10 @@ where
         };
         let scheme = self.continuation_type((file_id, term), 1, instantiations)?;
         let Some(scheme) = constrained_scheme(&mut self.context, scheme)? else {
-            return Err(self.unsupported(scope, unsupported("reifyType without its constraint")));
+            return Err(scope.unsupported(unsupported("reifyType without its constraint")));
         };
         if scheme.names.len() != 1 || scheme.constraints.len() != 1 {
-            return Err(self.unsupported(scope, unsupported("reifyType of another shape")));
+            return Err(scope.unsupported(unsupported("reifyType of another shape")));
         }
         let types = vec![self.context.queries.intern_type(Type::Unification(u32::MAX))];
         let Some(known) = self.monotypes.schemes.find(&scheme.key, &types) else {
@@ -58,13 +58,13 @@ where
             return Ok(Some(self.reified_pending(monotype)));
         };
         let Some((_, proxied)) = self.monotypes.function_parts(field) else {
-            return Err(self.unsupported(scope, unsupported("reifyType of another shape")));
+            return Err(scope.unsupported(unsupported("reifyType of another shape")));
         };
         let Some((proxy, answer)) = self.monotypes.function_parts(proxied) else {
-            return Err(self.unsupported(scope, unsupported("reifyType of another shape")));
+            return Err(scope.unsupported(unsupported("reifyType of another shape")));
         };
         let Monotype::Data(proxy_data) = self.monotypes.get(proxy).clone() else {
-            return Err(self.unsupported(scope, unsupported("reifyType without a Proxy")));
+            return Err(scope.unsupported(unsupported("reifyType without a Proxy")));
         };
         let value = self.fresh_local(self.monotypes.value_name(reified), reified);
         let handler = self.fresh_local(SmolStr::new_static("continuation"), continuation);
@@ -73,8 +73,8 @@ where
         let arguments = vec![value.expression()];
         let applied = ExpressionKind::Apply { function: Box::new(access), arguments };
         let applied = Expression::new(applied, proxied);
-        let proxy_value =
-            ExpressionKind::Construct { data: proxy_data, constructor: 0, arguments: vec![] };
+        let arguments = vec![];
+        let proxy_value = ExpressionKind::Construct { data: proxy_data, constructor: 0, arguments };
         let arguments = vec![Expression::new(proxy_value, proxy)];
         let answered = ExpressionKind::Apply { function: Box::new(applied), arguments };
         let answered = self.coerce(Expression::new(answered, answer), result);
@@ -97,10 +97,10 @@ where
         };
         let scheme = self.continuation_type((file_id, term), 1, instantiations)?;
         let Some(scheme) = constrained_scheme(&mut self.context, scheme)? else {
-            return Err(self.unsupported(scope, unsupported("provide without its constraint")));
+            return Err(scope.unsupported(unsupported("provide without its constraint")));
         };
         if !scheme.names.is_empty() || scheme.constraints.len() != 1 {
-            return Err(self.unsupported(scope, unsupported("provide of another shape")));
+            return Err(scope.unsupported(unsupported("provide of another shape")));
         }
         let Some((runtime, _)) = self.monotypes.schemes.at_run_time(&scheme.key) else {
             self.pass_scheme_at_run_time(scope, &scheme, false)?;
@@ -115,10 +115,10 @@ where
             return Ok(Some(self.reified_pending(monotype)));
         };
         let Some((dictionary, answer)) = self.monotypes.function_parts(field) else {
-            return Err(self.unsupported(scope, unsupported("provide of another shape")));
+            return Err(scope.unsupported(unsupported("provide of another shape")));
         };
         let Monotype::Record(members) = self.monotypes.get(dictionary).clone() else {
-            return Err(self.unsupported(scope, unsupported("provide of another shape")));
+            return Err(scope.unsupported(unsupported("provide of another shape")));
         };
         let value = self.fresh_local(SmolStr::new_static("context"), provided);
         let mut fields = Vec::with_capacity(members.len());
@@ -135,8 +135,8 @@ where
         let handler = self.fresh_local(SmolStr::new_static("continuation"), continuation);
         let access = ExpressionKind::Access { record: Box::new(handler.expression()), label };
         let access = Expression::new(access, field);
-        let applied =
-            ExpressionKind::Apply { function: Box::new(access), arguments: vec![dictionary] };
+        let arguments = vec![dictionary];
+        let applied = ExpressionKind::Apply { function: Box::new(access), arguments };
         let answered = self.coerce(Expression::new(applied, answer), result);
         let inner = self.lambda(vec![handler], answered);
         Ok(Some(self.lambda(vec![value], inner)))
@@ -170,10 +170,10 @@ where
         let scheme = self.continuation_type((file_id, term), position, instantiations)?;
         let scheme = crate::monotype::expand_synonyms(&mut self.context, scheme)?;
         let Some(scheme) = constrained_scheme(&mut self.context, scheme)? else {
-            return Err(self.unsupported(scope, unsupported("a CBN value without its constraint")));
+            return Err(scope.unsupported(unsupported("a CBN value without its constraint")));
         };
         if !scheme.names.is_empty() || scheme.constraints.len() != 1 {
-            return Err(self.unsupported(scope, unsupported("a CBN value of another shape")));
+            return Err(scope.unsupported(unsupported("a CBN value of another shape")));
         }
         let Some((runtime, _)) = self.monotypes.schemes.at_run_time(&scheme.key) else {
             self.pass_scheme_at_run_time(scope, &scheme, false)?;
@@ -197,15 +197,15 @@ where
             return Ok(Some(self.reified_pending(monotype)));
         };
         let Some((dictionary, answer)) = self.monotypes.function_parts(field) else {
-            return Err(self.unsupported(scope, unsupported("a CBN value of another shape")));
+            return Err(scope.unsupported(unsupported("a CBN value of another shape")));
         };
         let handler = self.fresh_local(SmolStr::new_static("deferred"), value);
-        let access =
-            ExpressionKind::Access { record: Box::new(handler.expression()), label: runtime.label };
+        let label = runtime.label;
+        let access = ExpressionKind::Access { record: Box::new(handler.expression()), label };
         let access = Expression::new(access, field);
         let dictionary = Expression::new(ExpressionKind::Record(vec![]), dictionary);
-        let forced =
-            ExpressionKind::Apply { function: Box::new(access), arguments: vec![dictionary] };
+        let arguments = vec![dictionary];
+        let forced = ExpressionKind::Apply { function: Box::new(access), arguments };
         let forced = Expression::new(forced, answer);
         let delayed_monotype = match applied {
             Some(applied) => self.monotypes.function_parts(applied).map(|(argument, _)| argument),

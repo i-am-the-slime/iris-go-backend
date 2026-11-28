@@ -202,7 +202,7 @@ impl Changing {
         }
     }
 
-    fn repeating(&mut self, names: Vec<String>, walk: impl FnOnce(&mut Self)) {
+    fn repeating(&mut self, names: Vec<String>, walk: impl FnOnce(&mut Changing)) {
         self.repeated += 1;
         self.declare(&names);
         walk(self);

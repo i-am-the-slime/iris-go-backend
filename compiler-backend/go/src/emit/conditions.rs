@@ -22,8 +22,8 @@ pub(super) fn assign_conditions(declarations: &mut [GoDeclaration]) {
 fn test_in_place(block: &mut Vec<GoStatement>, position: usize) {
     let GoStatement::Define { names, .. } = &block[position] else { return };
     let [name] = names.as_slice() else { return };
-    let Some(GoStatement::If { condition: GoExpression::Identifier(tested), .. }) =
-        block.get(position + 1)
+    let following = block.get(position + 1);
+    let Some(GoStatement::If { condition: GoExpression::Identifier(tested), .. }) = following
     else {
         return;
     };

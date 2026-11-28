@@ -232,8 +232,9 @@ fn shape_of_expression(
             }
             _ => None,
         },
-        GoExpression::String(_) | GoExpression::Utf16(_) => Some(Shape::Fixed),
-        GoExpression::Composite { type_: GoType::Slice(_), .. } => Some(Shape::Fixed),
+        GoExpression::String(_)
+        | GoExpression::Utf16(_)
+        | GoExpression::Composite { type_: GoType::Slice(_), .. } => Some(Shape::Fixed),
         GoExpression::Address(inner)
             if matches!(&**inner, GoExpression::Composite { type_: GoType::Slice(_), .. }) =>
         {

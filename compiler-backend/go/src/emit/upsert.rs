@@ -95,11 +95,8 @@ fn write_once_at(
 /// `value, found := object.LookupST(key, object)`, or `PeekImpl`, of two variables.
 fn lookup(statement: &GoStatement) -> Option<Lookup> {
     let GoStatement::Define { names, values } = statement else { return None };
-    let ([value, found], [GoExpression::Call { function, arguments }]) =
-        (names.as_slice(), values.as_slice())
-    else {
-        return None;
-    };
+    let [value, found] = names.as_slice() else { return None };
+    let [GoExpression::Call { function, arguments }] = values.as_slice() else { return None };
     let GoExpression::Qualified { package, name } = function.as_ref() else { return None };
     let [GoExpression::Identifier(key), GoExpression::Identifier(object)] = arguments.as_slice()
     else {

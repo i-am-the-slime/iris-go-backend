@@ -1,4 +1,3 @@
-use super::Simplifier;
 use super::choice::operation;
 use crate::foreign::{Boundary, Foreign, Iteration, Operator};
 use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
@@ -14,26 +13,20 @@ struct Reads {
     others: usize,
 }
 
-impl Simplifier<'_> {
-    /// The body with each `length xs` of a binding `xs = map f source` counting `source`
-    /// instead, when what is left reads `xs` at most once: a `map` keeps the length of what it
-    /// maps, and the one read that is left can then take the `map` into its own loop instead of
-    /// an array built to be read twice.
-    pub(super) fn count_lengths_at_source(
-        &self,
-        binding: &Binding,
-        body: Expression,
-    ) -> Expression {
-        let Some(source) = mapped_source(&binding.value) else { return body };
-        let mut reads = Reads::default();
-        count_reads(&body, binding.local.id, &mut reads);
-        if reads.lengths == 0 || reads.others > 1 {
-            return body;
-        }
-        let mut body = body;
-        count_at_source(&mut body, binding.local.id, source);
-        body
+/// The body with each `length xs` of a binding `xs = map f source` counting `source`
+/// instead, when what is left reads `xs` at most once: a `map` keeps the length of what it
+/// maps, and the one read that is left can then take the `map` into its own loop instead of
+/// an array built to be read twice.
+pub(super) fn count_lengths_at_source(binding: &Binding, body: Expression) -> Expression {
+    let Some(source) = mapped_source(&binding.value) else { return body };
+    let mut reads = Reads::default();
+    count_reads(&body, binding.local.id, &mut reads);
+    if reads.lengths == 0 || reads.others > 1 {
+        return body;
     }
+    let mut body = body;
+    count_at_source(&mut body, binding.local.id, source);
+    body
 }
 
 /// What a chain of `map`s maps over, when counting it again costs no more than its bounds.

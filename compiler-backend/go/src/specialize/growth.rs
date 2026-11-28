@@ -79,8 +79,8 @@ where
         let mut grows = false;
         let mut ancestor = self.current;
         while let Some(id) = ancestor {
-            if let Definition::Member { dictionary: enclosing, .. } =
-                &self.function_keys[id.0 as usize].definition
+            let definition = &self.function_keys[id.0 as usize].definition;
+            if let Definition::Member { dictionary: enclosing, .. } = definition
                 && enclosing.origin == dictionary.origin
                 && self.context.types.grows_all(&requested, &enclosing.types)
             {
@@ -98,8 +98,8 @@ where
             return Ok((key, vec![]));
         }
         let member = *member;
-        let (dictionary, promotions) =
-            self.promote_growing_context(&key.definition, dictionary, &types)?;
+        let promoted = self.promote_growing_context(&key.definition, dictionary, &types)?;
+        let (dictionary, promotions) = promoted;
         key.definition = Definition::Member { dictionary, member };
         Ok((key, promotions))
     }
@@ -234,10 +234,10 @@ where
             return Ok(Expression::new(ExpressionKind::Fail(pending), monotype));
         };
         if dictionaries.len() != scheme.constraints.len() {
-            return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+            return Err(scope.unsupported(UnsupportedState::UnabstractedEvidence));
         }
-        let substitution: Substitution =
-            scheme.names.iter().copied().zip(types.iter().copied()).collect();
+        let substitution = scheme.names.iter().copied().zip(types.iter().copied());
+        let substitution: Substitution = substitution.collect();
         let mut arguments = vec![];
         let passed = dictionaries.into_iter().zip(scheme.constraints.iter());
         for ((dictionary, &constraint), expected) in passed.zip(runtime.dictionaries.iter()) {
@@ -258,7 +258,7 @@ where
         let mut result = field;
         for _ in &arguments {
             let Some((_, rest)) = self.monotypes.function_parts(result) else {
-                return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+                return Err(scope.unsupported(UnsupportedState::UnabstractedEvidence));
             };
             result = rest;
         }

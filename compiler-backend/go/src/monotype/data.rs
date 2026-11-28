@@ -129,9 +129,8 @@ impl Monotypes {
         }
         let reads_start = self.schemes.read_count();
         let module = context.module(data.file_id)?;
-        let IndexedTypeItemKind::Newtype { constructors, .. } =
-            &module.indexed.items[data.item].kind
-        else {
+        let kind = &module.indexed.items[data.item].kind;
+        let IndexedTypeItemKind::Newtype { constructors, .. } = kind else {
             return Err(UnsupportedState::MissingDeclaration.into());
         };
         let Some(&constructor) = constructors.first() else {
@@ -281,14 +280,12 @@ impl Monotypes {
     {
         let used = self.used_parameters(context, file_id, item)?;
         let phantom = context.types.phantom();
-        let arguments = arguments
-            .iter()
-            .enumerate()
-            .map(|(position, &argument)| match used.get(position) {
-                Some(false) => phantom,
-                _ => context.types.without_causes(argument),
-            })
-            .collect();
+        let positioned = arguments.iter().enumerate();
+        let arguments = positioned.map(|(position, &argument)| match used.get(position) {
+            Some(false) => phantom,
+            _ => context.types.without_causes(argument),
+        });
+        let arguments = arguments.collect();
         Ok(DataType { file_id, item, arguments })
     }
 

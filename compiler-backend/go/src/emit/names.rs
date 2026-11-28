@@ -115,7 +115,7 @@ fn chosen_hint<'h>(hints: &'h [Hint], labels: &str) -> Option<&'h Hint> {
 /// Up to two labels of a record that the other records wanting its name lack,
 /// those most others lack first.
 fn distinguishing_labels(own: &[RecordField], others: &[&[RecordField]]) -> Vec<String> {
-    let mut lacking: Vec<(usize, &SmolStr)> = own
+    let lacking = own
         .iter()
         .map(|field| {
             let lacking = others
@@ -124,8 +124,8 @@ fn distinguishing_labels(own: &[RecordField], others: &[&[RecordField]]) -> Vec<
                 .count();
             (lacking, &field.label)
         })
-        .filter(|&(lacking, _)| lacking > 0)
-        .collect();
+        .filter(|&(lacking, _)| lacking > 0);
+    let mut lacking: Vec<(usize, &SmolStr)> = lacking.collect();
     lacking.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(right.1)));
     lacking.into_iter().take(2).map(|(_, label)| crate::naming::go_field(label)).collect()
 }
@@ -139,7 +139,7 @@ fn distinguishing_types(
     fields: &[std::sync::Arc<[RecordField]>],
     field_types: &[Vec<String>],
 ) -> Option<String> {
-    let differing: Vec<&str> = fields[index]
+    let differing = fields[index]
         .iter()
         .zip(&field_types[index])
         .filter(|(field, type_name)| {
@@ -150,21 +150,19 @@ fn distinguishing_types(
             })
         })
         .map(|(_, type_name)| type_name.as_str())
-        .take(limit)
-        .collect();
+        .take(limit);
+    let differing: Vec<&str> = differing.collect();
     (!differing.is_empty()).then(|| differing.concat())
 }
 
 /// Parts spelled with records by `short`, or by their labels where it has none.
 fn spell_parts(parts: &[NamePart], short: &FxHashMap<MonotypeId, String>) -> String {
-    let spelled: String = parts
-        .iter()
-        .map(|part| match part {
-            NamePart::Text(text) | NamePart::Stutter(text) => text.as_str(),
-            NamePart::Record { monotype, labels } => short.get(monotype).unwrap_or(labels).as_str(),
-            NamePart::Argument => "",
-        })
-        .collect();
+    let spelled = parts.iter().map(|part| match part {
+        NamePart::Text(text) | NamePart::Stutter(text) => text.as_str(),
+        NamePart::Record { monotype, labels } => short.get(monotype).unwrap_or(labels).as_str(),
+        NamePart::Argument => "",
+    });
+    let spelled: String = spelled.collect();
     identifier(&spelled)
 }
 
@@ -183,9 +181,8 @@ where
     pub(super) fn function_parts(&mut self, name: &str) -> GoResult<Option<Vec<NamePart>>> {
         let Some(spelling) = self.monotypes.function_spellings.get(name).cloned() else {
             let suffixes = [super::reuse::REUSING, super::hash_maps::HASHED];
-            let Some((function, suffix)) =
-                suffixes.iter().find_map(|&suffix| Some((name.strip_suffix(suffix)?, suffix)))
-            else {
+            let split_suffix = |&suffix: &&'static str| Some((name.strip_suffix(suffix)?, suffix));
+            let Some((function, suffix)) = suffixes.iter().find_map(split_suffix) else {
                 return Ok(None);
             };
             let Some(mut parts) = self.function_parts(function)? else { return Ok(None) };
@@ -372,15 +369,15 @@ where
                 }
             }
         }
-        let (ladders, chosen_homes): (Vec<_>, Vec<_>) =
-            self.record_ladders(&records, modules)?.into_iter().unzip();
+        let ladders = self.record_ladders(&records, modules)?;
+        let (ladders, chosen_homes): (Vec<_>, Vec<_>) = ladders.into_iter().unzip();
         let record_homes: FxHashMap<MonotypeId, FileId> = records
             .iter()
             .zip(chosen_homes)
             .filter_map(|(&monotype, home)| Some((monotype, home?)))
             .collect();
-        let record_ladders: FxHashMap<MonotypeId, Vec<String>> =
-            records.into_iter().zip(ladders).collect();
+        let record_ladders = records.into_iter().zip(ladders);
+        let record_ladders: FxHashMap<MonotypeId, Vec<String>> = record_ladders.collect();
         let mut homes = vec![];
         for (name, spelling) in pending {
             let spelling = match spelling {
@@ -392,18 +389,16 @@ where
                 }
                 PendingSpelling::Parts(parts) => {
                     let full = spell_parts(&parts, &FxHashMap::default());
-                    let parts = parts
-                        .into_iter()
-                        .map(|part| match part {
-                            NamePart::Text(text) => SpelledPart::Text(text),
-                            NamePart::Stutter(text) => SpelledPart::Stutter(text),
-                            NamePart::Argument => SpelledPart::Argument,
-                            NamePart::Record { monotype, .. } => SpelledPart::Record {
-                                global: self.record_names.get(&monotype).cloned(),
-                                name: record_ladders[&monotype][0].clone(),
-                            },
-                        })
-                        .collect();
+                    let parts = parts.into_iter().map(|part| match part {
+                        NamePart::Text(text) => SpelledPart::Text(text),
+                        NamePart::Stutter(text) => SpelledPart::Stutter(text),
+                        NamePart::Argument => SpelledPart::Argument,
+                        NamePart::Record { monotype, .. } => SpelledPart::Record {
+                            global: self.record_names.get(&monotype).cloned(),
+                            name: record_ladders[&monotype][0].clone(),
+                        },
+                    });
+                    let parts = parts.collect();
                     Spelling::Composed { parts, full }
                 }
             };
@@ -422,32 +417,24 @@ where
         modules: &Modules,
     ) -> GoResult<Vec<(Vec<String>, Option<FileId>)>> {
         let hints = self.record_hints(records, modules)?;
-        let fields: Vec<std::sync::Arc<[RecordField]>> = records
-            .iter()
-            .map(|&monotype| match self.monotypes.get(monotype) {
-                Monotype::Record(fields) => fields.clone(),
-                _ => unreachable!("invariant violated: a record name for a non-record"),
-            })
-            .collect();
-        let chosen: Vec<Option<Hint>> = records
-            .iter()
-            .zip(&fields)
-            .map(|(monotype, fields)| {
-                let labels = labels_name(fields);
-                hints.get(monotype).and_then(|hints| chosen_hint(hints, &labels)).cloned()
-            })
-            .collect();
+        let fields = records.iter().map(|&monotype| match self.monotypes.get(monotype) {
+            Monotype::Record(fields) => fields.clone(),
+            _ => unreachable!("invariant violated: a record name for a non-record"),
+        });
+        let fields: Vec<std::sync::Arc<[RecordField]>> = fields.collect();
+        let chosen = records.iter().zip(&fields).map(|(monotype, fields)| {
+            let labels = labels_name(fields);
+            hints.get(monotype).and_then(|hints| chosen_hint(hints, &labels)).cloned()
+        });
+        let chosen: Vec<Option<Hint>> = chosen.collect();
         let (field_types, typed) = self.spelled_fields(records, &fields, &chosen)?;
-        let first: Vec<String> = chosen
-            .iter()
-            .zip(&fields)
-            .map(|(hint, fields)| match hint {
-                Some(hint) => hint.name.clone(),
-                None => labels_name(fields),
-            })
-            .collect();
-        let short: FxHashMap<MonotypeId, String> =
-            records.iter().copied().zip(first.iter().cloned()).collect();
+        let first = chosen.iter().zip(&fields).map(|(hint, fields)| match hint {
+            Some(hint) => hint.name.clone(),
+            None => labels_name(fields),
+        });
+        let first: Vec<String> = first.collect();
+        let short = records.iter().copied().zip(first.iter().cloned());
+        let short: FxHashMap<MonotypeId, String> = short.collect();
         let mut wanting: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
         for (index, name) in first.iter().enumerate() {
             wanting.entry(name.as_str()).or_default().push(index);
@@ -459,8 +446,8 @@ where
                 .copied()
                 .filter(|&other| other != index)
                 .collect();
-            let other_fields: Vec<&[RecordField]> =
-                others.iter().map(|&other| &*fields[other]).collect();
+            let other_fields = others.iter().map(|&other| &*fields[other]);
+            let other_fields: Vec<&[RecordField]> = other_fields.collect();
             let typed = typed[index].clone();
             let of_types = |limit: usize| {
                 distinguishing_types(limit, index, &others, &fields, &field_types)
@@ -474,8 +461,8 @@ where
                     let qualifier = |other: usize| {
                         chosen[other].as_ref().and_then(|other| other.qualifier.as_ref())
                     };
-                    let distinguishes =
-                        others.iter().any(|&other| qualifier(other) != hint.qualifier.as_ref());
+                    let own = hint.qualifier.as_ref();
+                    let distinguishes = others.iter().any(|&other| qualifier(other) != own);
                     let qualified = hint
                         .qualifier
                         .as_ref()
@@ -486,11 +473,9 @@ where
                         [] => None,
                         ref labels => Some(format!("{}With{}", hint.name, labels.concat())),
                     };
-                    let instantiated =
-                        hint.instantiated.as_ref().map(|parts| spell_parts(parts, &short));
                     vec![
                         Some(hint.name.clone()),
-                        instantiated,
+                        hint.instantiated.as_ref().map(|parts| spell_parts(parts, &short)),
                         qualified,
                         with_labels,
                         of_two_types,
@@ -516,14 +501,12 @@ where
         fields: &[std::sync::Arc<[RecordField]>],
         chosen: &[Option<Hint>],
     ) -> GoResult<(Vec<Vec<String>>, Vec<String>)> {
-        let short: FxHashMap<MonotypeId, String> = records
-            .iter()
-            .zip(chosen.iter().zip(fields))
-            .map(|(&monotype, (hint, fields))| match hint {
-                Some(hint) => (monotype, hint.name.clone()),
-                None => (monotype, labels_name(fields)),
-            })
-            .collect();
+        let hinted = records.iter().zip(chosen.iter().zip(fields));
+        let short = hinted.map(|(&monotype, (hint, fields))| match hint {
+            Some(hint) => (monotype, hint.name.clone()),
+            None => (monotype, labels_name(fields)),
+        });
+        let short: FxHashMap<MonotypeId, String> = short.collect();
         let mut field_types = vec![];
         let mut typed = vec![];
         for fields in fields {
@@ -551,7 +534,10 @@ where
         if depth == 0 {
             return Ok(String::new());
         }
-        let inner = |emitter: &mut Self, prefix: &str, inner: MonotypeId| -> GoResult<String> {
+        let inner = |emitter: &mut Emitter<'_, '_, '_, Q>,
+                     prefix: &str,
+                     inner: MonotypeId|
+         -> GoResult<String> {
             Ok(format!("{prefix}{}", emitter.field_type_name(inner, short, depth - 1)?))
         };
         Ok(match self.monotypes.get(monotype).clone() {
@@ -670,9 +656,13 @@ where
                 hints.iter().find(|hint| hint.source <= Source::Alias).map(|hint| hint.name.clone())
             });
             if records.contains(&monotype) {
-                let hint =
-                    Hint { source: Source::Used, name, qualifier, instantiated: None, home: None };
-                hints.entry(monotype).or_default().push(hint);
+                hints.entry(monotype).or_default().push(Hint {
+                    source: Source::Used,
+                    name,
+                    qualifier,
+                    instantiated: None,
+                    home: None,
+                });
             }
         }
         let mut data: Vec<crate::monotype::DataType> = self.data_layouts.keys().cloned().collect();
@@ -681,13 +671,10 @@ where
         // nothing about the record it holds.
         data.retain(|data| data.arguments.is_empty());
         for data in data {
-            let Some(constructors) =
-                supported(self.monotypes.constructors(&mut self.context, &data))?
-            else {
-                continue;
-            };
-            let type_name =
-                capitalise(&identifier(&self.context.type_name(data.file_id, data.item)?));
+            let constructors = self.monotypes.constructors(&mut self.context, &data);
+            let Some(constructors) = supported(constructors)? else { continue };
+            let declared_name = self.context.type_name(data.file_id, data.item)?;
+            let type_name = capitalise(&identifier(&declared_name));
             for constructor in constructors.iter() {
                 if let [field] = constructor.fields[..]
                     && records.contains(&field)
@@ -716,15 +703,11 @@ where
         hints: &mut FxHashMap<MonotypeId, Vec<Hint>>,
     ) -> GoResult<()> {
         use checking::core::Type;
-        let label_sets: FxHashSet<Vec<SmolStr>> = records
-            .iter()
-            .filter_map(|&monotype| match self.monotypes.get(monotype) {
-                Monotype::Record(fields) => {
-                    Some(fields.iter().map(|field| field.label.clone()).collect())
-                }
-                _ => None,
-            })
-            .collect();
+        let label_sets = records.iter().filter_map(|&monotype| {
+            let Monotype::Record(fields) = self.monotypes.get(monotype) else { return None };
+            Some(fields.iter().map(|field| field.label.clone()).collect())
+        });
+        let label_sets: FxHashSet<Vec<SmolStr>> = label_sets.collect();
         let mut erased_newtypes = std::mem::take(&mut self.monotypes.erased_newtypes);
         erased_newtypes.extend(std::mem::take(&mut self.context.erased_newtypes));
         for erased in erased_newtypes {
@@ -740,8 +723,8 @@ where
         for module_index in ordered {
             let file_id = modules.file(module_index);
             let module = self.context.module(file_id)?;
-            let qualifier =
-                module.name.rsplit('.').next().map(|last| capitalise(&identifier(last)));
+            let last_segment = module.name.rsplit('.').next();
+            let qualifier = last_segment.map(|last| capitalise(&identifier(last)));
             let mut declared: Vec<(String, checking::TypeId, bool, Option<FileId>)> = vec![];
             for (item, indexed) in module.indexed.items.iter_types() {
                 let Some(name) = indexed.name.as_ref() else { continue };
@@ -759,8 +742,8 @@ where
                         if parameters.is_none_or(|data| !data.type_parameters.is_empty()) {
                             continue;
                         }
-                        let newtype =
-                            self.context.queries.intern_type(Type::Constructor(file_id, item));
+                        let constructor = Type::Constructor(file_id, item);
+                        let newtype = self.context.queries.intern_type(constructor);
                         declared.push((name.to_string(), newtype, true, Some(file_id)));
                     }
                     _ => {}
@@ -781,8 +764,8 @@ where
                     Some(synonym) if !self.is_record_type(synonym.expansion) => Source::Alias,
                     _ => Source::Declared,
                 };
-                let is_newtype =
-                    matches!(module.indexed.items[item].kind, IndexedTypeItemKind::Newtype { .. });
+                let kind = &module.indexed.items[item].kind;
+                let is_newtype = matches!(kind, IndexedTypeItemKind::Newtype { .. });
                 let home = is_newtype.then_some(file_id);
                 let name = capitalise(&identifier(name));
                 let instantiated = if arguments.is_empty() {
@@ -806,9 +789,13 @@ where
                 }
                 let source = if direct { Source::Declared } else { Source::Alias };
                 let name = capitalise(&identifier(&name));
-                let hint =
-                    Hint { source, name, qualifier: qualifier.clone(), instantiated: None, home };
-                hints.entry(monotype).or_default().push(hint);
+                hints.entry(monotype).or_default().push(Hint {
+                    source,
+                    name,
+                    qualifier: qualifier.clone(),
+                    instantiated: None,
+                    home,
+                });
             }
         }
         Ok(())
@@ -848,8 +835,8 @@ where
                 match self.context.types.lookup(row).clone() {
                     Type::Row(row) => {
                         let row = self.context.queries.lookup_row_type(row).clone();
-                        let mut labels: Vec<SmolStr> =
-                            row.fields.iter().map(|field| field.label.clone()).collect();
+                        let labels = row.fields.iter().map(|field| field.label.clone());
+                        let mut labels: Vec<SmolStr> = labels.collect();
                         labels.sort();
                         Some(labels)
                     }
@@ -858,8 +845,8 @@ where
             }
             _ => None,
         };
-        let newtype =
-            matches!(self.context.types.lookup(head), Type::Constructor(..)) && !is_record;
+        let constructed = matches!(self.context.types.lookup(head), Type::Constructor(..));
+        let newtype = constructed && !is_record;
         if !newtype && labels.is_none_or(|labels| !label_sets.contains(&labels)) {
             return Ok(None);
         }

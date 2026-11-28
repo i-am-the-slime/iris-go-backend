@@ -99,8 +99,8 @@ impl<'r> Rewrite<'r> {
             // The analysis knows the body by where it stood, and the function moves out to be
             // rewritten.
             let body = std::ptr::from_ref(&self.program.functions[index].body);
-            let mut function =
-                std::mem::replace(&mut self.program.functions[index], placeholder_function(unit));
+            let placeholder = placeholder_function(unit);
+            let mut function = std::mem::replace(&mut self.program.functions[index], placeholder);
             for parameter in &mut function.parameters {
                 let monotype = self.local_type(parameter.id, parameter.monotype);
                 if monotype != parameter.monotype {
@@ -121,16 +121,14 @@ impl<'r> Rewrite<'r> {
         }
         retyped
             .extend((original..self.program.functions.len()).map(|index| FunctionId(index as u32)));
-        let types: FxHashMap<FunctionId, MonotypeId> = retyped
-            .iter()
-            .map(|&id| {
-                let function = self.program.function(id);
-                let parameters: Vec<MonotypeId> =
-                    function.parameters.iter().map(|parameter| parameter.monotype).collect();
-                let result = function.result;
-                (id, self.function_type(&parameters, result))
-            })
-            .collect();
+        let types = retyped.iter().map(|&id| {
+            let function = self.program.function(id);
+            let parameters = function.parameters.iter().map(|parameter| parameter.monotype);
+            let parameters: Vec<MonotypeId> = parameters.collect();
+            let result = function.result;
+            (id, self.function_type(&parameters, result))
+        });
+        let types: FxHashMap<FunctionId, MonotypeId> = types.collect();
         for function in &mut self.program.functions {
             retype_references(&mut function.body, &types);
         }
@@ -166,17 +164,15 @@ impl<'r> Rewrite<'r> {
             let Some(fields) = fields_of(self.monotypes, monotype) else {
                 unreachable!("invariant violated: slots of neither a map nor a record")
             };
-            let fields: Vec<RecordField> = fields
-                .iter()
-                .map(|field| match layout.field(&field.label) {
-                    Some(slots) => {
-                        let range = slots.start..slots.start + slots.width;
-                        let monotype = self.retype(field.monotype, &representations[range]);
-                        RecordField { label: field.label.clone(), monotype }
-                    }
-                    None => field.clone(),
-                })
-                .collect();
+            let fields = fields.iter().map(|field| match layout.field(&field.label) {
+                Some(slots) => {
+                    let range = slots.start..slots.start + slots.width;
+                    let monotype = self.retype(field.monotype, &representations[range]);
+                    RecordField { label: field.label.clone(), monotype }
+                }
+                None => field.clone(),
+            });
+            let fields: Vec<RecordField> = fields.collect();
             let record = self.monotypes.intern(Monotype::Record(fields.into()));
             if let Some(spellings) = self.monotypes.record_spellings.get(&monotype).cloned() {
                 self.monotypes.record_spellings.entry(record).or_insert(spellings);
@@ -194,8 +190,8 @@ impl<'r> Rewrite<'r> {
 
     /// The expression that the analysis saw at `at`.
     fn expression_at(&mut self, expression: &mut Expression, at: *const Expression) {
-        let own =
-            self.decided.expressions.get(&at).map(|slots| self.decided.representations(slots));
+        let slots = self.decided.expressions.get(&at);
+        let own = slots.map(|slots| self.decided.representations(slots));
         let conversion = self.decided.conversions.remove(&at);
         let scrutinee_types: Vec<MonotypeId> = match &expression.kind {
             ExpressionKind::Case { scrutinees, .. } => {
@@ -287,8 +283,8 @@ impl<'r> Rewrite<'r> {
         };
         let mut built = vec![];
         for field in fields.iter() {
-            let slots =
-                layout.field(&field.label).map(|slots| slots.start..slots.start + slots.width);
+            let field_slots = layout.field(&field.label);
+            let slots = field_slots.map(|slots| slots.start..slots.start + slots.width);
             let (from, to) = match slots {
                 Some(range) => (&from[range.clone()], &to[range]),
                 None => (&[][..], &[][..]),
@@ -324,15 +320,12 @@ impl<'r> Rewrite<'r> {
         let slots = |label: &str| {
             layout.field(label).map_or(0..0, |field| field.start..field.start + field.width)
         };
-        let convert_parts = |rewrite: &mut Self, parts: Vec<Expression>| -> Vec<Expression> {
-            parts
-                .into_iter()
-                .zip(fields.iter())
-                .map(|(part, field)| {
-                    let range = slots(&field.label);
-                    rewrite.convert(part, field.monotype, &from[range.clone()], &to[range])
-                })
-                .collect()
+        let convert_parts = |rewrite: &mut Rewrite<'r>, parts: Vec<Expression>| {
+            let converted = parts.into_iter().zip(fields.iter()).map(|(part, field)| {
+                let range = slots(&field.label);
+                rewrite.convert(part, field.monotype, &from[range.clone()], &to[range])
+            });
+            converted.collect::<Vec<Expression>>()
         };
         let build = |parts: Vec<Expression>| {
             if to.iter().any(|native| native.is_native()) {
@@ -340,9 +333,8 @@ impl<'r> Rewrite<'r> {
                 Expression::new(ExpressionKind::Record(labelled.collect()), target)
             } else {
                 let data = data.clone();
-                let construct =
-                    ExpressionKind::Construct { data, constructor: 0, arguments: parts };
-                Expression::new(construct, target)
+                let kind = ExpressionKind::Construct { data, constructor: 0, arguments: parts };
+                Expression::new(kind, target)
             }
         };
         match value.kind {
@@ -355,21 +347,19 @@ impl<'r> Rewrite<'r> {
                 let mut bindings = vec![];
                 let value = Expression { kind, ..value };
                 let record = self.named("record", value, &mut bindings);
-                let parts = fields
-                    .iter()
-                    .map(|field| {
-                        let monotype = self.retype(field.monotype, &from[slots(&field.label)]);
-                        let label = field.label.clone();
-                        let record = Box::new(record.clone());
-                        Expression::new(ExpressionKind::Access { record, label }, monotype)
-                    })
-                    .collect();
+                let parts = fields.iter().map(|field| {
+                    let monotype = self.retype(field.monotype, &from[slots(&field.label)]);
+                    let label = field.label.clone();
+                    let record = Box::new(record.clone());
+                    Expression::new(ExpressionKind::Access { record, label }, monotype)
+                });
+                let parts = parts.collect();
                 let_in(bindings, build(convert_parts(self, parts)))
             }
             kind => {
                 let value = Expression { kind, ..value };
-                let locals: Vec<Local> =
-                    fields.iter().map(|field| self.fresh("field", field.monotype)).collect();
+                let locals = fields.iter().map(|field| self.fresh("field", field.monotype));
+                let locals: Vec<Local> = locals.collect();
                 let parts = locals.iter().map(Local::expression).collect();
                 let built = build(convert_parts(self, parts));
                 let pattern = constructor(data, 0, locals.iter().map(variable).collect(), tree);
@@ -454,8 +444,8 @@ impl<'r> Rewrite<'r> {
         match &mut expression.kind {
             ExpressionKind::Let { bindings, .. } => {
                 for binding in bindings {
-                    binding.local.monotype =
-                        self.local_type(binding.local.id, binding.local.monotype);
+                    let local = &mut binding.local;
+                    local.monotype = self.local_type(local.id, local.monotype);
                 }
             }
             ExpressionKind::EffectBind { action, local, .. } => {
@@ -480,8 +470,8 @@ impl<'r> Rewrite<'r> {
                     }
                 }
                 if changed {
-                    let parameters: Vec<MonotypeId> =
-                        parameters.iter().map(|parameter| parameter.monotype).collect();
+                    let parameters = parameters.iter().map(|parameter| parameter.monotype);
+                    let parameters: Vec<MonotypeId> = parameters.collect();
                     let result = body.monotype;
                     expression.monotype = self.function_type(&parameters, result);
                 }
@@ -532,11 +522,8 @@ impl<'r> Rewrite<'r> {
         match &mut pattern.kind {
             PatternKind::Variable(local) => local.monotype = monotype,
             PatternKind::Record(fields) => {
-                let (Some(originals), Monotype::Record(types)) =
-                    (fields_of(self.monotypes, original), self.monotypes.get(monotype).clone())
-                else {
-                    return;
-                };
+                let Some(originals) = fields_of(self.monotypes, original) else { return };
+                let Monotype::Record(types) = self.monotypes.get(monotype).clone() else { return };
                 for (label, field) in fields {
                     let typed = |fields: &[RecordField]| {
                         fields
@@ -684,11 +671,8 @@ impl<'r> Rewrite<'r> {
         };
         let [left, right] = &parameters[..] else { return false };
         let int = |local: &Local| matches!(self.monotypes.get(local.monotype), Monotype::Int);
-        let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::IntAdd), arguments } =
-            &body.kind
-        else {
-            return false;
-        };
+        let ExpressionKind::Foreign { foreign, arguments } = &body.kind else { return false };
+        let Foreign::Operator(Operator::IntAdd) = foreign else { return false };
         let is = |expression: &Expression, local: &Local| matches!(expression.kind, ExpressionKind::Local(id) if id == local.id);
         let adds = match &arguments[..] {
             [first, second] => {
@@ -753,8 +737,8 @@ impl<'r> Rewrite<'r> {
         let key_ref = self.named("key", key, &mut bindings);
         let table_ref = self.named("table", table, &mut bindings);
         let old = self.fresh("old", value_type);
-        let current =
-            hash_map(HashMapOperation::Lookup, vec![key_ref.clone(), table_ref.clone()], maybe);
+        let arguments = vec![key_ref.clone(), table_ref.clone()];
+        let current = hash_map(HashMapOperation::Lookup, arguments, maybe);
         let changed = applied(change, vec![old.expression()], maybe);
         let stored = self.stored(changed, key_ref, table_ref.clone(), hash);
         let alternatives = vec![

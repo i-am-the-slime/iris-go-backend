@@ -87,27 +87,21 @@ impl Simplifier<'_> {
         if !is_within_size(&function.body, SPECIALIZED_SIZE) {
             return None;
         }
-        let mut templates: Vec<Option<Expression>> = function
-            .parameters
-            .iter()
-            .zip(arguments)
-            .enumerate()
-            .map(|(index, (parameter, argument))| {
-                let typed = self.monotypes.function_parts(parameter.monotype).is_some()
-                    && self.monotypes.same_without_causes(argument.monotype, parameter.monotype);
-                let known = typed.then(|| self.known_function(argument)).flatten()?;
-                let uses =
-                    parameter_uses(&function.body, Callee::Function(callee), index, parameter.id);
-                let used = match known {
-                    KnownFunction::Defined => uses.occurs,
-                    KnownFunction::Built => uses.occurs && uses.only_called,
-                    KnownFunction::Moved => {
-                        uses.occurs && uses.only_called && uses.occurrences == 1
-                    }
-                };
-                (used && uses.passed_on_unchanged).then(|| template(argument, parameter.monotype))
-            })
-            .collect();
+        let called_function = Callee::Function(callee);
+        let parameters = function.parameters.iter().zip(arguments).enumerate();
+        let templates = parameters.map(|(index, (parameter, argument))| {
+            let typed = self.monotypes.function_parts(parameter.monotype).is_some()
+                && self.monotypes.same_without_causes(argument.monotype, parameter.monotype);
+            let known = typed.then(|| self.known_function(argument)).flatten()?;
+            let uses = parameter_uses(&function.body, called_function, index, parameter.id);
+            let used = match known {
+                KnownFunction::Defined => uses.occurs,
+                KnownFunction::Built => uses.occurs && uses.only_called,
+                KnownFunction::Moved => uses.occurs && uses.only_called && uses.occurrences == 1,
+            };
+            (used && uses.passed_on_unchanged).then(|| template(argument, parameter.monotype))
+        });
+        let mut templates: Vec<Option<Expression>> = templates.collect();
         templates.resize(function.parameters.len(), None);
         let kept = function.parameters.len() - templates.iter().flatten().count();
         let passed: usize = templates
@@ -130,8 +124,8 @@ impl Simplifier<'_> {
             ExpressionKind::Function(id) => takes_more(*id, 0).then_some(KnownFunction::Defined),
             ExpressionKind::Apply { function, arguments } => {
                 let ExpressionKind::Function(id) = function.kind else { return None };
-                let built =
-                    takes_more(id, arguments.len()) && arguments.iter().all(is_constant_or_local);
+                let takes_more_arguments = takes_more(id, arguments.len());
+                let built = takes_more_arguments && arguments.iter().all(is_constant_or_local);
                 built.then_some(KnownFunction::Built)
             }
             ExpressionKind::Lambda { .. } if is_within_size(argument, INLINE_SIZE) => {
@@ -216,8 +210,8 @@ impl Simplifier<'_> {
             self.substitute_copies(&mut body, parameter.id, &value);
         }
         let name = format_smolstr!("{}{names}", callee.name);
-        let spelling =
-            FunctionSpelling::Lifted { parent: callee.name.clone(), local: names.into() };
+        let parent = callee.name.clone();
+        let spelling = FunctionSpelling::Lifted { parent, local: names.into() };
         self.monotypes.function_spellings.entry(name.clone()).or_insert(spelling);
         Function {
             name,
@@ -408,9 +402,8 @@ impl Simplifier<'_> {
         let mut body = *body;
         redirect_local_calls(&mut body, original.local.id, index, &|_| Some(local.clone()));
         self.substitute_copies(&mut body, parameter.id, argument);
-        let value =
-            Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, monotype)
-                .replacing(original.value.position);
+        let lambda = ExpressionKind::Lambda { parameters, body: Box::new(body) };
+        let value = Expression::new(lambda, monotype).replacing(original.value.position);
         let fuel = std::mem::replace(&mut self.fuel, INLINE_FUEL);
         let value = self.expression(value);
         self.fuel = fuel;

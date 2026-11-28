@@ -75,7 +75,7 @@ where
             mentions_local(value, tail_loop.parameter)
                 && self.holds_references(value.monotype, &mut FxHashSet::default())
         })?;
-        let maps: Vec<*const Expression> = next
+        let maps = next
             .into_iter()
             .filter(|next| is_map(next) && next.monotype == parameter.monotype)
             .map(|map| {
@@ -83,8 +83,8 @@ where
                     unreachable!("invariant violated: a map is a foreign call")
                 };
                 std::ptr::from_ref(&arguments[0])
-            })
-            .collect();
+            });
+        let maps: Vec<*const Expression> = maps.collect();
         (!maps.is_empty()).then_some(maps)
     }
 

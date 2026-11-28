@@ -84,11 +84,8 @@ fn indexing_branches(alternatives: &[Alternative], array: LocalId) -> Option<Bra
         return None;
     };
     let [indexed] = &arguments[..] else { return None };
-    let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::ArrayIndex), arguments } =
-        &indexed.kind
-    else {
-        return None;
-    };
+    let ExpressionKind::Foreign { foreign, arguments } = &indexed.kind else { return None };
+    let Foreign::Operator(Operator::ArrayIndex) = foreign else { return None };
     let [indexed_array, indexed_position] = &arguments[..] else { return None };
     let reads_found = matches!(indexed_array.kind, ExpressionKind::Local(id) if id == array)
         && matches!(indexed_position.kind, ExpressionKind::Local(id) if id == position.id);

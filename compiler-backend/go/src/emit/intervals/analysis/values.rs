@@ -231,8 +231,8 @@ impl Analysis<'_, '_, '_> {
                     (self.upper(state, left)?, self.lower(state, right)?),
                     (self.upper(state, left)?, self.upper(state, right)?),
                 ];
-                let products: Vec<i128> =
-                    bounds.iter().map(|(a, b)| a.checked_mul(*b)).collect::<Option<_>>()?;
+                let products = bounds.iter().map(|(a, b)| a.checked_mul(*b));
+                let products: Vec<i128> = products.collect::<Option<_>>()?;
                 let (low, high) = (*products.iter().min()?, *products.iter().max()?);
                 let (least, most) = kind.range();
                 if low < least || high > most {
@@ -255,8 +255,8 @@ impl Analysis<'_, '_, '_> {
         state: &mut State,
         blank: Option<Symbol>,
     ) -> Option<Value> {
-        let values: Vec<Option<Value>> =
-            arguments.iter().map(|argument| self.value_with(argument, state, blank)).collect();
+        let values = arguments.iter().map(|argument| self.value_with(argument, state, blank));
+        let values: Vec<Option<Value>> = values.collect();
         let temporary = Value::of(self.temporary(state, Some(kind)));
         let mut bounds = vec![];
         for value in &values {

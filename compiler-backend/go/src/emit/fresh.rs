@@ -61,11 +61,8 @@ fn clips(statement: &GoStatement, name: &str) -> bool {
 
 fn grown(statement: &GoStatement, name: &str) -> Option<GoExpression> {
     let GoStatement::Assign { targets, values } = statement else { return None };
-    let ([GoExpression::Identifier(target)], [GoExpression::Call { function, arguments }]) =
-        (targets.as_slice(), values.as_slice())
-    else {
-        return None;
-    };
+    let [GoExpression::Identifier(target)] = targets.as_slice() else { return None };
+    let [GoExpression::Call { function, arguments }] = values.as_slice() else { return None };
     let [clip, capacity] = arguments.as_slice() else { return None };
     (target == name && is_slices_function(function, "Grow") && clip_of(clip, name))
         .then(|| capacity.clone())

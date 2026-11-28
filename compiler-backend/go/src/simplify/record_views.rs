@@ -120,9 +120,10 @@ impl Simplifier<'_> {
         let Monotype::Record(fields) = self.monotypes.get(record.monotype).clone() else {
             return Err(arguments);
         };
-        let Foreign::Call { function: GoFunction { package: GoPackage::Object, name }, .. } =
-            foreign
-        else {
+        let Foreign::Call { function, .. } = foreign else {
+            return Err(arguments);
+        };
+        let GoFunction { package: GoPackage::Object, name } = function else {
             return Err(arguments);
         };
         match (*name, arguments.as_slice()) {

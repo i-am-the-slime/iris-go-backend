@@ -56,8 +56,8 @@ impl Unchanging {
     /// every field.
     fn of(parameters: &[(String, GoType)], body: &mut [GoStatement]) -> Option<Unchanging> {
         let mut assigned = FxHashSet::default();
-        let mut bound: FxHashSet<String> =
-            parameters.iter().map(|(name, _)| name.clone()).collect();
+        let bound = parameters.iter().map(|(name, _)| name.clone());
+        let mut bound: FxHashSet<String> = bound.collect();
         statements_names(body, &mut |name| match name {
             Name::Written(name) => {
                 assigned.insert(name.clone());
@@ -78,11 +78,8 @@ impl Unchanging {
     /// The record and field a definition reads, when neither can change.
     fn read<'s>(&self, statement: &'s GoStatement) -> Option<(&'s str, (String, String))> {
         let GoStatement::Define { names, values } = statement else { return None };
-        let ([name], [GoExpression::Field { value, name: field }]) =
-            (names.as_slice(), values.as_slice())
-        else {
-            return None;
-        };
+        let [name] = names.as_slice() else { return None };
+        let [GoExpression::Field { value, name: field }] = values.as_slice() else { return None };
         let GoExpression::Identifier(record) = value.as_ref() else { return None };
         let fixed = !self.assigned.contains(record)
             && !self.assigned.contains(name)

@@ -157,19 +157,16 @@ where
         if modules.name(module) != MAP_MODULE {
             continue;
         }
-        let Some(FunctionSpelling::Specialized { name, types, .. }) =
-            monotypes.function_spellings.get(&function.name)
-        else {
-            continue;
-        };
+        let spelling = monotypes.function_spellings.get(&function.name);
+        let Some(FunctionSpelling::Specialized { name, types, .. }) = spelling else { continue };
         let Some(operation) = MapOperation::named(name) else { continue };
         let Some(&key) = types.first() else { continue };
         if !is_hashable_key(context, key) {
             continue;
         }
         // Unsimplified, the operation may take its arguments one at a time.
-        let mut arguments: Vec<MonotypeId> =
-            function.parameters.iter().map(|parameter| parameter.monotype).collect();
+        let arguments = function.parameters.iter().map(|parameter| parameter.monotype);
+        let mut arguments: Vec<MonotypeId> = arguments.collect();
         let mut result = function.result;
         while let Some((argument, rest)) = monotypes.function_parts(result) {
             arguments.push(argument);
@@ -193,13 +190,11 @@ where
 /// so none of them is a Go map, and keeping their operations as calls would only cost a second
 /// simplification.
 fn celled_maps(monotypes: &Monotypes) -> FxHashSet<MonotypeId> {
-    monotypes
-        .ids()
-        .filter_map(|id| match monotypes.get(id) {
-            Monotype::Reference(held) | Monotype::MutableArray(held) => Some(*held),
-            _ => None,
-        })
-        .collect()
+    let celled = monotypes.ids().filter_map(|id| match monotypes.get(id) {
+        Monotype::Reference(held) | Monotype::MutableArray(held) => Some(*held),
+        _ => None,
+    });
+    celled.collect()
 }
 
 /// The map types whose trees the program builds or takes apart itself, outside
@@ -233,8 +228,8 @@ where
             );
         if shows_tree {
             // Unsimplified, `showTree` takes its dictionaries first and the map after them.
-            let mut arguments: Vec<MonotypeId> =
-                function.parameters.iter().map(|parameter| parameter.monotype).collect();
+            let arguments = function.parameters.iter().map(|parameter| parameter.monotype);
+            let mut arguments: Vec<MonotypeId> = arguments.collect();
             let mut result = function.result;
             while let Some((argument, rest)) = monotypes.function_parts(result) {
                 arguments.push(argument);
@@ -532,7 +527,10 @@ pub struct KeptOperations {
 }
 
 impl KeptOperations {
-    pub fn new(program: &Program, operations: &FxHashMap<FunctionId, MapOperation>) -> Self {
+    pub fn new(
+        program: &Program,
+        operations: &FxHashMap<FunctionId, MapOperation>,
+    ) -> KeptOperations {
         let names = operations
             .iter()
             .map(|(&id, &operation)| (program.function(id).name.clone(), operation))

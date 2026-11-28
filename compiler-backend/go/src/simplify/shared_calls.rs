@@ -23,8 +23,8 @@ impl Simplifier<'_> {
         // Most functions make no call twice, which one count of the calls rules out.
         let mut counts = FxHashMap::default();
         count_calls(body, &mut counts);
-        let repeated: FxHashSet<u64> =
-            counts.into_iter().filter(|&(_, count)| count > 1).map(|(key, _)| key).collect();
+        let repeated = counts.into_iter().filter(|&(_, count)| count > 1).map(|(key, _)| key);
+        let repeated: FxHashSet<u64> = repeated.collect();
         if repeated.is_empty() {
             return;
         }
@@ -45,11 +45,11 @@ impl Simplifier<'_> {
             let local = self.named_local(&name, call.monotype);
             replace_calls(expression, &call, local.id);
             let monotype = expression.monotype;
-            let body =
-                std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
+            let placeholder = Expression::new(ExpressionKind::Unit, monotype);
+            let body = std::mem::replace(expression, placeholder);
             let bindings = vec![Binding { local, value: call }];
-            *expression =
-                Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype);
+            let kind = ExpressionKind::Let { bindings, body: Box::new(body) };
+            *expression = Expression::new(kind, monotype);
         }
     }
 

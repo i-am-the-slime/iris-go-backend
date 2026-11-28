@@ -226,14 +226,11 @@ where
         tracked: bool,
     ) -> GoResult<SlotPlan> {
         let plan = self.plan_tracked_slots(constructors, tracked)?;
-        let fields = plan
-            .slots
-            .into_iter()
-            .filter_map(|slot| match slot {
-                Slot::Tag | Slot::Unique => None,
-                Slot::Field { name, monotype } => Some((name, monotype)),
-            })
-            .collect();
+        let fields = plan.slots.into_iter().filter_map(|slot| match slot {
+            Slot::Tag | Slot::Unique => None,
+            Slot::Field { name, monotype } => Some((name, monotype)),
+        });
+        let fields = fields.collect();
         self.arrange_tracked_slots(1, plan.constructors, fields, tracked)
     }
 
@@ -268,8 +265,8 @@ where
         }
         slots.sort_by_key(|(_, shape)| shape.declaration_rank());
         let shape = Shape::of_struct(slots.iter().map(|(_, shape)| *shape));
-        let pointer_prefix =
-            slots.iter().filter(|(_, shape)| shape.declaration_rank().0 < 2).count();
+        let pointers = slots.iter().filter(|(_, shape)| shape.declaration_rank().0 < 2);
+        let pointer_prefix = pointers.count();
         let slots = slots.into_iter().map(|(slot, _)| slot).collect();
         Ok(SlotPlan { constructors, slots, pointer_prefix, shape })
     }
@@ -454,8 +451,8 @@ impl NamedSlots {
     /// constructors that share slots name them after the position, `Field0`.
     fn new(constructors: &[DataConstructor], groups: &[Vec<usize>], naming: Naming) -> NamedSlots {
         let shared_groups = groups.iter().filter(|group| group.len() > 1).count();
-        let mut named =
-            NamedSlots { constructors: vec![vec![]; constructors.len()], fields: vec![] };
+        let constructor_slots = vec![vec![]; constructors.len()];
+        let mut named = NamedSlots { constructors: constructor_slots, fields: vec![] };
         let mut shared_index = 0;
         for group in groups {
             let first = &constructors[group[0]];

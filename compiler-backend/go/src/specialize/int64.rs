@@ -20,7 +20,7 @@ use smol_str::{SmolStr, format_smolstr};
 use super::{Scope, Specializer};
 use crate::error::GoResult;
 use crate::monomorphic::{Expression, ExpressionKind};
-use crate::monotype::{LongMentions, MonotypeId, long_mentions};
+use crate::monotype::{LongMentions, MonotypeId, long_mentions, spell_longs};
 use crate::primitives::{Int64Operation, KnownType, Signedness};
 
 #[derive(Default)]
@@ -91,8 +91,7 @@ where
             Signedness::Signed => spelling.signed,
             Signedness::Unsigned => spelling.unsigned,
         };
-        let spelled =
-            crate::monotype::spell_longs(&mut self.context, type_id, signed_long, spelling.long);
+        let spelled = spell_longs(&mut self.context, type_id, signed_long, spelling.long);
         self.int64.spelled.insert((type_id, signedness), spelled);
         Ok(spelled)
     }
@@ -149,8 +148,8 @@ where
             _ => return None,
         };
         let parameter = self.fresh_local(self.monotypes.value_name(argument), argument);
-        let foreign =
-            crate::foreign::Foreign::Int64 { operation: Int64Operation::Convert, signedness };
+        let operation = Int64Operation::Convert;
+        let foreign = crate::foreign::Foreign::Int64 { operation, signedness };
         let kind = ExpressionKind::Foreign {
             foreign: foreign.interned(),
             arguments: vec![parameter.expression()],

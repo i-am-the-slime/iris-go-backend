@@ -26,11 +26,11 @@ impl Simplifier<'_> {
             return Err(arguments);
         }
         let accumulator = parameters[accumulator_position].id;
-        let decision =
-            [Operator::BooleanAnd, Operator::BooleanOr].into_iter().find_map(|operator| {
-                let condition = self.decided(body, accumulator, operator)?;
-                Some((operator, condition))
-            });
+        let operators = [Operator::BooleanAnd, Operator::BooleanOr];
+        let decision = operators.into_iter().find_map(|operator| {
+            let condition = self.decided(body, accumulator, operator)?;
+            Some((operator, condition))
+        });
         let Some((operator, condition)) = decision else { return Err(arguments) };
         let [step, initial, array] = <[Expression; 3]>::try_from(arguments)
             .unwrap_or_else(|_| unreachable!("invariant violated: a fold has three arguments"));
@@ -39,8 +39,8 @@ impl Simplifier<'_> {
         };
         let element = parameters.swap_remove(1 - accumulator_position);
         let predicate_type = self.monotypes.function(element.monotype, monotype);
-        let predicate =
-            ExpressionKind::Lambda { parameters: vec![element], body: Box::new(condition) };
+        let body = Box::new(condition);
+        let predicate = ExpressionKind::Lambda { parameters: vec![element], body };
         let predicate = Expression::new(predicate, predicate_type);
         let search = match operator {
             Operator::BooleanAnd => &ARRAY_ALL,
@@ -79,16 +79,13 @@ impl Simplifier<'_> {
                 if *inner == operator =>
             {
                 let [left, right] = arguments.as_slice() else { return None };
-                let (left, right) =
-                    match (mentions_local(left, accumulator), mentions_local(right, accumulator)) {
-                        (false, true) => {
-                            (left.clone(), self.decided(right, accumulator, operator)?)
-                        }
-                        (true, false) => {
-                            (self.decided(left, accumulator, operator)?, right.clone())
-                        }
-                        _ => return None,
-                    };
+                let left_mentions = mentions_local(left, accumulator);
+                let right_mentions = mentions_local(right, accumulator);
+                let (left, right) = match (left_mentions, right_mentions) {
+                    (false, true) => (left.clone(), self.decided(right, accumulator, operator)?),
+                    (true, false) => (self.decided(left, accumulator, operator)?, right.clone()),
+                    _ => return None,
+                };
                 Some(self.operator(
                     Foreign::Operator(operator).interned(),
                     vec![left, right],
@@ -118,14 +115,11 @@ impl Simplifier<'_> {
                 if scrutinees.iter().any(|scrutinee| mentions_local(scrutinee, accumulator)) {
                     return None;
                 }
-                let alternatives = alternatives
-                    .iter()
-                    .map(|alternative| {
-                        let body =
-                            self.decided_guarded(&alternative.body, accumulator, operator)?;
-                        Some(Alternative { body, ..alternative.clone() })
-                    })
-                    .collect::<Option<Vec<Alternative>>>()?;
+                let alternatives = alternatives.iter().map(|alternative| {
+                    let body = self.decided_guarded(&alternative.body, accumulator, operator)?;
+                    Some(Alternative { body, ..alternative.clone() })
+                });
+                let alternatives = alternatives.collect::<Option<Vec<Alternative>>>()?;
                 let scrutinees = scrutinees.clone();
                 Some(Expression::new(ExpressionKind::Case { scrutinees, alternatives }, monotype))
             }
@@ -144,20 +138,15 @@ impl Simplifier<'_> {
                 Some(Guarded::Unconditional(self.decided(body, accumulator, operator)?))
             }
             Guarded::Guards(branches) => {
-                let branches = branches
-                    .iter()
-                    .map(|branch| {
-                        if branch
-                            .guards
-                            .iter()
-                            .any(|guard| mentions_local(guard.value(), accumulator))
-                        {
-                            return None;
-                        }
-                        let body = self.decided(&branch.body, accumulator, operator)?;
-                        Some(GuardedBranch { guards: branch.guards.clone(), body })
-                    })
-                    .collect::<Option<Vec<GuardedBranch>>>()?;
+                let branches = branches.iter().map(|branch| {
+                    if branch.guards.iter().any(|guard| mentions_local(guard.value(), accumulator))
+                    {
+                        return None;
+                    }
+                    let body = self.decided(&branch.body, accumulator, operator)?;
+                    Some(GuardedBranch { guards: branch.guards.clone(), body })
+                });
+                let branches = branches.collect::<Option<Vec<GuardedBranch>>>()?;
                 Some(Guarded::Guards(branches))
             }
         }

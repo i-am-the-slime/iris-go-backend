@@ -1,4 +1,5 @@
 use super::conditions::{is_pure, negated};
+use crate::emit::index_arrays::is_line;
 use crate::go_traversal::{self, Walk, each_expression_in_statement};
 use crate::syntax::{
     GoBinaryOperator, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoUnaryOperator,
@@ -21,8 +22,7 @@ impl Walk for Branches {
             }
         }
         body.iter_mut().for_each(|statement| self.statement(statement));
-        let alone =
-            body.iter().filter(|statement| !matches!(statement, GoStatement::Line(_))).count() == 1;
+        let alone = body.iter().filter(|statement| !is_line(statement)).count() == 1;
         let statements = std::mem::take(body);
         for statement in statements {
             body.extend(simplified(statement, alone));
@@ -46,9 +46,8 @@ fn sink_calls_into_branches(body: &mut Vec<GoStatement>) {
     let mut index = 0;
     while index < body.len() {
         if let Some((choice, call)) = chosen_then_called(body, index) {
-            let GoStatement::Expression(GoExpression::Call { function, arguments }) =
-                body.remove(call)
-            else {
+            let called = body.remove(call);
+            let GoStatement::Expression(GoExpression::Call { function, arguments }) = called else {
                 unreachable!()
             };
             let method = match *function {
@@ -101,8 +100,8 @@ fn chosen_then_called(body: &mut [GoStatement], index: usize) -> Option<(usize, 
     if !receives || !arguments.iter().all(is_pure) {
         return None;
     }
-    let uses: usize =
-        body[index + 1..].iter_mut().map(|statement| mentions(statement, &name)).sum();
+    let following = &mut body[index + 1..];
+    let uses: usize = following.iter_mut().map(|statement| mentions(statement, &name)).sum();
     (uses == 3).then_some((choice, call))
 }
 
@@ -138,9 +137,8 @@ fn simplified(statement: GoStatement, alone: bool) -> Vec<GoStatement> {
             None => vec![GoStatement::Expression(call)],
         },
         GoStatement::If { condition, then, otherwise } => {
-            let then_empty = then.iter().all(|statement| matches!(statement, GoStatement::Line(_)));
-            let otherwise_empty =
-                otherwise.iter().all(|statement| matches!(statement, GoStatement::Line(_)));
+            let then_empty = then.iter().all(is_line);
+            let otherwise_empty = otherwise.iter().all(is_line);
             match (then_empty, otherwise_empty) {
                 (true, true) if is_pure(&condition) => vec![],
                 (true, false) => vec![GoStatement::If {
@@ -240,9 +238,8 @@ fn switch_of_chain(statement: &GoStatement) -> Option<GoStatement> {
 }
 
 fn compared(condition: &GoExpression) -> Option<(&GoExpression, &GoExpression)> {
-    let GoExpression::Binary { operator: GoBinaryOperator::Equal, left, right } =
-        condition.unattributed()
-    else {
+    let condition = condition.unattributed();
+    let GoExpression::Binary { operator: GoBinaryOperator::Equal, left, right } = condition else {
         return None;
     };
     Some((left.unattributed(), right.unattributed()))

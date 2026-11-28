@@ -84,21 +84,19 @@ impl Modules {
             names.push(context.module(file)?.name.clone());
         }
         let sees = transitive_closure(&imports);
-        let qualifiers = qualified
-            .into_iter()
-            .map(|qualified| {
-                let mut qualifiers: FxHashMap<ModuleIndex, SmolStr> = FxHashMap::default();
-                for (qualifier, file) in &qualified {
-                    qualifiers.insert(index[file], qualifier.clone());
+        let qualifiers = qualified.into_iter().map(|qualified| {
+            let mut qualifiers: FxHashMap<ModuleIndex, SmolStr> = FxHashMap::default();
+            for (qualifier, file) in &qualified {
+                qualifiers.insert(index[file], qualifier.clone());
+            }
+            for (qualifier, file) in &qualified {
+                for reexported in &reexports[index[file].0 as usize] {
+                    qualifiers.entry(index[reexported]).or_insert_with(|| qualifier.clone());
                 }
-                for (qualifier, file) in &qualified {
-                    for reexported in &reexports[index[file].0 as usize] {
-                        qualifiers.entry(index[reexported]).or_insert_with(|| qualifier.clone());
-                    }
-                }
-                qualifiers
-            })
-            .collect();
+            }
+            qualifiers
+        });
+        let qualifiers = qualifiers.collect();
         Ok(Modules { files, names, index, sees, qualifiers, entry: ModuleIndex(0) })
     }
 

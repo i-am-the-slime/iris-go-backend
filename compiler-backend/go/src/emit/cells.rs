@@ -76,13 +76,11 @@ pub(super) fn keep_parameter_cells_in_locals(
     effects: &Effects,
     never_recovering: &BTreeSet<String>,
 ) {
-    let declared: FxHashSet<String> = declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            GoDeclaration::Function { name, .. } => Some(name.clone()),
-            _ => None,
-        })
-        .collect();
+    let declared = declarations.iter().filter_map(|declaration| match declaration {
+        GoDeclaration::Function { name, .. } => Some(name.clone()),
+        _ => None,
+    });
+    let declared: FxHashSet<String> = declared.collect();
     let caught = caught_functions(declarations, &declared, never_recovering);
     let calls = Calls { declared: &declared, helpers, effects };
     for declaration in declarations.iter_mut() {
@@ -327,8 +325,8 @@ pub(super) fn substitute_cell_aliases(declarations: &mut [GoDeclaration]) {
         go_traversal::each_block_in_declaration(declaration, |block| {
             for statement in block.iter() {
                 if let GoStatement::Define { names, values } = statement
-                    && let ([name], [GoExpression::Address(_)]) =
-                        (names.as_slice(), values.as_slice())
+                    && let [name] = names.as_slice()
+                    && let [GoExpression::Address(_)] = values.as_slice()
                     && fixed.contains(name)
                 {
                     allocations.insert(name.clone());

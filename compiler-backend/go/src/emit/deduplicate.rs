@@ -29,15 +29,11 @@ pub(super) fn merge_identical_declarations(
     while !changed.is_empty() {
         changed.sort_unstable();
         changed.retain(|index| merging.candidates.contains(index));
-        let texts: Vec<String> = changed
-            .par_iter()
-            .map(|&index| {
-                let declaration = merging.declarations[index].as_ref();
-                comparable_text(
-                    declaration.expect("invariant violated: changed declaration removed"),
-                )
-            })
-            .collect();
+        let texts = changed.par_iter().map(|&index| {
+            let declaration = merging.declarations[index].as_ref();
+            comparable_text(declaration.expect("invariant violated: changed declaration removed"))
+        });
+        let texts: Vec<String> = texts.collect();
         let mut merges = vec![];
         for (index, text) in changed.into_iter().zip(texts) {
             if let Some(representative) = merging.classify(index, text) {
@@ -64,8 +60,8 @@ struct Merging {
 
 impl Merging {
     fn new(declarations: Vec<GoDeclaration>) -> Merging {
-        let mut declarations: Vec<Option<GoDeclaration>> =
-            declarations.into_iter().map(Some).collect();
+        let declarations = declarations.into_iter().map(Some);
+        let mut declarations: Vec<Option<GoDeclaration>> = declarations.collect();
         let mut candidates = FxHashSet::default();
         let mut index_of = FxHashMap::default();
         for (index, declaration) in declarations.iter().enumerate() {
@@ -81,23 +77,21 @@ impl Merging {
                 candidates.insert(index);
             }
         }
-        let references: Vec<Vec<String>> = declarations
-            .par_iter_mut()
-            .map(|declaration| {
-                let Some(declaration) = declaration else { return vec![] };
-                let binders = binders(declaration);
-                let mut references = vec![];
-                declaration.for_each_name_mut(&mut |name| {
-                    if let Name::Reference(name) | Name::Written(name) = name
-                        && !binders.contains(name.as_str())
-                        && index_of.contains_key(name.as_str())
-                    {
-                        references.push(name.clone());
-                    }
-                });
-                references
-            })
-            .collect();
+        let references = declarations.par_iter_mut().map(|declaration| {
+            let Some(declaration) = declaration else { return vec![] };
+            let binders = binders(declaration);
+            let mut references = vec![];
+            declaration.for_each_name_mut(&mut |name| {
+                if let Name::Reference(name) | Name::Written(name) = name
+                    && !binders.contains(name.as_str())
+                    && index_of.contains_key(name.as_str())
+                {
+                    references.push(name.clone());
+                }
+            });
+            references
+        });
+        let references: Vec<Vec<String>> = references.collect();
         let mut users: FxHashMap<String, FxHashSet<usize>> = FxHashMap::default();
         for (index, names) in references.into_iter().enumerate() {
             for name in names {

@@ -67,14 +67,11 @@ impl GoFile {
             let _ = writeln!(printer.output, "//go:build {constraint}\n");
         }
         let _ = writeln!(printer.output, "package {}", self.package);
-        let imports: Vec<String> = self
-            .imports
-            .iter()
-            .map(|GoImport { path, alias }| match alias {
-                Some(alias) => format!("{alias} \"{path}\""),
-                None => format!("\"{path}\""),
-            })
-            .collect();
+        let imports = self.imports.iter().map(|GoImport { path, alias }| match alias {
+            Some(alias) => format!("{alias} \"{path}\""),
+            None => format!("\"{path}\""),
+        });
+        let imports: Vec<String> = imports.collect();
         match imports.as_slice() {
             [] => {}
             [import] => {
@@ -90,18 +87,15 @@ impl GoFile {
         }
         // Declarations render independently, so they render in parallel and
         // join in order.
-        let rendered: Vec<(String, crate::erasure::Census)> = self
-            .declarations
-            .par_iter()
-            .map(|declaration| {
-                let every = coverage == LineCoverage::Every && file_name.is_some();
-                let mut printer =
-                    Printer { directory: directory.clone(), every, ..Printer::default() };
-                printer.output.push('\n');
-                printer.declaration(declaration);
-                (printer.output, printer.census)
-            })
-            .collect();
+        let rendered = self.declarations.par_iter().map(|declaration| {
+            let every = coverage == LineCoverage::Every && file_name.is_some();
+            let directory = directory.clone();
+            let mut printer = Printer { directory, every, ..Printer::default() };
+            printer.output.push('\n');
+            printer.declaration(declaration);
+            (printer.output, printer.census)
+        });
+        let rendered: Vec<(String, crate::erasure::Census)> = rendered.collect();
         for (output, census) in rendered {
             printer.output.push_str(&output);
             printer.census.absorb(census);
@@ -341,8 +335,8 @@ impl Printer {
     fn block(&mut self, statements: &[GoStatement]) {
         let enclosing = self.attribution.clone();
         let ends_procedure = std::mem::take(&mut self.ends_procedure);
-        let last =
-            statements.iter().rposition(|statement| !matches!(statement, GoStatement::Line(_)));
+        let is_not_line = |statement: &GoStatement| !matches!(statement, GoStatement::Line(_));
+        let last = statements.iter().rposition(is_not_line);
         self.indentation += 1;
         for (position, statement) in statements.iter().enumerate() {
             self.ends_procedure = ends_procedure && Some(position) == last;
@@ -374,8 +368,8 @@ impl Printer {
             GoStatement::Line(_) => {}
             GoStatement::Define { names, values } => {
                 let depth = if names.len() > 1 && values.len() > 1 { 2 } else { 1 };
-                let values: Vec<String> =
-                    values.iter().map(|value| self.expression_at(value, 0, depth)).collect();
+                let values = values.iter().map(|value| self.expression_at(value, 0, depth));
+                let values: Vec<String> = values.collect();
                 self.line(&format!("{} := {}", names.join(", "), values.join(", ")));
             }
             GoStatement::Variable { name, type_, value } => {
@@ -404,10 +398,10 @@ impl Printer {
                     return;
                 }
                 let depth = if targets.len() > 1 && values.len() > 1 { 2 } else { 1 };
-                let targets: Vec<String> =
-                    targets.iter().map(|target| self.expression_at(target, 0, depth)).collect();
-                let values: Vec<String> =
-                    values.iter().map(|value| self.expression_at(value, 0, depth)).collect();
+                let targets = targets.iter().map(|target| self.expression_at(target, 0, depth));
+                let targets: Vec<String> = targets.collect();
+                let values = values.iter().map(|value| self.expression_at(value, 0, depth));
+                let values: Vec<String> = values.collect();
                 self.line(&format!("{} = {}", targets.join(", "), values.join(", ")));
             }
             GoStatement::Expression(expression) => {
@@ -448,8 +442,8 @@ impl Printer {
                     None => self.line("switch {"),
                 }
                 for case in cases {
-                    let values: Vec<String> =
-                        case.values.iter().map(|value| self.expression(value, 0)).collect();
+                    let values = case.values.iter().map(|value| self.expression(value, 0));
+                    let values: Vec<String> = values.collect();
                     self.branch_line(&format!("case {}:", values.join(", ")), case.line.as_ref());
                     self.ends_procedure = ends_procedure;
                     self.block(&case.body);
@@ -458,8 +452,8 @@ impl Printer {
                     if covers.is_empty() {
                         self.branch_line("default:", line.as_ref());
                     } else {
-                        let covers: Vec<String> =
-                            covers.iter().map(|value| self.expression(value, 0)).collect();
+                        let covers = covers.iter().map(|value| self.expression(value, 0));
+                        let covers: Vec<String> = covers.collect();
                         let text = format!("default: // {}", covers.join(", "));
                         self.branch_line(&text, line.as_ref());
                     }
@@ -580,8 +574,8 @@ impl Printer {
             GoType::Pointer(element) => format!("*{}", self.type_(element)),
             GoType::Map(key, value) => format!("map[{}]{}", self.type_(key), self.type_(value)),
             GoType::Function { parameters, result } => {
-                let parameters: Vec<String> =
-                    parameters.iter().map(|parameter| self.type_(parameter)).collect();
+                let parameters = parameters.iter().map(|parameter| self.type_(parameter));
+                let parameters: Vec<String> = parameters.collect();
                 match result {
                     Some(result) => {
                         format!("func({}) {}", parameters.join(", "), self.type_(result))
@@ -594,17 +588,16 @@ impl Printer {
                     return "struct{}".into();
                 }
                 let mut rendered = String::from("struct {\n");
-                let width =
-                    fields.iter().map(|field| field.name.chars().count()).max().unwrap_or(0);
+                let widths = fields.iter().map(|field| field.name.chars().count());
+                let width = widths.max().unwrap_or(0);
                 let member_lines = std::mem::take(&mut self.member_lines);
-                let field_types: Vec<String> =
-                    fields.iter().map(|field| self.type_(&field.type_)).collect();
+                let field_types = fields.iter().map(|field| self.type_(&field.type_));
+                let field_types: Vec<String> = field_types.collect();
                 let type_widths = tagged_type_widths(fields, &field_types);
                 let rows = fields.iter().zip(&field_types).zip(type_widths);
                 for ((field, field_type), type_width) in rows {
-                    if let Some((_, SourceLine { path, line, column })) =
-                        member_lines.iter().find(|(member, _)| *member == field.name)
-                    {
+                    let source = member_lines.iter().find(|(member, _)| *member == field.name);
+                    if let Some((_, SourceLine { path, line, column })) = source {
                         let shown = self.shown_path(path);
                         let _ = writeln!(rendered, "//line {shown}:{line}:{column}");
                     }
@@ -612,16 +605,13 @@ impl Printer {
                         rendered.push('\t');
                     }
                     let name = &field.name;
-                    match &field.label {
+                    let _ = match &field.label {
                         Some(label) => {
                             let tag = struct_tag(label);
-                            let _ =
-                                writeln!(rendered, "{name:width$} {field_type:type_width$} {tag}");
+                            writeln!(rendered, "{name:width$} {field_type:type_width$} {tag}")
                         }
-                        None => {
-                            let _ = writeln!(rendered, "{name:width$} {field_type}");
-                        }
-                    }
+                        None => writeln!(rendered, "{name:width$} {field_type}"),
+                    };
                 }
                 for _ in 0..self.indentation {
                     rendered.push('\t');
@@ -630,13 +620,13 @@ impl Printer {
                 rendered
             }
             GoType::Generic { name, arguments } => {
-                let arguments: Vec<String> =
-                    arguments.iter().map(|argument| self.type_argument(argument)).collect();
+                let arguments = arguments.iter().map(|argument| self.type_argument(argument));
+                let arguments: Vec<String> = arguments.collect();
                 format!("{name}[{}]", arguments.join(", "))
             }
             GoType::Results(results) => {
-                let results: Vec<String> =
-                    results.iter().map(|result| self.type_(result)).collect();
+                let results = results.iter().map(|result| self.type_(result));
+                let results: Vec<String> = results.collect();
                 format!("({})", results.join(", "))
             }
         }
@@ -647,8 +637,8 @@ impl Printer {
         let indentation = std::mem::take(&mut self.indentation);
         let rendered = self.type_(type_);
         self.indentation = indentation;
-        let parts: Vec<&str> =
-            rendered.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+        let parts = rendered.lines().map(str::trim).filter(|line| !line.is_empty());
+        let parts: Vec<&str> = parts.collect();
         parts.join("; ").replace("{; ", "{ ").replace("; }", " }")
     }
 
@@ -760,8 +750,8 @@ impl Printer {
             GoExpression::Spread(value) => format!("{}...", self.expression_at(value, 0, depth)),
             GoExpression::Instantiation { function, arguments } => {
                 let function = self.expression_at(function, 6, depth);
-                let arguments: Vec<String> =
-                    arguments.iter().map(|argument| self.type_argument(argument)).collect();
+                let arguments = arguments.iter().map(|argument| self.type_argument(argument));
+                let arguments: Vec<String> = arguments.collect();
                 format!("{function}[{}]", arguments.join(", "))
             }
             GoExpression::Function { parameters, result, body } => {
@@ -782,8 +772,8 @@ impl Printer {
             }
             GoExpression::Results(values) => {
                 let depth = if values.len() > 1 { depth + 1 } else { depth };
-                let values: Vec<String> =
-                    values.iter().map(|value| self.expression_at(value, 0, depth)).collect();
+                let values = values.iter().map(|value| self.expression_at(value, 0, depth));
+                let values: Vec<String> = values.collect();
                 values.join(", ")
             }
         }
@@ -819,14 +809,12 @@ impl Printer {
             GoType::Slice(element) => Some(element.as_ref()),
             _ => None,
         };
-        let fields: Vec<String> = fields
-            .iter()
-            .map(|(name, value)| match (name, element_type) {
-                (Some(name), _) => format!("{name}: {}", self.expression(value, 0)),
-                (None, Some(element_type)) => self.element(value, element_type),
-                (None, None) => self.expression(value, 0),
-            })
-            .collect();
+        let fields = fields.iter().map(|(name, value)| match (name, element_type) {
+            (Some(name), _) => format!("{name}: {}", self.expression(value, 0)),
+            (None, Some(element_type)) => self.element(value, element_type),
+            (None, None) => self.expression(value, 0),
+        });
+        let fields: Vec<String> = fields.collect();
         format!("{{{}}}", fields.join(", "))
     }
 

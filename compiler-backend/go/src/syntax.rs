@@ -334,8 +334,8 @@ pub struct GoDefault {
 
 impl GoDefault {
     pub fn covering(cases: &mut Vec<GoCase>) -> GoDefault {
-        let GoCase { values, body, line } =
-            cases.pop().expect("invariant violated: a total switch has a case");
+        let last = cases.pop().expect("invariant violated: a total switch has a case");
+        let GoCase { values, body, line } = last;
         GoDefault { covers: values, body, line }
     }
 }

@@ -11,6 +11,7 @@
 //! reads `runner.BodyKind` as `BodyKindJSONRequestBody`, and a switch on a constant that one of
 //! its cases names is that case's body.
 
+use crate::emit::index_arrays::is_line;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::go_traversal::{self, Walk};
@@ -47,23 +48,17 @@ fn constant_fields(declarations: &[GoDeclaration]) -> (Built, FxHashMap<String, 
     let mut constants = FxHashMap::default();
     for declaration in declarations {
         let GoDeclaration::Function { name, parameters, body, .. } = declaration else { continue };
-        let mut statements =
-            body.iter().filter(|statement| !matches!(statement, GoStatement::Line(_)));
-        let (Some(GoStatement::Return(Some(composite))), None) =
-            (statements.next(), statements.next())
-        else {
-            continue;
-        };
+        let mut statements = body.iter().filter(|statement| !is_line(statement));
+        let first_two = (statements.next(), statements.next());
+        let (Some(GoStatement::Return(Some(composite))), None) = first_two else { continue };
         let GoExpression::Composite { fields, .. } = composite else { continue };
-        let parameters: FxHashSet<&str> =
-            parameters.iter().map(|(name, _)| name.as_str()).collect();
-        let constant_fields: FxHashMap<String, GoExpression> = fields
-            .iter()
-            .filter_map(|(field, value)| {
-                let field = field.as_ref()?;
-                is_constant(value, &parameters).then(|| (field.clone(), value.clone()))
-            })
-            .collect();
+        let parameters = parameters.iter().map(|(name, _)| name.as_str());
+        let parameters: FxHashSet<&str> = parameters.collect();
+        let constant_fields = fields.iter().filter_map(|(field, value)| {
+            let field = field.as_ref()?;
+            is_constant(value, &parameters).then(|| (field.clone(), value.clone()))
+        });
+        let constant_fields: FxHashMap<String, GoExpression> = constant_fields.collect();
         if fields.iter().all(|(_, value)| is_constant(value, &parameters)) {
             constants.insert(name.clone(), composite.clone());
         }
@@ -136,8 +131,8 @@ impl Walk for Results<'_> {
     fn statement(&mut self, statement: &mut GoStatement) {
         match statement {
             GoStatement::Define { names, values } => {
-                if let ([name], [GoExpression::Call { function, .. }]) =
-                    (names.as_slice(), values.as_slice())
+                if let [name] = names.as_slice()
+                    && let [GoExpression::Call { function, .. }] = values.as_slice()
                     && let GoExpression::Identifier(callee) = function.as_ref()
                     && self.built.contains_key(callee)
                 {
@@ -245,15 +240,15 @@ fn chosen_case(block: &mut [GoStatement], position: usize) -> Option<Vec<GoState
         return None;
     }
     let body = body.clone();
-    let defined: Vec<String> = body
+    let defined = body
         .iter()
         .flat_map(|statement| match statement {
             GoStatement::Define { names, .. } => names.clone(),
             GoStatement::Variable { name, .. } => vec![name.clone()],
             _ => vec![],
         })
-        .filter(|name| name != "_")
-        .collect();
+        .filter(|name| name != "_");
+    let defined: Vec<String> = defined.collect();
     let clash = block.iter_mut().enumerate().any(|(at, statement)| {
         at != position && defined.iter().any(|name| super::aliases::mentions(statement, name))
     });

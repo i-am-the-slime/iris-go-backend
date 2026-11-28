@@ -7,6 +7,7 @@ use rustc_hash::FxHashMap;
 
 use super::Simplifier;
 use super::choice::operation;
+use super::constants::int;
 use crate::foreign::{ARRAY_SLICE, Comparison, Foreign, Iteration, Operator};
 use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, mentions_local};
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local, LocalId};
@@ -164,8 +165,7 @@ impl Simplifier<'_> {
         bindings: &mut Vec<Binding>,
     ) -> Expression {
         let boolean = self.monotypes.intern(Monotype::Boolean);
-        let literal =
-            |value| Expression::new(ExpressionKind::Literal(Literal::Int(value)), integer);
+        let literal = |value| int(value, integer);
         let compare = |comparison, left: Expression, right: Expression| {
             operation(Operator::Compare(comparison), vec![left, right], boolean)
         };
@@ -254,8 +254,8 @@ impl Simplifier<'_> {
     ) -> Expression {
         match view {
             View::Range { first, .. } => {
-                let offset =
-                    operation(Operator::IntMultiply, vec![index, step.expression()], integer);
+                let operands = vec![index, step.expression()];
+                let offset = operation(Operator::IntMultiply, operands, integer);
                 operation(Operator::IntAdd, vec![(*first).clone(), offset], integer)
             }
             View::Map { callback, inner } => {
@@ -267,8 +267,8 @@ impl Simplifier<'_> {
                 let read = self.view_read(inner, index, argument, integer, step);
                 let mut callback = (*callback).clone();
                 self.rename(&mut callback, &mut FxHashMap::default());
-                let kind =
-                    ExpressionKind::Apply { function: Box::new(callback), arguments: vec![read] };
+                let function = Box::new(callback);
+                let kind = ExpressionKind::Apply { function, arguments: vec![read] };
                 Expression::new(kind, element)
             }
             View::Prefix { inner, .. } | View::EmptyWhen { inner, .. } => {
@@ -282,8 +282,8 @@ impl Simplifier<'_> {
 }
 
 fn collect_reads(expression: &Expression, local: LocalId, reads: &mut Vec<Expression>) {
-    if let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::ArrayIndex), arguments } =
-        &expression.kind
+    if let ExpressionKind::Foreign { foreign, arguments } = &expression.kind
+        && matches!(foreign, Foreign::Operator(Operator::ArrayIndex))
         && matches!(arguments[0].kind, ExpressionKind::Local(id) if id == local)
     {
         reads.push(arguments[1].clone());
@@ -345,8 +345,7 @@ fn range_step(
     match view {
         View::Range { first, last } => {
             let boolean = monotypes.intern(Monotype::Boolean);
-            let literal =
-                |value| Expression::new(ExpressionKind::Literal(Literal::Int(value)), integer);
+            let literal = |value| int(value, integer);
             let condition = rises(&Offset::of(first), &Offset::of(last), boolean, integer);
             let kind = ExpressionKind::If {
                 condition: Box::new(condition),
@@ -371,24 +370,21 @@ struct Offset {
 
 impl Offset {
     fn of(expression: &Expression) -> Offset {
-        let within =
-            |constant: i64| i64::from(i32::MIN) <= constant && constant <= i64::from(i32::MAX);
-        let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } =
-            &expression.kind
-        else {
+        let int32 = i64::from(i32::MIN)..=i64::from(i32::MAX);
+        let within = |constant: i64| int32.contains(&constant);
+        let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else {
             return match expression.kind {
                 ExpressionKind::Literal(Literal::Int(constant)) => Offset { base: None, constant },
                 _ => Offset { base: Some(expression.clone()), constant: 0 },
             };
         };
-        let sign = match operator {
-            Operator::IntAdd => 1,
-            Operator::IntSubtract => -1,
+        let sign = match foreign {
+            Foreign::Operator(Operator::IntAdd) => 1,
+            Foreign::Operator(Operator::IntSubtract) => -1,
             _ => return Offset { base: Some(expression.clone()), constant: 0 },
         };
-        let (left, ExpressionKind::Literal(Literal::Int(added))) =
-            (&arguments[0], &arguments[1].kind)
-        else {
+        let left = &arguments[0];
+        let ExpressionKind::Literal(Literal::Int(added)) = &arguments[1].kind else {
             return Offset { base: Some(expression.clone()), constant: 0 };
         };
         let inner = Offset::of(left);
@@ -454,11 +450,8 @@ fn is_below_one(condition: &Expression, end: &Expression) -> bool {
     else {
         return false;
     };
-    let (compared, ExpressionKind::Literal(Literal::Int(bound))) =
-        (&arguments[0], &arguments[1].kind)
-    else {
-        return false;
-    };
+    let compared = &arguments[0];
+    let ExpressionKind::Literal(Literal::Int(bound)) = &arguments[1].kind else { return false };
     let same_end = match (&compared.kind, &end.kind) {
         (ExpressionKind::Local(left), ExpressionKind::Local(right)) => left.eq(right),
         (ExpressionKind::Literal(left), ExpressionKind::Literal(right)) => left.eq(right),

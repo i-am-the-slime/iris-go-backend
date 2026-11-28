@@ -14,7 +14,7 @@
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Literal,
-    LocalId, PatternKind,
+    LocalId, Pattern, PatternKind,
 };
 use crate::monotype::{Monotype, Monotypes};
 
@@ -79,8 +79,7 @@ fn guarded_at_zero(
     parameter: LocalId,
 ) -> Option<(&Expression, &Expression, LocalId)> {
     let [alternative] = alternatives else { return None };
-    let binds_nothing =
-        |pattern: &crate::monomorphic::Pattern| matches!(pattern.kind, PatternKind::Wildcard);
+    let binds_nothing = |pattern: &Pattern| matches!(pattern.kind, PatternKind::Wildcard);
     let Guarded::Guards(branches) = &alternative.body else { return None };
     let [at_zero, otherwise] = branches.as_slice() else { return None };
     let [Guard::Boolean(condition)] = at_zero.guards.as_slice() else { return None };
@@ -113,10 +112,11 @@ fn counts_one_bit(step: &Expression, bits: LocalId, id: FunctionId) -> bool {
     let Some((Operator::IntAdd, [left, right])) = operation(step) else { return false };
     let counts = |counted: &Expression, rest: &Expression| {
         let Some(argument) = recursive_argument(rest, id) else { return false };
-        let lowest_bit =
-            is_operation(counted, Operator::IntAnd, |[value, mask]| {
-                is_local(value, bits) && is_int_literal(mask, 1)
-            }) && is_operation(argument, Operator::IntZeroFillShiftRight, |[value, shift]| {
+        let masks_lowest_bit = is_operation(counted, Operator::IntAnd, |[value, mask]| {
+            is_local(value, bits) && is_int_literal(mask, 1)
+        });
+        let lowest_bit = masks_lowest_bit
+            && is_operation(argument, Operator::IntZeroFillShiftRight, |[value, shift]| {
                 is_local(value, bits) && is_int_literal(shift, 1)
             });
         let lowest_cleared = is_int_literal(counted, 1)
@@ -145,11 +145,8 @@ fn unconditional(alternative: &Alternative) -> Option<&Expression> {
 }
 
 fn operation(expression: &Expression) -> Option<(Operator, &[Expression; 2])> {
-    let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } =
-        &expression.kind
-    else {
-        return None;
-    };
+    let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return None };
+    let Foreign::Operator(operator) = foreign else { return None };
     Some((*operator, arguments.as_slice().try_into().ok()?))
 }
 

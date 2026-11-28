@@ -267,7 +267,7 @@ pub(super) struct Guarded {
 }
 
 impl Guarded {
-    pub(super) fn of(declaration: &mut GoDeclaration) -> Self {
+    pub(super) fn of(declaration: &mut GoDeclaration) -> Guarded {
         let guarded = Guarded { read: default(), written: default(), bound: default() };
         let mut literals = Literals { guarded };
         go_traversal::declaration(&mut literals, declaration);
@@ -429,9 +429,8 @@ impl Walk for Free<'_> {
 fn assign_directly(block: &mut Vec<GoStatement>) {
     let mut position = 0;
     while position < block.len() {
-        let Some(next) =
-            (position + 1..block.len()).find(|&next| !matches!(block[next], GoStatement::Line(_)))
-        else {
+        let is_statement = |&next: &usize| !matches!(block[next], GoStatement::Line(_));
+        let Some(next) = (position + 1..block.len()).find(is_statement) else {
             break;
         };
         let staged = match (&block[position], &block[next]) {

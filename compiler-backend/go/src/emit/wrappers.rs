@@ -52,23 +52,19 @@ struct Wrappers {
 
 impl Wrappers {
     fn of(declarations: &[GoDeclaration]) -> Wrappers {
-        let signatures: FxHashMap<&str, (Vec<&GoType>, Option<&GoType>)> = declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                GoDeclaration::Function { name, parameters, result, .. } => {
-                    let types = parameters.iter().map(|(_, type_)| type_).collect();
-                    Some((name.as_str(), (types, result.as_ref())))
-                }
-                _ => None,
-            })
-            .collect();
-        let written: Vec<&str> = declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                GoDeclaration::Written { source, .. } => Some(source.as_str()),
-                _ => None,
-            })
-            .collect();
+        let signatures = declarations.iter().filter_map(|declaration| match declaration {
+            GoDeclaration::Function { name, parameters, result, .. } => {
+                let types = parameters.iter().map(|(_, type_)| type_).collect();
+                Some((name.as_str(), (types, result.as_ref())))
+            }
+            _ => None,
+        });
+        let signatures: FxHashMap<&str, (Vec<&GoType>, Option<&GoType>)> = signatures.collect();
+        let written = declarations.iter().filter_map(|declaration| match declaration {
+            GoDeclaration::Written { source, .. } => Some(source.as_str()),
+            _ => None,
+        });
+        let written: Vec<&str> = written.collect();
         let mut wrappers = Wrappers::default();
         for declaration in declarations {
             let GoDeclaration::Function { name, parameters, body, .. } = declaration else {

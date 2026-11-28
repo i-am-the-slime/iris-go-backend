@@ -91,12 +91,10 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 self.names = Names::of(parameters, body, self.program);
                 let mut state = State::default();
                 self.scopes.push(FxHashMap::default());
-                let symbols: Vec<Symbol> = parameters
-                    .iter()
-                    .map(|(name, type_)| {
-                        self.bind(name, kind_of_type(type_), shape_of_type(type_), &mut state)
-                    })
-                    .collect();
+                let symbols = parameters.iter().map(|(name, type_)| {
+                    self.bind(name, kind_of_type(type_), shape_of_type(type_), &mut state)
+                });
+                let symbols: Vec<Symbol> = symbols.collect();
                 if let Some(entry) = entry {
                     let place = |place: Place, analysis: &Analysis<'_, '_, '_>| match place {
                         Place::Zero => Some(ZERO),
@@ -250,14 +248,14 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         }
         state.heap = self.fresh_generation();
     }
+}
 
-    /// Forgets the symbols bound since `watermark`, keeping what they implied about the others.
-    fn restrict(&self, state: &mut State, watermark: Symbol) {
-        let local = |symbol: Symbol| symbol >= watermark;
-        state.bounds.retain(|symbol, row| {
-            row.retain(|other, _| !local(*other));
-            !local(*symbol) && !row.is_empty()
-        });
-        state.generations.retain(|symbol, _| !local(*symbol));
-    }
+/// Forgets the symbols bound since `watermark`, keeping what they implied about the others.
+fn restrict(state: &mut State, watermark: Symbol) {
+    let local = |symbol: Symbol| symbol >= watermark;
+    state.bounds.retain(|symbol, row| {
+        row.retain(|other, _| !local(*other));
+        !local(*symbol) && !row.is_empty()
+    });
+    state.generations.retain(|symbol, _| !local(*symbol));
 }

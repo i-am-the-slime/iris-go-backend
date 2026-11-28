@@ -117,9 +117,10 @@ where
         let enclosing = match &self.spans.enclosing {
             Some(enclosing) => Some(enclosing.clone()),
             None => {
-                let function = self.current.map(|id| self.program.function(id));
-                let position =
-                    function.and_then(|function| function.body.position.or(function.position));
+                let position = self.current.and_then(|id| {
+                    let function = self.program.function(id);
+                    function.body.position.or(function.position)
+                });
                 self.span_line(position)?
             }
         };
@@ -427,8 +428,8 @@ fn open_at(line: Option<SourceLine>, block: &mut Vec<GoStatement>) {
 }
 
 pub(super) fn open_otherwise_at(line: Option<SourceLine>, otherwise: &mut Vec<GoStatement>) {
-    let mut statements =
-        otherwise.iter().filter(|statement| !matches!(statement, GoStatement::Line(_)));
+    let statements = otherwise.iter();
+    let mut statements = statements.filter(|statement| !matches!(statement, GoStatement::Line(_)));
     match (statements.next(), statements.next()) {
         (None, _) | (Some(GoStatement::If { .. }), None) => {}
         _ => open_at(line, otherwise),
@@ -585,22 +586,17 @@ fn align(
     };
     let mut used: FxHashSet<usize> = matched.iter().flatten().copied().collect();
     let mut inlined_used: FxHashSet<usize> = FxHashSet::default();
-    let moved: Vec<Option<&Vec<SourceLine>>> = after
-        .iter()
-        .zip(&matched)
-        .map(|(head, found)| match found {
-            Some(_) => None,
-            None => {
-                moved_from(head, before, &mut used).map(|origin| &before[origin].1).or_else(|| {
-                    let head = without_fresh_suffixes(head);
-                    let origin = (0..inlined.len())
-                        .find(|at| !inlined_used.contains(at) && inlined[*at].0 == head)?;
-                    inlined_used.insert(origin);
-                    Some(&inlined[origin].1)
-                })
-            }
-        })
-        .collect();
+    let moved = after.iter().zip(&matched).map(|(head, found)| match found {
+        Some(_) => None,
+        None => moved_from(head, before, &mut used).map(|origin| &before[origin].1).or_else(|| {
+            let head = without_fresh_suffixes(head);
+            let origin = (0..inlined.len())
+                .find(|at| !inlined_used.contains(at) && inlined[*at].0 == head)?;
+            inlined_used.insert(origin);
+            Some(&inlined[origin].1)
+        }),
+    });
+    let moved: Vec<Option<&Vec<SourceLine>>> = moved.collect();
     let mut lines = Vec::with_capacity(after.len());
     let mut gap_start = 0;
     let mut at = 0;

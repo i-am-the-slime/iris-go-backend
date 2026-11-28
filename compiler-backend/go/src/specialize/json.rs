@@ -158,9 +158,8 @@ where
         if (module, name) != ("Data.Show", "show") {
             return Ok(None);
         }
-        let (Some(&element), [element_show @ Dictionary::Instance(shown)]) =
-            (instance.types.first(), instance.context.as_ref())
-        else {
+        let parts = (instance.types.first(), instance.context.as_ref());
+        let (Some(&element), [element_show @ Dictionary::Instance(shown)]) = parts else {
             return Ok(None);
         };
         let list = self.instance_head(instance.origin)?;

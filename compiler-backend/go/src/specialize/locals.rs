@@ -7,6 +7,7 @@ use files::FileId;
 use indexing::TermItemId;
 use smol_str::SmolStr;
 
+use super::instantiation::checked_binder_source;
 use super::{
     LOCAL_SPECIALIZATION_LIMIT, LocalForm, LocalSource, LocalSpecialization, Reference, Scope,
     Specializer, runtime,
@@ -28,12 +29,9 @@ where
         source: LocalSource,
     ) -> GoResult<Expression> {
         let Some(local) = scope.locals.get(&source) else {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct {
-                    construct: "references to locals outside their scope",
-                },
-            ));
+            return Err(scope.unsupported(UnsupportedState::Construct {
+                construct: "references to locals outside their scope",
+            }));
         };
         Ok(Expression::new(ExpressionKind::Local(local.id), local.monotype))
     }
@@ -137,12 +135,9 @@ where
                     if dictionaries.is_empty() && trailing.is_empty() {
                         return self.expression(scope, current);
                     }
-                    return Err(self.unsupported(
-                        scope,
-                        UnsupportedState::Construct {
-                            construct: "evidence applied to a non-reference",
-                        },
-                    ));
+                    return Err(scope.unsupported(UnsupportedState::Construct {
+                        construct: "evidence applied to a non-reference",
+                    }));
                 }
             };
             if let tree::VariableResolution::Source(lowering::TermVariableResolution::Let(group)) =
@@ -170,7 +165,7 @@ where
         }
         match resolution {
             tree::VariableResolution::Generated(binder) => {
-                let source = self.checked_binder_source(scope, binder);
+                let source = checked_binder_source(scope, binder);
                 self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Binder(binder)) => {
@@ -304,10 +299,9 @@ where
             body = expression;
         }
         if binders.len() != dictionaries.len() {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct { construct: "evidence applied to a non-reference" },
-            ));
+            return Err(scope.unsupported(UnsupportedState::Construct {
+                construct: "evidence applied to a non-reference",
+            }));
         }
         let previous: Vec<_> = binders
             .iter()
@@ -350,10 +344,9 @@ where
         {
             return Ok(LocalForm::Alias(alternative.where_expression.expression));
         }
-        Err(self.unsupported(
-            scope,
-            UnsupportedState::Construct { construct: "inferred polymorphic local bindings" },
-        ))
+        Err(scope.unsupported(UnsupportedState::Construct {
+            construct: "inferred polymorphic local bindings",
+        }))
     }
 
     fn polymorphic_local_reference(
@@ -365,8 +358,8 @@ where
     ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let declaration = &module.checked.tree[scope.polymorphic_locals[&source].declaration];
-        let requested =
-            self.abstraction_types(scope, &declaration.value.abstractions, instantiations)?;
+        let abstractions = &declaration.value.abstractions;
+        let requested = self.abstraction_types(scope, abstractions, instantiations)?;
         let mut substitution = scope.substitution.clone();
         substitution.extend(instantiations.iter().map(|(&name, &type_id)| (name, type_id)));
         let requested_monotype =
@@ -385,7 +378,7 @@ where
         let dictionaries = self.promote_growing_local_evidence(
             scope,
             &name,
-            &declaration.value.abstractions,
+            abstractions,
             (&requested, &types),
             dictionaries,
         )?;
@@ -393,11 +386,11 @@ where
         let (dictionaries, runtime_values) = self::runtime::detach_runtime_values(&dictionaries);
         let dictionaries: Arc<[Dictionary]> = Arc::from(dictionaries);
         let canonical = self.types_without_causes(&types);
-        let existing =
-            scope.polymorphic_locals[&source].specializations.iter().find(|specialization| {
-                self.types_without_causes(&specialization.types) == canonical
-                    && specialization.dictionaries == dictionaries
-            });
+        let polymorphic_local = &scope.polymorphic_locals[&source];
+        let existing = polymorphic_local.specializations.iter().find(|specialization| {
+            self.types_without_causes(&specialization.types) == canonical
+                && specialization.dictionaries == dictionaries
+        });
         if let Some(specialization) = existing {
             let local = &specialization.local;
             let expression = Expression::new(ExpressionKind::Local(local.id), local.monotype);
@@ -468,10 +461,9 @@ where
             };
             let polymorphic = &scope.polymorphic_locals[&source];
             if polymorphic.specializations.len() > LOCAL_SPECIALIZATION_LIMIT {
-                return Err(self.unsupported(
-                    scope,
-                    UnsupportedState::SpecializationLimit { limit: LOCAL_SPECIALIZATION_LIMIT },
-                ));
+                return Err(scope.unsupported(UnsupportedState::SpecializationLimit {
+                    limit: LOCAL_SPECIALIZATION_LIMIT,
+                }));
             }
             let value = &module.checked.tree[polymorphic.declaration].value;
             let specialization = &polymorphic.specializations[index];
@@ -502,25 +494,6 @@ where
             polymorphic.active = active.flatten();
             polymorphic.specializations[index].value = Some(specialized?);
         }
-    }
-
-    pub(super) fn specialized_bindings(
-        &mut self,
-        scope: &mut Scope,
-        source: lowering::LetBindingNameGroupId,
-    ) -> Vec<Binding> {
-        let polymorphic = scope
-            .polymorphic_locals
-            .get_mut(&source)
-            .expect("invariant violated: polymorphic local is in scope");
-        let specializations = std::mem::take(&mut polymorphic.specializations);
-        let bindings = specializations.into_iter().map(|specialization| Binding {
-            local: specialization.local,
-            value: specialization
-                .value
-                .expect("invariant violated: requested local specialization was never produced"),
-        });
-        bindings.collect()
     }
 
     /// Recovers, from the type the reference is checked at, the quantifiers
@@ -598,4 +571,22 @@ where
         }
         Ok(())
     }
+}
+
+pub(super) fn specialized_bindings(
+    scope: &mut Scope,
+    source: lowering::LetBindingNameGroupId,
+) -> Vec<Binding> {
+    let polymorphic = scope
+        .polymorphic_locals
+        .get_mut(&source)
+        .expect("invariant violated: polymorphic local is in scope");
+    let specializations = std::mem::take(&mut polymorphic.specializations);
+    let bindings = specializations.into_iter().map(|specialization| Binding {
+        local: specialization.local,
+        value: specialization
+            .value
+            .expect("invariant violated: requested local specialization was never produced"),
+    });
+    bindings.collect()
 }

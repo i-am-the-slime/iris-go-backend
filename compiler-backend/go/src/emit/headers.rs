@@ -100,14 +100,12 @@ impl<'e> Keeping<'e> {
         declarations: &mut [GoDeclaration],
         effects: &'e Effects,
         helpers: &'e FxHashSet<String>,
-    ) -> Self {
-        let declared: FxHashSet<String> = declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                GoDeclaration::Function { name, .. } => Some(name.clone()),
-                _ => None,
-            })
-            .collect();
+    ) -> Keeping<'e> {
+        let declared = declarations.iter().filter_map(|declaration| match declaration {
+            GoDeclaration::Function { name, .. } => Some(name.clone()),
+            _ => None,
+        });
+        let declared: FxHashSet<String> = declared.collect();
         let mut functions = declared.clone();
         loop {
             let mut keeping = Keeping { functions, declared: declared.clone(), effects, helpers };
@@ -197,11 +195,10 @@ fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping<'_>) -> Sli
             let positions = sliced.entry(name.clone()).or_insert_with(|| vec![false; *arity]);
             positions[*position] = true;
         }
-        let newly: FxHashMap<&str, Vec<usize>> =
-            changed.iter().fold(FxHashMap::default(), |mut by_name, (name, position, _)| {
-                by_name.entry(name.as_str()).or_default().push(*position);
-                by_name
-            });
+        let mut newly: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
+        for (name, position, _) in &changed {
+            newly.entry(name.as_str()).or_default().push(*position);
+        }
         for declaration in declarations.iter_mut() {
             go_traversal::each_expression_in_declaration(declaration, |expression| {
                 if let GoExpression::Call { function, arguments } = expression
@@ -361,13 +358,11 @@ fn hoist_in_loops(
     while position < block.len() {
         let statement = &mut block[position];
         if is_loop(statement) && keeping.keeps(std::slice::from_mut(statement)) {
-            let arrays: Vec<String> = dereferenced(statement)
-                .into_iter()
-                .filter(|array| {
-                    !binds(statement, array)
-                        && only_indexed(std::slice::from_mut(statement), array, sliced, None)
-                })
-                .collect();
+            let arrays = dereferenced(statement).into_iter().filter(|array| {
+                !binds(statement, array)
+                    && only_indexed(std::slice::from_mut(statement), array, sliced, None)
+            });
+            let arrays: Vec<String> = arrays.collect();
             let hoisted: Vec<GoStatement> = arrays
                 .iter()
                 .map(|array| hoist(std::slice::from_mut(statement), array, names))
@@ -480,16 +475,14 @@ pub(super) fn drop_repeated_bounds_tests(
     for declaration in declarations.iter_mut() {
         let GoDeclaration::Function { body, .. } = declaration else { continue };
         let written = written_names(body);
-        let tests: Vec<(String, GoExpression)> = definitions(body)
-            .into_iter()
-            .filter(|(name, test)| {
-                !written.contains(name) && is_bounds_test(test) && reads(test).is_disjoint(&written)
-            })
-            .collect();
+        let tests = definitions(body).into_iter().filter(|(name, test)| {
+            !written.contains(name) && is_bounds_test(test) && reads(test).is_disjoint(&written)
+        });
+        let tests: Vec<(String, GoExpression)> = tests.collect();
         for (name, test) in tests {
             let through_pointer = has_dereference(&test);
-            let test =
-                Test { name, rendered: format!("{test:?}"), through_pointer, keeping: &keeping };
+            let rendered = format!("{test:?}");
+            let test = Test { name, rendered, through_pointer, keeping: &keeping };
             go_traversal::each_block(body, |block| test.drop_repeats(block));
         }
     }

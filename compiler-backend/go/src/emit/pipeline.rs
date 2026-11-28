@@ -203,11 +203,11 @@ where
 
     fn keep_cells_in_locals(&self, declarations: &mut [GoDeclaration]) {
         let helpers: FxHashSet<String> = self.support_functions.values().cloned().collect();
-        let constructors =
-            self.type_declarations.iter().filter_map(|declaration| match declaration {
-                GoDeclaration::Function { name, .. } => Some(name.clone()),
-                _ => None,
-            });
+        let type_declarations = self.type_declarations.iter();
+        let constructors = type_declarations.filter_map(|declaration| match declaration {
+            GoDeclaration::Function { name, .. } => Some(name.clone()),
+            _ => None,
+        });
         let safe_callees: FxHashSet<String> = helpers.iter().cloned().chain(constructors).collect();
         array_parameters::promote_array_parameters(declarations, &safe_callees);
         let never_recovering = self.foreign_packages.packages_that_never_recover();
@@ -234,11 +234,11 @@ where
         declarations: &mut Vec<GoDeclaration>,
         lines_aside: &mut Option<SetAside>,
     ) {
-        let taken =
-            |name: &str| self.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
+        let global_names = &self.global_names;
+        let taken = |name: &str| global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
         lengths::count_lengths_up_to_comparisons(declarations);
-        let mut names: Vec<DeclarationNames> =
-            declarations.iter_mut().map(GoDeclaration::declared_names).collect();
+        let names = declarations.iter_mut().map(GoDeclaration::declared_names);
+        let mut names: Vec<DeclarationNames> = names.collect();
         if self.imports.contains(GoPackage::Direct.path()) {
             self.imports.insert(GoPackage::Prim.path().into());
         }
@@ -274,8 +274,8 @@ where
         constant_fields::read_constant_fields(declarations);
         merging::join_repeated_tests(declarations);
         unpacked::read_found_answers(declarations);
-        let global =
-            |name: &str| self.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
+        let global_names = &self.global_names;
+        let global = |name: &str| global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
         upsert::look_up_and_write_once(declarations, &global);
         probes::probe_once(declarations, &global);
         index_arrays::count_instead_of_listing_indices(declarations);
@@ -306,22 +306,21 @@ where
             .collect();
         // The homes of the declarations each declaration stands for.
         let mut merged: FxHashMap<String, Vec<Option<ModuleIndex>>> = FxHashMap::default();
-        let declarations =
-            deduplicate::merge_identical_declarations(declarations, &mut |from, into| {
-                let from_homes =
-                    merged.remove(from).unwrap_or_else(|| vec![homes.get(from).copied()]);
-                merged
-                    .entry(into.to_string())
-                    .or_insert_with(|| vec![homes.get(into).copied()])
-                    .extend(from_homes);
-            });
+        let mut merge_homes = |from: &str, into: &str| {
+            let from_homes = merged.remove(from).unwrap_or_else(|| vec![homes.get(from).copied()]);
+            merged
+                .entry(into.to_string())
+                .or_insert_with(|| vec![homes.get(into).copied()])
+                .extend(from_homes);
+        };
+        let distinct = deduplicate::merge_identical_declarations(declarations, &mut merge_homes);
         for (name, merged_homes) in merged {
             match modules.common_home(&merged_homes) {
                 Some(home) => homes.insert(name, home),
                 None => homes.remove(&name),
             };
         }
-        (declarations, homes)
+        (distinct, homes)
     }
 
     fn complete_declarations(
@@ -354,13 +353,11 @@ where
         homes: &mut FxHashMap<String, ModuleIndex>,
         modules: &Modules,
     ) -> GoResult<Vec<(GoDeclaration, Option<ModuleIndex>)>> {
-        let declared: FxHashSet<String> = all
-            .iter()
-            .flat_map(|declaration| match declaration {
-                GoDeclaration::Constants { names, .. } => names.clone(),
-                declaration => declaration.name().map(str::to_string).into_iter().collect(),
-            })
-            .collect();
+        let declared = all.iter().flat_map(|declaration| match declaration {
+            GoDeclaration::Constants { names, .. } => names.clone(),
+            declaration => declaration.name().map(str::to_string).into_iter().collect(),
+        });
+        let declared: FxHashSet<String> = declared.collect();
         let record_homes = self.spell_pending(modules, &declared)?;
         for (name, file) in record_homes {
             if let Some(home) = modules.index(file) {
@@ -374,14 +371,11 @@ where
             };
             name.and_then(|name| homes.get(name)).copied()
         };
-        let placed = all
-            .into_iter()
-            .map(|declaration| {
-                let home = home(&declaration);
-                (declaration, home)
-            })
-            .collect();
-        Ok(placed)
+        let placed = all.into_iter().map(|declaration| {
+            let home = home(&declaration);
+            (declaration, home)
+        });
+        Ok(placed.collect())
     }
 
     fn split_into_packages(

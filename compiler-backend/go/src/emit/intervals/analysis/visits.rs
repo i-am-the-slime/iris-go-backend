@@ -53,10 +53,9 @@ impl Analysis<'_, '_, '_> {
                     GoBinaryOperator::Divide
                 };
                 let mut arguments = std::mem::take(arguments);
-                let right = arguments.pop().expect("a divisor");
-                let left = arguments.pop().expect("a dividend");
-                *value =
-                    GoExpression::Binary { operator, left: Box::new(left), right: Box::new(right) };
+                let right = Box::new(arguments.pop().expect("a divisor"));
+                let left = Box::new(arguments.pop().expect("a dividend"));
+                *value = GoExpression::Binary { operator, left, right };
             }
         }
     }
@@ -104,8 +103,8 @@ impl Analysis<'_, '_, '_> {
             if written_field(target, &self.program.fields).is_none() {
                 continue;
             }
-            let fits =
-                targets.len() == values.len() && self.fits_in_int32(&values[position], state);
+            let one_value_each = targets.len() == values.len();
+            let fits = one_value_each && self.fits_in_int32(&values[position], state);
             self.observe(site_of(target), fits);
         }
     }

@@ -166,7 +166,7 @@ struct KernelSource {
     line: Option<SourceLine>,
 }
 
-impl<'p, 'q, Q> Emitter<'p, '_, 'q, Q>
+impl<'p, 'm, 'q, Q> Emitter<'p, 'm, 'q, Q>
 where
     Q: checking::ExternalQueries,
 {
@@ -247,7 +247,7 @@ where
         callback: &Found<'e>,
         arguments: &'e [Expression],
         result_element: Element,
-    ) -> Option<(Analysis<'a, 'e, Self>, Shape)>
+    ) -> Option<(Analysis<'a, 'e, Emitter<'p, 'm, 'q, Q>>, Shape)>
     where
         'p: 'e,
     {
@@ -326,8 +326,8 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
     if kernels.sources.is_empty() {
         return;
     }
-    let by_name: FxHashMap<&str, &KernelSource> =
-        kernels.sources.iter().map(|source| (source.name.as_str(), source)).collect();
+    let by_name = kernels.sources.iter().map(|source| (source.name.as_str(), source));
+    let by_name: FxHashMap<&str, &KernelSource> = by_name.collect();
     let mut added = vec![];
     for file in files.iter_mut() {
         let mut called: Vec<&KernelSource> = vec![];
@@ -707,7 +707,7 @@ where
 }
 
 impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
-    fn new(emitter: &'a E, element: Element) -> Self {
+    fn new(emitter: &'a E, element: Element) -> Analysis<'a, 'e, E> {
         Analysis { emitter, element, inputs: vec![], captures: vec![], bindings: vec![] }
     }
 
@@ -752,8 +752,8 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
 
     /// The term a callback computes from the terms of its arguments.
     fn apply(&mut self, callback: &Found<'e>, arguments: Vec<Term>, depth: usize) -> Option<Term> {
-        let arguments: Vec<Term> =
-            arguments.into_iter().map(|argument| self.shared(argument)).collect();
+        let arguments = arguments.into_iter().map(|argument| self.shared(argument));
+        let arguments: Vec<Term> = arguments.collect();
         match callback {
             Found::Inline { parameters, body } => {
                 let mut scope: FxHashMap<LocalId, Term> = FxHashMap::default();
@@ -880,8 +880,8 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                     self.element.is_integer()
                         || matches!(term, Term::Constant(text) if text.parse::<f64>().is_ok_and(|number| number != 0.0))
                 };
-                if let (Condition::Compare(Ordering::Equal, left, right), false) =
-                    (&condition, negated)
+                if let Condition::Compare(Ordering::Equal, left, right) = &condition
+                    && !negated
                     && (exact(left) || exact(right))
                     && ((**left == then && **right == otherwise)
                         || (**right == then && **left == otherwise))
@@ -1136,16 +1136,16 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 then,
                 otherwise,
             } => {
-                let (chosen, kept, ordering) =
-                    match (**then == Term::Accumulator, **otherwise == Term::Accumulator) {
-                        (false, true) => (then, otherwise, *ordering),
-                        // Choosing the accumulator where the comparison holds
-                        // chooses NaN elements, unless there are none.
-                        (true, false) if self.element.is_integer() => {
-                            (otherwise, then, ordering.complement()?)
-                        }
-                        _ => return None,
-                    };
+                let accumulators = (**then == Term::Accumulator, **otherwise == Term::Accumulator);
+                let (chosen, kept, ordering) = match accumulators {
+                    (false, true) => (then, otherwise, *ordering),
+                    // Choosing the accumulator where the comparison holds
+                    // chooses NaN elements, unless there are none.
+                    (true, false) if self.element.is_integer() => {
+                        (otherwise, then, ordering.complement()?)
+                    }
+                    _ => return None,
+                };
                 if !element_term(chosen) || **kept != Term::Accumulator {
                     return None;
                 }
@@ -1228,8 +1228,8 @@ fn extremum(term: &Term) -> Option<(&'static str, &Term, &Term)> {
     else {
         return None;
     };
-    let chooses_compared =
-        (left == then && right == otherwise) || (left == otherwise && right == then);
+    let chooses_in_order = left == then && right == otherwise;
+    let chooses_compared = chooses_in_order || (left == otherwise && right == then);
     if *ordering == Ordering::Equal || !chooses_compared {
         return None;
     }
@@ -1448,7 +1448,7 @@ impl Kernel {
                     });
                 }
                 out.push_str("\t}\n");
-                let pair = |left: &str, right: &str| self.combine_vectors(*reduction, left, right);
+                let pair = |left: &str, right: &str| combine_vectors(*reduction, left, right);
                 let _ = writeln!(
                     out,
                     "\tacc0 = {}",
@@ -1458,7 +1458,7 @@ impl Kernel {
                 out.push_str("\tacc0.Store(lanes[:])\n");
                 out.push_str("\taccumulator := initial\n");
                 out.push_str("\tfor _, lane := range lanes[:step] {\n");
-                let _ = writeln!(out, "\t\t{}", self.combine_scalars(*reduction));
+                let _ = writeln!(out, "\t\t{}", combine_scalars(*reduction));
                 out.push_str("\t}\n");
                 let _ = writeln!(out, "\tfor ; i < {length}; i++ {{");
                 out.push_str(&self.scalar_step(step, "\t\t", false));
@@ -1493,8 +1493,8 @@ impl Kernel {
         let as_int64 = |name: &str| {
             format!("unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData({name}))), len({name}))")
         };
-        let mut arguments: Vec<String> =
-            (0..self.inputs).map(|position| as_int64(&input_name(position))).collect();
+        let arguments = (0..self.inputs).map(|position| as_int64(&input_name(position)));
+        let mut arguments: Vec<String> = arguments.collect();
         arguments.extend(self.parameters.iter().map(|name| format!("int64({name})")));
         match self.shape {
             Shape::Fold { .. } => {
@@ -1530,8 +1530,8 @@ impl Kernel {
         let vector = flavor.vector(self.element);
         let package = flavor.package();
         let (bound, lanes) = self.reads();
-        let mut spelling =
-            self.spelling(copy, copy.map_or("acc".into(), |copy| format!("acc{copy}")));
+        let accumulator = copy.map_or("acc".into(), |copy| format!("acc{copy}"));
+        let mut spelling = self.spelling(copy, accumulator);
         spelling.flavor = Some(flavor);
         for lane in lanes {
             let (low, high) = match copy {
@@ -1576,24 +1576,6 @@ impl Kernel {
         let _ = writeln!(out, "\t\t{}.StorePart(out[i:])", spelling.vector(term));
     }
 
-    fn combine_vectors(&self, reduction: Reduction, left: &str, right: &str) -> String {
-        match reduction {
-            Reduction::Add => format!("{left}.Add({right})"),
-            Reduction::Multiply => format!("{left}.Mul({right})"),
-            Reduction::Max => format!("{right}.IfElse({left}.Less({right}), {left})"),
-            Reduction::Min => format!("{right}.IfElse({right}.Less({left}), {left})"),
-        }
-    }
-
-    fn combine_scalars(&self, reduction: Reduction) -> &'static str {
-        match reduction {
-            Reduction::Add => "accumulator = accumulator + lane",
-            Reduction::Multiply => "accumulator = accumulator * lane",
-            Reduction::Max => "if accumulator < lane {\n\t\t\taccumulator = lane\n\t\t}",
-            Reduction::Min => "if lane < accumulator {\n\t\t\taccumulator = lane\n\t\t}",
-        }
-    }
-
     /// The scalar loop body of a fold: the element, then the step.
     fn scalar_step(&self, step: &Term, indentation: &str, ranged: bool) -> String {
         let mut out = String::new();
@@ -1622,8 +1604,8 @@ impl Kernel {
     ) {
         let (bound, lanes) = self.reads();
         for lane in lanes.into_iter().filter(|_| !ranged) {
-            let _ =
-                writeln!(out, "{indentation}{} := {}[i]", spelling.lane(lane), input_name(lane));
+            let lane_name = spelling.lane(lane);
+            let _ = writeln!(out, "{indentation}{} := {}[i]", lane_name, input_name(lane));
         }
         for index in bound {
             let value = spelling.declared(&self.bindings[index]);
@@ -1692,6 +1674,24 @@ impl Kernel {
             selections: 0,
             flavor: None,
         }
+    }
+}
+
+fn combine_vectors(reduction: Reduction, left: &str, right: &str) -> String {
+    match reduction {
+        Reduction::Add => format!("{left}.Add({right})"),
+        Reduction::Multiply => format!("{left}.Mul({right})"),
+        Reduction::Max => format!("{right}.IfElse({left}.Less({right}), {left})"),
+        Reduction::Min => format!("{right}.IfElse({right}.Less({left}), {left})"),
+    }
+}
+
+fn combine_scalars(reduction: Reduction) -> &'static str {
+    match reduction {
+        Reduction::Add => "accumulator = accumulator + lane",
+        Reduction::Multiply => "accumulator = accumulator * lane",
+        Reduction::Max => "if accumulator < lane {\n\t\t\taccumulator = lane\n\t\t}",
+        Reduction::Min => "if lane < accumulator {\n\t\t\taccumulator = lane\n\t\t}",
     }
 }
 

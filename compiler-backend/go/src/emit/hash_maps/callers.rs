@@ -131,12 +131,12 @@ impl Versions {
             if wants == taken_by(program, decided, site.callee, real) {
                 continue;
             }
-            let version =
-                if !wants.contains(&true) || taken_by(program, decided, base, real) == wants {
-                    Version::Original(base)
-                } else {
-                    Version::Variant(base, wants)
-                };
+            let wants_maps = wants.contains(&true);
+            let version = if !wants_maps || taken_by(program, decided, base, real) == wants {
+                Version::Original(base)
+            } else {
+                Version::Variant(base, wants)
+            };
             if self.id(&version) != Some(site.callee) {
                 wanted.push((site.call, version));
             }
@@ -197,7 +197,7 @@ impl Versions {
 
     /// The variants that take and give the maps their functions do.
     fn alike(&self, program: &Program, decided: &Decided) -> Vec<FunctionId> {
-        let mut alike: Vec<FunctionId> = self
+        let alike = self
             .bases
             .iter()
             .filter(|&(&variant, &base)| {
@@ -205,8 +205,8 @@ impl Versions {
                 taken_by(program, decided, variant, real) == taken_by(program, decided, base, real)
                     && given_by(decided, variant) == given_by(decided, base)
             })
-            .map(|(&variant, _)| variant)
-            .collect();
+            .map(|(&variant, _)| variant);
+        let mut alike: Vec<FunctionId> = alike.collect();
         alike.sort_unstable();
         alike
     }
@@ -214,8 +214,8 @@ impl Versions {
     /// Folds the variants back into their functions: their calls call the functions, and they
     /// leave the program.
     fn fold(&mut self, program: &mut Program, folded: &[FunctionId]) {
-        let mut renumbered: FxHashMap<FunctionId, FunctionId> =
-            folded.iter().map(|&variant| (variant, self.base(variant))).collect();
+        let renumbered = folded.iter().map(|&variant| (variant, self.base(variant)));
+        let mut renumbered: FxHashMap<FunctionId, FunctionId> = renumbered.collect();
         let mut functions = std::mem::take(&mut program.functions);
         let variants = functions.split_off(self.originals);
         for (offset, variant) in variants.into_iter().enumerate() {

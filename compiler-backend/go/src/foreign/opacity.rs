@@ -373,9 +373,8 @@ impl Package {
             type_parameters = read_type_parameters(&declaration[2..end]);
             position = end + 1;
         }
-        if let Some(function) =
-            read_signature(name, type_parameters, vec![], &declaration[position..])
-        {
+        let signature = &declaration[position..];
+        if let Some(function) = read_signature(name, type_parameters, vec![], signature) {
             self.functions.push(function);
         }
     }
@@ -425,8 +424,8 @@ impl Package {
             .filter(|function| signature_escape(function, &escaping).is_some())
             .map(|function| function.name.clone())
             .collect();
-        let mut opaque: FxHashSet<String> =
-            self.functions.iter().map(|function| function.name.clone()).collect();
+        let names = self.functions.iter().map(|function| function.name.clone());
+        let mut opaque: FxHashSet<String> = names.collect();
         let mut opaque_methods: FxHashSet<String> = self.methods.clone();
         loop {
             let surroundings =
@@ -440,12 +439,7 @@ impl Package {
             let next_methods: FxHashSet<String> = self
                 .methods
                 .iter()
-                .filter(|name| {
-                    let mut definitions =
-                        self.method_functions.iter().filter(|method| &method.name == *name);
-                    definitions.all(|method| surroundings.escapes(method).is_empty())
-                        && self.method_functions.iter().any(|method| &method.name == *name)
-                })
+                .filter(|name| self.method_is_opaque(name, &surroundings))
                 .cloned()
                 .collect();
             if next == opaque && next_methods == opaque_methods {
@@ -557,9 +551,9 @@ impl Package {
         index: usize,
         in_place: &FxHashMap<String, Vec<usize>>,
     ) -> bool {
-        let whole_argument =
-            index.checked_sub(1).is_some_and(|before| body[before].is("(") || body[before].is(","))
-                && body.get(index + 1).is_some_and(|next| next.is(")") || next.is(","));
+        let previous = index.checked_sub(1).map(|before| &body[before]);
+        let whole_argument = previous.is_some_and(|token| token.is("(") || token.is(","))
+            && body.get(index + 1).is_some_and(|next| next.is(")") || next.is(","));
         if !whole_argument {
             return false;
         }
@@ -570,6 +564,12 @@ impl Package {
         }
         let position = split_top(&body[open + 1..index], ",").len();
         in_place.get(callee).is_some_and(|positions| positions.contains(&position))
+    }
+
+    fn method_is_opaque(&self, name: &str, surroundings: &Surroundings) -> bool {
+        let mut definitions = self.method_functions.iter().filter(|method| method.name == name);
+        definitions.all(|method| surroundings.escapes(method).is_empty())
+            && self.method_functions.iter().any(|method| method.name == name)
     }
 
     fn surroundings<'p>(
@@ -618,8 +618,8 @@ impl Package {
     }
 
     fn escaping_words(&self) -> FxHashSet<String> {
-        let mut escaping: FxHashSet<String> =
-            ESCAPING_WORDS.iter().map(|word| word.to_string()).collect();
+        let words = ESCAPING_WORDS.iter().map(|word| word.to_string());
+        let mut escaping: FxHashSet<String> = words.collect();
         loop {
             let before = escaping.len();
             for declaration in &self.types {
@@ -682,8 +682,8 @@ fn read_type_parameters(tokens: &[Token]) -> Vec<TypeParameter> {
 }
 
 fn signature_shapes(function: &Function) -> ForeignSignature {
-    let type_parameters: FxHashSet<String> =
-        function.type_parameters.iter().map(|parameter| parameter.name.clone()).collect();
+    let names = function.type_parameters.iter().map(|parameter| parameter.name.clone());
+    let type_parameters: FxHashSet<String> = names.collect();
     let entries = split_top(&function.parameters, ",");
     let mut parameters = Vec::with_capacity(entries.len());
     for (position, entry) in entries.iter().enumerate() {
@@ -709,8 +709,8 @@ fn shape_of(tokens: &[Token], type_parameters: &FxHashSet<String>) -> ForeignSha
     if tokens.iter().any(|token| token.is_word("func") || token.is("(")) {
         return ForeignShape::Other;
     }
-    let mut held =
-        tokens.iter().filter_map(Token::word).filter(|word| type_parameters.contains(*word));
+    let words = tokens.iter().filter_map(Token::word);
+    let mut held = words.filter(|word| type_parameters.contains(*word));
     match (held.next(), held.next()) {
         (Some(word), None)
             if tokens.last().is_some_and(|last| last.is_word(word) || last.is("]")) =>
@@ -993,7 +993,7 @@ impl<'f> Flow<'f> {
             callbacks: FxHashSet::default(),
         };
         flow.declare_parameters(&function.parameters);
-        flow.callbacks = flow.callbacks_among(&function.parameters);
+        flow.callbacks = callbacks_among(&function.parameters);
         flow.declare_parameters(result_list(&function.results));
         for (index, token) in body.iter().enumerate() {
             if token.is_word("func") && body.get(index + 1).is_some_and(|token| token.is("(")) {
@@ -1028,20 +1028,6 @@ impl<'f> Flow<'f> {
                 }
             }
         }
-    }
-
-    fn callbacks_among(&self, list: &'f [Token]) -> FxHashSet<&'f str> {
-        let mut callbacks = FxHashSet::default();
-        let mut pending = vec![];
-        for entry in split_top(list, ",") {
-            let Some(name) = entry.first().and_then(Token::word) else { continue };
-            pending.push(name);
-            if entry.len() > 1 {
-                let function = entry[1].is_word("func");
-                callbacks.extend(pending.drain(..).filter(|_| function));
-            }
-        }
-        callbacks
     }
 
     fn declare_literal(&mut self, keyword: usize) {
@@ -1106,8 +1092,9 @@ impl<'f> Flow<'f> {
                 }
             }
             let right = index + 1..self.right_end(index, header);
-            if let ([name], Some(constructed)) =
-                (self.names(start..index).as_slice(), self.constructed_type(right.clone()))
+            let assigned = self.names(start..index);
+            let constructed = self.constructed_type(right.clone());
+            if let ([name], Some(constructed)) = (assigned.as_slice(), constructed)
                 && defines
             {
                 self.declared.insert(name, constructed);
@@ -1450,10 +1437,10 @@ impl<'f> Flow<'f> {
         }
         if previous.is(")") {
             let parenthesis = opening(tokens, open - 1)?;
-            let after_func =
-                parenthesis.checked_sub(1).is_some_and(|before| tokens[before].is_word("func"));
+            let token_before = parenthesis.checked_sub(1).map(|before| &tokens[before]);
+            let after_func = token_before.is_some_and(|token| token.is_word("func"));
             let converts = mentions(&tokens[parenthesis..open], self.parameter);
-            let curried = parenthesis.checked_sub(1).and_then(|before| tokens[before].word());
+            let curried = token_before.and_then(|token| token.word());
             let curried = curried
                 .is_some_and(|callee| self.holds_values(callee) || self.is_typed_function(callee));
             return (!after_func && !converts && !curried)
@@ -1613,6 +1600,20 @@ impl<'f> Flow<'f> {
         let local_channel = self.holds_values(root) || self.is_typed_local(root);
         (!local_channel).then(|| format!("sends a value on `{root}`"))
     }
+}
+
+fn callbacks_among(list: &[Token]) -> FxHashSet<&str> {
+    let mut callbacks = FxHashSet::default();
+    let mut pending = vec![];
+    for entry in split_top(list, ",") {
+        let Some(name) = entry.first().and_then(Token::word) else { continue };
+        pending.push(name);
+        if entry.len() > 1 {
+            let function = entry[1].is_word("func");
+            callbacks.extend(pending.drain(..).filter(|_| function));
+        }
+    }
+    callbacks
 }
 
 fn result_list(results: &[Token]) -> &[Token] {
@@ -1860,8 +1861,7 @@ func LookupImpl[K comparable, V, M any](just func(V) M, nothing M, key K, entrie
 func Empty[K comparable, V, M any]() map[K]V { return map[K]V{} }
 ";
         let opacity = foreign_opacity(&[source]);
-        let inferred =
-            |name: &str| opacity.function(name).map(|function| function.inferred.clone());
+        let inferred = |name: &str| opacity.function(name).map(|opaque| opaque.inferred.clone());
         assert_eq!(inferred("LookupImpl"), Some(vec!["K".into(), "V".into(), "M".into()]));
         assert_eq!(inferred("Empty"), Some(vec![]));
     }

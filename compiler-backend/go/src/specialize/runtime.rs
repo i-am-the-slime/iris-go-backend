@@ -201,8 +201,8 @@ where
                     )
                 };
                 let erased = runtime.constraint;
-                let value =
-                    self.runtime_value(scope, promotion.dictionary, promotion.constraint, erased)?;
+                let dictionary = promotion.dictionary;
+                let value = self.runtime_value(scope, dictionary, promotion.constraint, erased)?;
                 let value = Some(Box::new(value));
                 *slot = Dictionary::Runtime(RuntimeDictionary { constraint: erased, value });
             }
@@ -323,7 +323,7 @@ where
                 continue;
             }
             let Some(slot) = dictionaries.get_mut(position) else {
-                return Err(self.unsupported(scope, UnsupportedState::GrowingEvidence));
+                return Err(scope.unsupported(UnsupportedState::GrowingEvidence));
             };
             let erased_constraint = self.context.types.substitute(constraint, &erased);
             let runtime = RuntimeDictionary { constraint: erased_constraint, value: None };
@@ -331,8 +331,8 @@ where
             let constraint = self.context.types.substitute(constraint, &instantiated);
             let value = self.runtime_value(scope, dictionary, constraint, erased_constraint)?;
             let value = Some(Box::new(value));
-            dictionaries[position] =
-                Dictionary::Runtime(RuntimeDictionary { constraint: erased_constraint, value });
+            let runtime = RuntimeDictionary { constraint: erased_constraint, value };
+            dictionaries[position] = Dictionary::Runtime(runtime);
             self.note_growing_evidence(&definition, constraint)?;
         }
         Ok(dictionaries)
@@ -440,8 +440,8 @@ where
         for constraint in constraints {
             let monotype = self.runtime_monotype(definition, constraint)?;
             let class = self.class_environment(definition, constraint)?;
-            let class =
-                crate::naming::lower_first(&self.context.type_name(class.file_id, class.item)?);
+            let class_name = self.context.type_name(class.file_id, class.item)?;
+            let class = crate::naming::lower_first(&class_name);
             let name = smol_str::format_smolstr!("{class}Dictionary");
             parameters.push(self.fresh_local(name, monotype));
         }
@@ -499,14 +499,16 @@ where
         dictionaries: Vec<Dictionary>,
         monotype: MonotypeId,
     ) -> GoResult<Expression> {
-        let missing =
-            |name: &SmolStr| UnsupportedState::MissingInstanceMember { member: name.to_string() };
+        let missing = |name: &SmolStr| {
+            let member = name.to_string();
+            UnsupportedState::MissingInstanceMember { member }
+        };
         let constraint = runtime.constraint;
         let Some(value) = runtime.value else {
-            return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+            return Err(scope.unsupported(UnsupportedState::UnboundEvidence));
         };
         let Some(field) = self.record_field(*value, &name) else {
-            return Err(self.unsupported(scope, missing(&name)));
+            return Err(scope.unsupported(missing(&name)));
         };
         if dictionaries.is_empty() {
             return Ok(self.coerce(field, monotype));
@@ -518,7 +520,7 @@ where
             .iter()
             .find(|declared| class.file_id == member.0 && declared.item_id == member.1)
         else {
-            return Err(self.unsupported(scope, missing(&name)));
+            return Err(scope.unsupported(missing(&name)));
         };
         let field_type = declared.field_type;
         let erased = self.erased_member(&class, field_type, &Substitution::default());
@@ -531,7 +533,7 @@ where
         let mut result = field.monotype;
         for _ in &arguments {
             let Some((_, rest)) = self.monotypes.function_parts(result) else {
-                return Err(self.unsupported(scope, missing(&name)));
+                return Err(scope.unsupported(missing(&name)));
             };
             result = rest;
         }
@@ -590,12 +592,9 @@ where
             | Dictionary::Reflectable(_)
             | Dictionary::Trivial
             | Dictionary::Runtime(RuntimeDictionary { value: None, .. }) => {
-                return Err(self.unsupported(
-                    scope,
-                    UnsupportedState::Construct {
-                        construct: "growing evidence of compiler-solved constraints",
-                    },
-                ));
+                return Err(scope.unsupported(UnsupportedState::Construct {
+                    construct: "growing evidence of compiler-solved constraints",
+                }));
             }
         };
         let monotype = self.runtime_monotype(&scope.definition, erased)?;
@@ -607,8 +606,8 @@ where
         let mut fields = vec![];
         for member in &class.class.members {
             let label = self.context.term_name(class.file_id, member.item_id)?;
-            let erased_member =
-                self.erased_member(&class, member.field_type, &Substitution::default());
+            let substitution = Substitution::default();
+            let erased_member = self.erased_member(&class, member.field_type, &substitution);
             let member_monotype = self.closed_monotype(scope, erased_member.body)?;
             let field = record.iter().find(|field| field.label == label);
             let field = field.expect("invariant violated: a member is not in its dictionary");
@@ -632,8 +631,8 @@ where
                 dictionaries,
                 member_monotype,
             )?;
-            let value =
-                if parameters.is_empty() { reference } else { self.lambda(parameters, reference) };
+            let nullary = parameters.is_empty();
+            let value = if nullary { reference } else { self.lambda(parameters, reference) };
             fields.push((label, self.coerce(value, field.monotype)));
         }
         for (position, entry) in class.class.superclasses.iter().enumerate() {
@@ -646,8 +645,8 @@ where
             };
             let dictionary = self.resolve_superclass(&scope.evidence(), &instance, superclass)?;
             let constraint = self.context.types.substitute(entry.constraint, &class.substitution);
-            let erased =
-                self.context.types.substitute(entry.constraint, &erased_class.substitution);
+            let erased_substitution = &erased_class.substitution;
+            let erased = self.context.types.substitute(entry.constraint, erased_substitution);
             fields.push((label, self.runtime_value(scope, dictionary, constraint, erased)?));
         }
         fields.sort_by(|left, right| left.0.cmp(&right.0));

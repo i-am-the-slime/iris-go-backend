@@ -19,8 +19,8 @@ where
         monotype: MonotypeId,
     ) -> Option<Vec<GoStatement>> {
         let mut statements = vec![];
-        let text =
-            self.text_of(identifier_expression(entry), monotype, entry, 0, &mut statements)?;
+        let entry_value = identifier_expression(entry);
+        let text = self.text_of(entry_value, monotype, entry, 0, &mut statements)?;
         let print = self.performing(GoFunction { package: GoPackage::Console, name: "Print" });
         statements.push(GoStatement::Expression(call(print, vec![text])));
         Some(statements)
@@ -82,8 +82,8 @@ where
         let texts = printing_name("texts", depth, entry);
         let item = printing_name("element", depth, entry);
         let mut body = vec![];
-        let text =
-            self.text_of(identifier_expression(&item), element, entry, depth + 1, &mut body)?;
+        let item_value = identifier_expression(&item);
+        let text = self.text_of(item_value, element, entry, depth + 1, &mut body)?;
         let make = builtin_call(
             GoBuiltin::Make,
             vec![

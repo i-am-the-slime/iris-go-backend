@@ -260,8 +260,7 @@ impl Int64Operation {
         };
         match (self, operands) {
             (Operation::Constant(bits), []) => long(bits),
-            (Operation::FromInt, [x]) => long(*x),
-            (Operation::Convert | Operation::Same, [x]) => long(*x),
+            (Operation::FromInt | Operation::Convert | Operation::Same, [x]) => long(*x),
             (Operation::Add, [x, y]) => long(x.wrapping_add(*y)),
             (Operation::Subtract, [x, y]) => long(x.wrapping_sub(*y)),
             (Operation::Multiply, [x, y]) => long(x.wrapping_mul(*y)),

@@ -31,8 +31,8 @@ pub fn lift_local_functions(
         initializing: FxHashSet::default(),
     };
     for index in 0..original {
-        let mut function =
-            functions[index].take().expect("invariant violated: function lifted twice");
+        let function = functions[index].take();
+        let mut function = function.expect("invariant violated: function lifted twice");
         lifter.binders.clear();
         lifter.created_base = lifter.next_function;
         for parameter in &function.parameters {
@@ -71,12 +71,12 @@ fn inline_called_partial_applications(expression: &mut Expression, arities: &[us
     for binding in bindings.iter() {
         free.extend(free_locals(&binding.value));
     }
-    let (inlined, kept): (Vec<Binding>, Vec<Binding>) =
-        std::mem::take(bindings).into_iter().partition(|binding| {
-            is_partial_application(&binding.value, arities)
-                && !free.contains(&binding.local.id)
-                && only_called(body, binding.local.id)
-        });
+    let candidates = std::mem::take(bindings).into_iter();
+    let (inlined, kept): (Vec<Binding>, Vec<Binding>) = candidates.partition(|binding| {
+        is_partial_application(&binding.value, arities)
+            && !free.contains(&binding.local.id)
+            && only_called(body, binding.local.id)
+    });
     for binding in &inlined {
         substitute_calls(body, binding.local.id, &binding.value);
     }
@@ -137,14 +137,13 @@ fn saturate_wrappers(functions: &mut [Function], entry: FunctionId, lifter: &mut
             }
             let missing = callee.parameters[arguments.len()..].to_vec();
             let result = callee.result;
-            let erased =
-                missing.iter().any(|parameter| erases(lifter.monotypes, parameter.monotype))
-                    || erases(lifter.monotypes, result);
+            let mut signature = missing.iter().map(|parameter| parameter.monotype).chain([result]);
+            let erased = signature.any(|monotype| erases(lifter.monotypes, monotype));
             if erased {
                 continue;
             }
-            let fresh: Vec<Local> =
-                missing.iter().map(|parameter| lifter.fresh(parameter)).collect();
+            let fresh = missing.iter().map(|parameter| lifter.fresh(parameter));
+            let fresh: Vec<Local> = fresh.collect();
             let wrapper = &mut functions[index];
             let ExpressionKind::Apply { arguments, .. } = &mut wrapper.body.kind else {
                 unreachable!()
@@ -217,8 +216,8 @@ impl Lifter<'_> {
         }
         if !lifts {
             for_each_child_mut(&mut expression, &mut |child| {
-                let taken =
-                    std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
+                let placeholder = Expression::new(ExpressionKind::Unit, child.monotype);
+                let taken = std::mem::replace(child, placeholder);
                 *child = self.expression(taken, base);
             });
             return expression;
@@ -239,17 +238,14 @@ impl Lifter<'_> {
         let first = self.next_function;
         self.next_function += bindings.len();
         self.created.resize_with(self.next_function - self.created_base, || None);
-        let targets: Vec<(LocalId, FunctionId, MonotypeId)> = bindings
-            .iter()
-            .enumerate()
-            .map(|(position, binding)| {
-                let mut monotype = binding.local.monotype;
-                for local in captured.iter().rev() {
-                    monotype = self.monotypes.function(local.monotype, monotype);
-                }
-                (binding.local.id, FunctionId((first + position) as u32), monotype)
-            })
-            .collect();
+        let targets = bindings.iter().enumerate().map(|(position, binding)| {
+            let mut monotype = binding.local.monotype;
+            for local in captured.iter().rev() {
+                monotype = self.monotypes.function(local.monotype, monotype);
+            }
+            (binding.local.id, FunctionId((first + position) as u32), monotype)
+        });
+        let targets: Vec<(LocalId, FunctionId, MonotypeId)> = targets.collect();
 
         for (position, binding) in bindings.into_iter().enumerate() {
             let parameters: Vec<Local> = captured.iter().map(|local| self.fresh(local)).collect();
@@ -270,8 +266,8 @@ impl Lifter<'_> {
             let mut all_parameters = parameters;
             all_parameters.extend(lambda_parameters);
             let name = format_smolstr!("{base}{}", crate::naming::capitalise(&binding.local.name));
-            let spelling =
-                FunctionSpelling::Lifted { parent: base.into(), local: binding.local.name.clone() };
+            let local = binding.local.name.clone();
+            let spelling = FunctionSpelling::Lifted { parent: base.into(), local };
             self.monotypes.function_spellings.entry(name.clone()).or_insert(spelling);
             let lifted = self.expression(*body, &name);
             let function = Function {
@@ -355,26 +351,22 @@ fn flatten_applications(expression: &mut Expression) {
     if let ExpressionKind::Let { body, .. } = &mut function.kind {
         let monotype = expression.monotype;
         let arguments = std::mem::take(arguments);
-        let inner =
-            std::mem::replace(body.as_mut(), Expression::new(ExpressionKind::Unit, monotype));
+        let placeholder = Expression::new(ExpressionKind::Unit, monotype);
+        let inner = std::mem::replace(body.as_mut(), placeholder);
         let kind = ExpressionKind::Apply { function: Box::new(inner), arguments };
         **body = Expression::new(kind, monotype);
         flatten_applications(body);
         body.monotype = monotype;
-        let ExpressionKind::Apply { function, .. } =
-            std::mem::replace(&mut expression.kind, ExpressionKind::Unit)
-        else {
-            unreachable!()
-        };
+        let applied = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
+        let ExpressionKind::Apply { function, .. } = applied else { unreachable!() };
         let mut function = *function;
         function.monotype = monotype;
         *expression = function;
         return;
     }
     let ExpressionKind::Apply { .. } = function.kind else { return };
-    let ExpressionKind::Apply { function: inner, arguments: mut leading } =
-        std::mem::replace(&mut function.kind, ExpressionKind::Unit)
-    else {
+    let applied = std::mem::replace(&mut function.kind, ExpressionKind::Unit);
+    let ExpressionKind::Apply { function: inner, arguments: mut leading } = applied else {
         unreachable!()
     };
     leading.append(arguments);

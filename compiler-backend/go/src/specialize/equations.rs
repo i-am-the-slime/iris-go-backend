@@ -3,6 +3,7 @@ use std::sync::Arc;
 use checking::tree;
 use smol_str::SmolStr;
 
+use super::locals::specialized_bindings;
 use super::{
     LocalForm, LocalSource, PolymorphicLocal, Scope, Specializer, alternatives_monotype,
     equation_position,
@@ -24,8 +25,8 @@ where
         scope: &mut Scope,
         equations: &[tree::Equation],
     ) -> GoResult<Expression> {
-        let position =
-            equations.first().and_then(|first| equation_position(&scope.module, first.source));
+        let first_source = equations.first().map(|first| first.source);
+        let position = first_source.and_then(|source| equation_position(&scope.module, source));
         let mut function = self.equation_function(scope, equations)?;
         if let ExpressionKind::Lambda { body, .. } = &mut function.kind {
             body.position = body.position.or(position);
@@ -39,7 +40,7 @@ where
         equations: &[tree::Equation],
     ) -> GoResult<Expression> {
         let Some(first) = equations.first() else {
-            return Err(self.unsupported(scope, UnsupportedState::MissingEquation));
+            return Err(scope.unsupported(UnsupportedState::MissingEquation));
         };
         let pattern_match = tree::PatternMatch::Equations(first.source);
         let exhaustive = scope.module.checked.tree.is_exhaustive_match(pattern_match);
@@ -60,8 +61,8 @@ where
                 .find_map(|equation| equation.binders.get(position))
                 .copied()
                 .expect("invariant violated: arity is the maximum binder count");
-            let monotype =
-                self.binder_monotype(scope, scope.module.checked.tree[binder].type_id)?;
+            let binder_type = scope.module.checked.tree[binder].type_id;
+            let monotype = self.binder_monotype(scope, binder_type)?;
             let binders = equations.iter().filter_map(|equation| equation.binders.get(position));
             let name = self.parameter_name(scope, binders.copied(), monotype);
             parameters.push(self.fresh_local(name, monotype));
@@ -97,7 +98,7 @@ where
         binders: impl IntoIterator<Item = tree::BinderId>,
         monotype: MonotypeId,
     ) -> SmolStr {
-        let named = binders.into_iter().find_map(|binder| match self.unwrap_typed(scope, binder) {
+        let named = binders.into_iter().find_map(|binder| match unwrap_typed(scope, binder) {
             (binder, tree::BinderKind::Variable) => Some(self.binder_name(scope, binder)),
             (_, tree::BinderKind::Named { name, .. }) => Some(name.clone()),
             _ => None,
@@ -112,7 +113,7 @@ where
     ) -> GoResult<Option<Vec<Local>>> {
         let all_variables = binders.iter().all(|&binder| {
             matches!(
-                self.unwrap_typed(scope, binder).1,
+                unwrap_typed(scope, binder).1,
                 tree::BinderKind::Variable | tree::BinderKind::Wildcard
             )
         });
@@ -134,19 +135,6 @@ where
             parameters.push(local);
         }
         Ok(Some(parameters))
-    }
-
-    pub(super) fn unwrap_typed<'s>(
-        &self,
-        scope: &'s Scope,
-        mut binder: tree::BinderId,
-    ) -> (tree::BinderId, &'s tree::BinderKind) {
-        loop {
-            match &scope.module.checked.tree[binder].kind {
-                tree::BinderKind::Typed { binder: inner, .. } => binder = *inner,
-                kind => return (binder, kind),
-            }
-        }
     }
 
     pub(super) fn lambda(&mut self, parameters: Vec<Local>, body: Expression) -> Expression {
@@ -254,7 +242,7 @@ where
                     chunks.push(Chunk::Pattern(pattern, value, exhaustive));
                 }
                 tree::LetBindingChunk::PatternError { .. } => {
-                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                    return Err(scope.unsupported(UnsupportedState::BinderError));
                 }
                 tree::LetBindingChunk::Names { groups, .. } => {
                     let mut declarations = vec![];
@@ -263,10 +251,9 @@ where
                         for &source in group.as_slice() {
                             let Some(declaration_id) = module.checked.tree.lookup_let(source)
                             else {
-                                return Err(self.unsupported(
-                                    scope,
-                                    UnsupportedState::MissingLocalDeclaration,
-                                ));
+                                return Err(
+                                    scope.unsupported(UnsupportedState::MissingLocalDeclaration)
+                                );
                             };
                             let declaration = &module.checked.tree[declaration_id];
                             let name = module
@@ -333,7 +320,7 @@ where
                             match member {
                                 Member::Monomorphic(binding) => bindings.push(binding),
                                 Member::Polymorphic(source) => {
-                                    bindings.extend(self.specialized_bindings(scope, source));
+                                    bindings.extend(specialized_bindings(scope, source));
                                 }
                             }
                         }
@@ -369,5 +356,17 @@ where
             };
         }
         Ok(body)
+    }
+}
+
+pub(super) fn unwrap_typed(
+    scope: &Scope,
+    mut binder: tree::BinderId,
+) -> (tree::BinderId, &tree::BinderKind) {
+    loop {
+        match &scope.module.checked.tree[binder].kind {
+            tree::BinderKind::Typed { binder: inner, .. } => binder = *inner,
+            kind => return (binder, kind),
+        }
     }
 }

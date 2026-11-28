@@ -58,8 +58,8 @@ where
             && let Some(start) = starting_value(first, &buffer)
         {
             out.remove(declaration + 1);
-            out[declaration] =
-                GoStatement::Define { names: vec![buffer.clone()], values: vec![start] };
+            let names = vec![buffer.clone()];
+            out[declaration] = GoStatement::Define { names, values: vec![start] };
         }
         Ok(to_string(identifier_expression(&buffer)))
     }
@@ -110,8 +110,8 @@ where
                 };
                 let append_int = self.qualified(GoPackage::Strconv, "AppendInt");
                 let decimal = GoExpression::Integer(10);
-                let appended =
-                    call(append_int, vec![identifier_expression(buffer), widened, decimal]);
+                let buffer_value = identifier_expression(buffer);
+                let appended = call(append_int, vec![buffer_value, widened, decimal]);
                 out.push(assign(buffer, appended));
                 Ok(true)
             }
@@ -268,8 +268,8 @@ where
                     vec![identifier_expression(&buffer), argument],
                 ),
                 None => {
-                    let shown =
-                        call(identifier_expression(self.function_reference(show)), vec![argument]);
+                    let show_function = identifier_expression(self.function_reference(show));
+                    let shown = call(show_function, vec![argument]);
                     self.buffer_append(identifier_expression(&buffer), shown)
                 }
             };
@@ -494,8 +494,8 @@ where
 
     pub(super) fn delegate_to_writers(&mut self, declarations: &mut [GoDeclaration]) {
         let mut delegated = FxHashMap::default();
-        let writers: Vec<(FunctionId, String)> =
-            self.writers.iter().map(|(&id, name)| (id, name.clone())).collect();
+        let writers = self.writers.iter().map(|(&id, name)| (id, name.clone()));
+        let writers: Vec<(FunctionId, String)> = writers.collect();
         for (id, writer) in writers {
             if self.is_inlined_writer(id) || only_constants(&self.program.function(id).body) {
                 continue;
@@ -570,11 +570,8 @@ fn only_constants(expression: &Expression) -> bool {
 
 fn starting_value(statement: &GoStatement, buffer: &str) -> Option<GoExpression> {
     let GoStatement::Assign { targets, values } = statement else { return None };
-    let ([GoExpression::Identifier(target)], [GoExpression::Call { function, arguments }]) =
-        (targets.as_slice(), values.as_slice())
-    else {
-        return None;
-    };
+    let [GoExpression::Identifier(target)] = targets.as_slice() else { return None };
+    let [GoExpression::Call { function, arguments }] = values.as_slice() else { return None };
     if target != buffer
         || !matches!(arguments.first(), Some(GoExpression::Identifier(first)) if first == buffer)
     {
@@ -619,15 +616,13 @@ fn append_operands<'e>(expression: &'e Expression, operands: &mut Vec<&'e Expres
 /// Drops the functions that no code reaches: the string wrapper of a writer whose callers all
 /// append with the writer, or a helper whose every call was found to build a constant.
 pub(super) fn drop_unreached_functions(declarations: &mut Vec<GoDeclaration>) {
-    let functions: FxHashSet<String> = declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            GoDeclaration::Function { name, .. } if name != "main" && name != "init" => {
-                Some(name.clone())
-            }
-            _ => None,
-        })
-        .collect();
+    let functions = declarations.iter().filter_map(|declaration| match declaration {
+        GoDeclaration::Function { name, .. } if name != "main" && name != "init" => {
+            Some(name.clone())
+        }
+        _ => None,
+    });
+    let functions: FxHashSet<String> = functions.collect();
     let mut references: FxHashMap<String, Vec<String>> = FxHashMap::default();
     let mut reached: Vec<String> = vec![];
     for declaration in declarations.iter_mut() {

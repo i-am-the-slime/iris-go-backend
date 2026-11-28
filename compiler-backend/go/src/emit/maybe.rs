@@ -3,8 +3,8 @@ use rustc_hash::FxHashSet;
 use super::names::{NamePart, PendingSpelling};
 use super::packages::Spelling;
 use super::{
-    ConstructorLayout, DataKind, DataLayout, Emitter, binary, call, field, identifier_expression,
-    is_simple,
+    ConstructorLayout, DataKind, DataLayout, Emitter, binary, call, composite, field,
+    identifier_expression, is_simple,
 };
 use crate::error::GoResult;
 use crate::monomorphic::{Literal, Pattern, PatternKind};
@@ -123,21 +123,6 @@ where
         Ok((self.maybe_representation(payload)? == Representation::Pointer).then_some(payload))
     }
 
-    pub(super) fn maybe_boolean_test(
-        &self,
-        layout: &DataLayout,
-        arguments: &[Pattern],
-        path: GoExpression,
-    ) -> Option<GoExpression> {
-        let Some(MaybeLayout::Boolean { true_, false_, .. }) = &layout.maybe else { return None };
-        let [Pattern { kind: PatternKind::Literal(Literal::Boolean(value)), .. }] = arguments
-        else {
-            return None;
-        };
-        let constant = if *value { true_ } else { false_ };
-        Some(binary(GoBinaryOperator::Equal, path, identifier_expression(constant)))
-    }
-
     pub(super) fn maybe_layout(
         &mut self,
         data: &DataType,
@@ -149,14 +134,15 @@ where
         let fields_of = |constructor: &DataConstructor| -> Vec<(String, MonotypeId)> {
             constructor.fields.iter().map(|&field| ("Just".to_string(), field)).collect()
         };
-        let scalar = |emitter: &mut Self, name: String, maybe: MaybeLayout| -> DataLayout {
-            let constructors = constructors
-                .iter()
-                .map(|constructor| ConstructorLayout {
-                    tag: String::new(),
-                    fields: fields_of(constructor),
-                })
-                .collect();
+        let scalar = |emitter: &mut Emitter<'_, '_, '_, Q>,
+                      name: String,
+                      maybe: MaybeLayout|
+         -> DataLayout {
+            let constructors = constructors.iter().map(|constructor| ConstructorLayout {
+                tag: String::new(),
+                fields: fields_of(constructor),
+            });
+            let constructors = constructors.collect();
             let layout = DataLayout {
                 name,
                 kind: DataKind::Tagged,
@@ -360,7 +346,7 @@ where
             }
             MaybeLayout::Struct { nothing, literal, .. } => {
                 if is_just && *literal {
-                    let composite = self.composite(layout, constructor, values);
+                    let composite = composite(layout, constructor, values);
                     if layout.boxed {
                         GoExpression::Address(Box::new(composite))
                     } else {
@@ -412,7 +398,7 @@ where
             ],
             MaybeLayout::Pointer { .. } => vec![GoStatement::Return(Some(parameter))],
             MaybeLayout::Struct { .. } => {
-                let composite = self.composite(layout, just, vec![parameter]);
+                let composite = composite(layout, just, vec![parameter]);
                 let built = if layout.boxed {
                     GoExpression::Address(Box::new(composite))
                 } else {
@@ -436,9 +422,10 @@ where
         if !self.maybe_helpers.declared.insert(nothing.to_string()) {
             return;
         }
-        let composite = self.composite(layout, constructor, vec![]);
-        let value =
-            if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite };
+        let mut value = composite(layout, constructor, vec![]);
+        if layout.boxed {
+            value = GoExpression::Address(Box::new(value));
+        }
         self.type_declarations.push(GoDeclaration::Variable {
             name: nothing.to_string(),
             type_: None,
@@ -514,26 +501,38 @@ where
             .reduce(|left, right| binary(GoBinaryOperator::LogicalAnd, left, right))
             .unwrap_or(GoExpression::Boolean(true))
     }
+}
 
-    pub(super) fn constructor_field(
-        &self,
-        layout: &DataLayout,
-        constructor: usize,
-        position: usize,
-        path: GoExpression,
-    ) -> GoExpression {
-        match &layout.maybe {
-            None | Some(MaybeLayout::Struct { .. }) => {
-                field(path, &layout.constructors[constructor].fields[position].0)
-            }
-            Some(MaybeLayout::Char { .. }) => {
-                GoExpression::Conversion { type_: GoType::Rune, value: Box::new(path) }
-            }
-            Some(MaybeLayout::Boolean { true_, .. }) => {
-                binary(GoBinaryOperator::Equal, path, identifier_expression(true_))
-            }
-            Some(MaybeLayout::Pointer { .. }) => path,
+pub(super) fn maybe_boolean_test(
+    layout: &DataLayout,
+    arguments: &[Pattern],
+    path: GoExpression,
+) -> Option<GoExpression> {
+    let Some(MaybeLayout::Boolean { true_, false_, .. }) = &layout.maybe else { return None };
+    let [Pattern { kind: PatternKind::Literal(Literal::Boolean(value)), .. }] = arguments else {
+        return None;
+    };
+    let constant = if *value { true_ } else { false_ };
+    Some(binary(GoBinaryOperator::Equal, path, identifier_expression(constant)))
+}
+
+pub(super) fn constructor_field(
+    layout: &DataLayout,
+    constructor: usize,
+    position: usize,
+    path: GoExpression,
+) -> GoExpression {
+    match &layout.maybe {
+        None | Some(MaybeLayout::Struct { .. }) => {
+            field(path, &layout.constructors[constructor].fields[position].0)
         }
+        Some(MaybeLayout::Char { .. }) => {
+            GoExpression::Conversion { type_: GoType::Rune, value: Box::new(path) }
+        }
+        Some(MaybeLayout::Boolean { true_, .. }) => {
+            binary(GoBinaryOperator::Equal, path, identifier_expression(true_))
+        }
+        Some(MaybeLayout::Pointer { .. }) => path,
     }
 }
 
@@ -605,7 +604,7 @@ where
         let is_just = self
             .constructor_test(&layout, just, value.clone())
             .expect("invariant violated: Just is one of two constructors");
-        let payload = self.constructor_field(&layout, just, 0, value);
+        let payload = constructor_field(&layout, just, 0, value);
         let mut then = vec![];
         let addressed = if is_simple(&payload) {
             payload

@@ -17,14 +17,12 @@ where
         absorbing: Option<&Pattern>,
         (accumulator, initial): (&str, &GoExpression),
     ) -> GoResult<Vec<GoStatement>> {
-        let ([Place::Constructor { constructor, index: 0, go_field }], Some(absorbing)) =
-            (places, absorbing)
-        else {
+        let [Place::Constructor { constructor, index: 0, go_field }] = places else {
             return Ok(vec![looped]);
         };
-        let PatternKind::Constructor { data, constructor: absorbing_constructor, .. } =
-            &absorbing.kind
-        else {
+        let Some(absorbing) = absorbing else { return Ok(vec![looped]) };
+        let kind = &absorbing.kind;
+        let PatternKind::Constructor { data, constructor: absorbing_constructor, .. } = kind else {
             return Ok(vec![looped]);
         };
         let layout = self.data_layout(data)?;
@@ -68,8 +66,8 @@ where
             leaving.leave_once_absorbed(body, starts_kept);
         }
         let carried = field(identifier_expression(accumulator), go_field);
-        let read =
-            GoStatement::Define { names: vec![scalar.clone()], values: vec![carried.clone()] };
+        let values = vec![carried.clone()];
+        let read = GoStatement::Define { names: vec![scalar.clone()], values };
         let written = GoStatement::Assign {
             targets: vec![carried],
             values: vec![identifier_expression(&scalar)],
@@ -349,8 +347,8 @@ fn copies_of(accumulator: &str, statements: &[GoStatement]) -> Vec<String> {
     let mut copies = vec![];
     for statement in statements {
         if let GoStatement::Define { names, values } = statement
-            && let ([copy], [GoExpression::Identifier(copied)]) =
-                (names.as_slice(), values.as_slice())
+            && let [copy] = names.as_slice()
+            && let [GoExpression::Identifier(copied)] = values.as_slice()
             && (copied == accumulator || copies.contains(copied))
         {
             copies.push(copy.clone());

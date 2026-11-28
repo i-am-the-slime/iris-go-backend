@@ -164,8 +164,8 @@ where
                 };
                 let value_type = self.go_type(value)?;
                 self.declare_reference();
-                let empty =
-                    GoExpression::Composite { type_: reference_type(value_type), fields: vec![] };
+                let type_ = reference_type(value_type);
+                let empty = GoExpression::Composite { type_, fields: vec![] };
                 let reference = self.temporary("reference");
                 out.push(GoStatement::Define {
                     names: vec![reference.clone()],
@@ -349,8 +349,8 @@ where
         let from_left = self.projection(either, "Left", Some(0))?;
         let from_right = self.projection(either, "Right", Some(0))?;
         let register = self.value(register, out)?;
-        let function =
-            self.performing(GoFunction { package: GoPackage::Aff, name: "MakeAffDirect" });
+        let make_aff_direct = GoFunction { package: GoPackage::Aff, name: "MakeAffDirect" };
+        let function = self.performing(make_aff_direct);
         Ok(call(function, vec![is_left, from_left, from_right, register]))
     }
 
@@ -361,8 +361,8 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let join = self.record_field_monotype(record, "join");
-        let (callback, _) =
-            self.monotypes.function_parts(join).expect("invariant violated: join takes a callback");
+        let join_parts = self.monotypes.function_parts(join);
+        let (callback, _) = join_parts.expect("invariant violated: join takes a callback");
         let (either, _) = self
             .monotypes
             .function_parts(callback)
@@ -387,8 +387,8 @@ where
         let (unit_data, unit_right) = self.constructor_named(unit_either, "Right")?;
         let unit_right = self.construct(&unit_data, unit_right, vec![unit_value()])?;
         let handler = self.record_field_projection(completion, "handler")?;
-        let function =
-            self.go_function(GoFunction { package: GoPackage::Aff, name: "FiberFields" });
+        let fiber_fields = GoFunction { package: GoPackage::Aff, name: "FiberFields" };
+        let function = self.go_function(fiber_fields);
         let fields = call(function, vec![handle, left, right, unit_right, handler]);
         self.record_from_results(fields, record, out)
     }
@@ -454,9 +454,8 @@ where
                 if let Some(GoStatement::Return(None)) = body.last() {
                     body.pop();
                 }
-                let result_type = self.go_result(result)?;
-                let section =
-                    GoExpression::Function { parameters: vec![], result: result_type, body };
+                let returned = self.go_result(result)?;
+                let section = GoExpression::Function { parameters: vec![], result: returned, body };
                 self.deliver(call(section, vec![]), result, sink, out)
             })
         };
@@ -531,8 +530,8 @@ where
         let end = self.hoist(end, "end", out);
         let saved = self.tail_loop.take();
         let mut body = vec![];
-        let variable = if let ExpressionKind::Lambda { parameters, body: lambda_body } =
-            &arguments[2].kind
+        let kind = &arguments[2].kind;
+        let variable = if let ExpressionKind::Lambda { parameters, body: lambda_body } = kind
             && let [parameter] = parameters.as_slice()
         {
             let variable = self.bind_local(parameter);

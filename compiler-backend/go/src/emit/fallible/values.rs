@@ -89,12 +89,8 @@ pub(super) fn lower_function_values(
     for declaration in declarations.iter_mut() {
         typer.declaration(declaration);
     }
-    let mut lowered: Vec<(GoType, GoType)> = program
-        .candidates
-        .iter()
-        .zip(&lowered)
-        .filter(|(_, lowered)| **lowered)
-        .map(|(candidate, _)| {
+    let lowered = program.candidates.iter().zip(&lowered).filter(|(_, lowered)| **lowered).map(
+        |(candidate, _)| {
             let GoType::Function { parameters, .. } = candidate else {
                 unreachable!("invariant violated: a candidate is a function type")
             };
@@ -104,8 +100,9 @@ pub(super) fn lower_function_values(
                 result: Some(Box::new(results)),
             };
             (candidate.clone(), to)
-        })
-        .collect();
+        },
+    );
+    let mut lowered: Vec<(GoType, GoType)> = lowered.collect();
     loop {
         let before = lowered.clone();
         for (_, to) in lowered.iter_mut() {
@@ -322,8 +319,8 @@ fn each_type_in_statements(body: &mut [GoStatement], visit: &mut impl FnMut(&mut
 }
 
 fn each_type_in_expression(value: &mut GoExpression, visit: &mut impl FnMut(&mut GoType)) {
-    let mut statement =
-        GoStatement::Expression(std::mem::replace(value, GoExpression::Boolean(false)));
+    let expression = std::mem::replace(value, GoExpression::Boolean(false));
+    let mut statement = GoStatement::Expression(expression);
     each_type_in_statements(std::slice::from_mut(&mut statement), visit);
     let GoStatement::Expression(taken) = statement else { unreachable!() };
     *value = taken;
@@ -397,9 +394,8 @@ impl Program {
             };
             let GoExpression::Call { function, .. } = value.unattributed() else { continue };
             let GoExpression::Identifier(function) = function.unattributed() else { continue };
-            if let Some(GoType::Function { result: Some(result), .. }) =
-                program.functions.get(function)
-            {
+            let declared = program.functions.get(function);
+            if let Some(GoType::Function { result: Some(result), .. }) = declared {
                 let result = result.as_ref().clone();
                 program.variables.insert(name.clone(), result);
             }
@@ -688,8 +684,8 @@ impl<'t> Typer<'t> {
     fn statement(&mut self, statement: &mut GoStatement) {
         match statement {
             GoStatement::Define { names, values } => {
-                let types: Vec<Ty> =
-                    values.iter_mut().map(|value| self.expression(value, false)).collect();
+                let types = values.iter_mut().map(|value| self.expression(value, false));
+                let types: Vec<Ty> = types.collect();
                 match types.as_slice() {
                     [Ty::Known(GoType::Results(results))] if names.len() == results.len() => {
                         for (name, type_) in names.iter().zip(results) {
@@ -998,8 +994,8 @@ impl<'t> Typer<'t> {
             && self.local(name).is_none()
         {
             let name = name.clone();
-            let types: Vec<Ty> =
-                arguments.iter_mut().map(|argument| self.expression(argument, false)).collect();
+            let types = arguments.iter_mut().map(|argument| self.expression(argument, false));
+            let types: Vec<Ty> = types.collect();
             if let Some(GoType::Function { result, .. }) = self.program.functions.get(&name) {
                 return match result {
                     Some(result) => Ty::Known(*result.clone()),
@@ -1048,9 +1044,8 @@ impl<'t> Typer<'t> {
                     let callee = std::mem::replace(function.as_mut(), GoExpression::Boolean(false));
                     let mut marked = vec![callee];
                     marked.append(arguments);
-                    let GoExpression::Call { function: head, arguments: rest } =
-                        self.marked(CALL_MARK, index, marked)
-                    else {
+                    let marked = self.marked(CALL_MARK, index, marked);
+                    let GoExpression::Call { function: head, arguments: rest } = marked else {
                         unreachable!("invariant violated: a mark is a call")
                     };
                     *function = head;
@@ -1065,13 +1060,12 @@ impl<'t> Typer<'t> {
             Ty::Holder(_) => Ty::unknown(),
             Ty::Unknown { all, either, told } => {
                 let count = arguments.len();
-                let removed: Vec<usize> = (0..self.program.candidates.len())
-                    .filter(|index| {
-                        (all.contains(index) || !told)
-                            && matches!(&self.program.candidates[*index],
-                                GoType::Function { parameters, .. } if parameters.len() == count)
-                    })
-                    .collect();
+                let removed = (0..self.program.candidates.len()).filter(|index| {
+                    (all.contains(index) || !told)
+                        && matches!(&self.program.candidates[*index],
+                            GoType::Function { parameters, .. } if parameters.len() == count)
+                });
+                let removed: Vec<usize> = removed.collect();
                 for index in removed {
                     self.remove(index);
                 }
@@ -1196,9 +1190,8 @@ impl<'t> Typer<'t> {
     }
 
     fn parameters_of(&mut self, index: usize) -> (Vec<(String, GoType)>, GoType) {
-        let GoType::Function { parameters, result: Some(result) } =
-            self.program.candidates[index].clone()
-        else {
+        let candidate = self.program.candidates[index].clone();
+        let GoType::Function { parameters, result: Some(result) } = candidate else {
             unreachable!("invariant violated: a candidate returns an Either")
         };
         let named = parameters
@@ -1225,8 +1218,8 @@ impl<'t> Typer<'t> {
     /// value of a lowered type.
     fn function_wrapper(&mut self, function: &str, index: usize) -> GoExpression {
         let (parameters, result) = self.parameters_of(index);
-        let arguments =
-            parameters.iter().map(|(name, _)| GoExpression::Identifier(name.clone())).collect();
+        let arguments = parameters.iter().map(|(name, _)| GoExpression::Identifier(name.clone()));
+        let arguments = arguments.collect();
         let literal = GoExpression::Function {
             parameters,
             result: Some(result),
@@ -1270,16 +1263,14 @@ fn is_plain(value: &GoExpression) -> bool {
 /// results that only passes its parameters on to a top-level function of its own type is that
 /// function.
 pub(super) fn unmark(declarations: &mut [GoDeclaration]) {
-    let functions: FxHashMap<String, (Vec<GoType>, Option<GoType>)> = declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            GoDeclaration::Function { name, parameters, result, .. } => Some((
-                name.clone(),
-                (parameters.iter().map(|(_, type_)| type_.clone()).collect(), result.clone()),
-            )),
-            _ => None,
-        })
-        .collect();
+    let functions = declarations.iter().filter_map(|declaration| match declaration {
+        GoDeclaration::Function { name, parameters, result, .. } => Some((
+            name.clone(),
+            (parameters.iter().map(|(_, type_)| type_.clone()).collect(), result.clone()),
+        )),
+        _ => None,
+    });
+    let functions: FxHashMap<String, (Vec<GoType>, Option<GoType>)> = functions.collect();
     for declaration in declarations.iter_mut() {
         let locals = declaration.declared_names().locals;
         crate::go_traversal::each_expression_in_declaration(declaration, |expression| {
@@ -1306,11 +1297,8 @@ fn forwarded_function(
     functions: &FxHashMap<String, (Vec<GoType>, Option<GoType>)>,
     locals: &FxHashSet<String>,
 ) -> Option<String> {
-    let GoExpression::Function { parameters, result: Some(result @ GoType::Results(_)), body } =
-        literal
-    else {
-        return None;
-    };
+    let GoExpression::Function { parameters, result, body } = literal else { return None };
+    let Some(result @ GoType::Results(_)) = result else { return None };
     let mut statements = body.iter().filter(|statement| !matches!(statement, GoStatement::Line(_)));
     let (Some(GoStatement::Return(Some(returned))), None) = (statements.next(), statements.next())
     else {

@@ -21,13 +21,11 @@ pub(super) fn keep_confined_cells_in_locals(
     never_recovering: &BTreeSet<String>,
 ) {
     let in_place = foreign_packages.arguments_called_in_place();
-    let declared: FxHashSet<String> = declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            GoDeclaration::Function { name, .. } => Some(name.clone()),
-            _ => None,
-        })
-        .collect();
+    let declared = declarations.iter().filter_map(|declaration| match declaration {
+        GoDeclaration::Function { name, .. } => Some(name.clone()),
+        _ => None,
+    });
+    let declared: FxHashSet<String> = declared.collect();
     for known in SHARED_CELLS {
         if !foreign_packages.provides(known.module) {
             continue;
@@ -208,7 +206,7 @@ impl Facts {
             }
         }
         loop {
-            let refuted: Vec<(String, String)> = confined
+            let refuted = confined
                 .iter()
                 .filter(|(function, name)| {
                     let binding = &self.functions[function].bindings[name];
@@ -222,8 +220,8 @@ impl Facts {
                         })
                     })
                 })
-                .cloned()
-                .collect();
+                .cloned();
+            let refuted: Vec<(String, String)> = refuted.collect();
             if refuted.is_empty() {
                 return confined;
             }
@@ -246,11 +244,11 @@ impl Facts {
             }
         }
         loop {
-            let refuted: Vec<(String, usize)> = unshared
+            let refuted = unshared
                 .iter()
                 .filter(|(function, position)| {
-                    let sites =
-                        self.call_sites.get(function).map(Vec::as_slice).unwrap_or_default();
+                    let calls = self.call_sites.get(function);
+                    let sites = calls.map(Vec::as_slice).unwrap_or_default();
                     !sites.iter().all(|site| {
                         let argument = site.arguments.get(*position).cloned().flatten();
                         argument.is_some_and(|argument| {
@@ -258,8 +256,8 @@ impl Facts {
                         })
                     })
                 })
-                .cloned()
-                .collect();
+                .cloned();
+            let refuted: Vec<(String, usize)> = refuted.collect();
             if refuted.is_empty() {
                 break;
             }
@@ -467,7 +465,7 @@ fn keep_in_locals(
         return;
     }
     let function = &facts.functions[name.as_str()];
-    let kept: Vec<String> = unshared
+    let kept = unshared
         .iter()
         .map(|&position| &parameters[position])
         .filter(|(parameter, type_)| {
@@ -475,8 +473,8 @@ fn keep_in_locals(
             let alone = parameters.iter().filter(|(_, other)| other == type_).count() == 1;
             alone && binding.accessed && !binding.modified && binding.passed.is_empty()
         })
-        .map(|(parameter, _)| parameter.clone())
-        .collect();
+        .map(|(parameter, _)| parameter.clone());
+    let kept: Vec<String> = kept.collect();
     if kept.is_empty() || !only_calls_kept(body, cell, &kept, calls) {
         return;
     }

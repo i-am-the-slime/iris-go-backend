@@ -8,11 +8,11 @@ use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Litera
 pub(super) fn branch_tail_calls(mut program: Program) -> Program {
     let references = reference_graph(&program.functions);
     let components = strongly_connected(&references);
-    let arities: Vec<usize> =
-        program.functions.iter().map(|function| function.parameters.len()).collect();
+    let arities = program.functions.iter().map(|function| function.parameters.len());
+    let arities: Vec<usize> = arities.collect();
     for component in components {
-        let members: FxHashSet<FunctionId> =
-            component.iter().map(|&index| FunctionId(index as u32)).collect();
+        let members = component.iter().map(|&index| FunctionId(index as u32));
+        let members: FxHashSet<FunctionId> = members.collect();
         let recursive = component.len() > 1 || references[component[0]].contains(&component[0]);
         if !recursive {
             continue;

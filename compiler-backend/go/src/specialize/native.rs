@@ -35,8 +35,8 @@ where
             data.extend(self.foreign_data(file_id, source)?);
             functions.extend(self.foreign_functions(file_id, source)?);
         }
-        let mut native_data: FxHashSet<(FileId, TypeItemId)> =
-            data.iter().filter(|(_, data)| !data.boxed).map(|(&key, _)| key).collect();
+        let native_data = data.iter().filter(|(_, data)| !data.boxed).map(|(&key, _)| key);
+        let mut native_data: FxHashSet<(FileId, TypeItemId)> = native_data.collect();
         let mut native_functions: FxHashSet<(FileId, TermItemId)> = functions
             .iter()
             .filter(|function| !function.boxed)
@@ -68,8 +68,9 @@ where
             .collect();
         self.monotypes.native_foreigns = native_functions;
         self.monotypes.native_foreign_data = native_data;
-        self.monotypes.empty_interface_foreign_data =
-            data.iter().filter(|(_, data)| data.empty_interface).map(|(&key, _)| key).collect();
+        let empty_interface = data.iter().filter(|(_, data)| data.empty_interface);
+        let empty_interface = empty_interface.map(|(&key, _)| key).collect();
+        self.monotypes.empty_interface_foreign_data = empty_interface;
         Ok(())
     }
 
@@ -174,9 +175,8 @@ where
                     _ => return Ok(()),
                 };
                 for constructor in constructors {
-                    if let Some(constructor_type) =
-                        module.checked.lookup_term_item_type(constructor)
-                    {
+                    let constructor_type = module.checked.lookup_term_item_type(constructor);
+                    if let Some(constructor_type) = constructor_type {
                         self.mentioned_foreign_data(constructor_type, mentioned, visited)?;
                     }
                 }

@@ -102,11 +102,8 @@ fn either_every_literal_builds(
 ) -> Option<String> {
     let mut built: Option<&str> = None;
     for argument in arguments {
-        let GoExpression::Function { result: Some(GoType::Named(either)), .. } =
-            argument.unattributed()
-        else {
-            return None;
-        };
+        let GoExpression::Function { result, .. } = argument.unattributed() else { return None };
+        let Some(GoType::Named(either)) = result else { return None };
         if !shapes.contains_key(either) || built.is_some_and(|built| built != either) {
             return None;
         }

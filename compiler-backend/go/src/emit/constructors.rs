@@ -13,7 +13,7 @@
 //! composite literals are done with it.
 
 use super::packages::Spelling;
-use super::{DataKind, DataLayout, Emitter, call, identifier_expression, lines};
+use super::{DataKind, DataLayout, Emitter, call, composite, identifier_expression, lines};
 use crate::error::GoResult;
 use crate::go_traversal;
 use crate::monomorphic::{Expression, ExpressionKind, Local};
@@ -40,6 +40,7 @@ where
         let ExpressionKind::Construct { data, constructor, arguments } = &body.kind else {
             return Ok(None);
         };
+        let constructor = *constructor;
         let applies_parameters = arguments.len() == parameters.len()
             && arguments.iter().zip(&parameters).all(|(argument, parameter)| {
                 matches!(argument.kind, ExpressionKind::Local(id) if id == parameter.id)
@@ -48,7 +49,7 @@ where
         {
             return Ok(None);
         }
-        let key = (data.clone(), *constructor, monotype);
+        let key = (data.clone(), constructor, monotype);
         if let Some(name) = self.constructor_functions.get(&key) {
             return Ok(Some(identifier_expression(name)));
         }
@@ -58,13 +59,13 @@ where
             self.constructor_functions.insert(key, name.clone());
             return Ok(Some(identifier_expression(&name)));
         }
-        let construction = self.construction_key(&layout, *constructor)?;
+        let construction = self.construction_key(&layout, constructor)?;
         let shared = construction.as_ref().and_then(|key| self.construction_functions.get(key));
         if let Some(name) = shared.cloned() {
             self.constructor_functions.insert(key, name.clone());
             return Ok(Some(identifier_expression(&name)));
         }
-        if layout.constructors[*constructor].fields.len() != parameters.len() {
+        if layout.constructors[constructor].fields.len() != parameters.len() {
             return Ok(None);
         }
         let mut parameter_types = Vec::with_capacity(parameters.len());
@@ -72,8 +73,7 @@ where
             parameter_types.push(self.go_type(parameter.monotype)?);
         }
         let result = self.go_result(body.monotype)?;
-        let name =
-            self.declare_constructor_function(data, *constructor, parameter_types, result)?;
+        let name = self.declare_constructor_function(data, constructor, parameter_types, result)?;
         self.constructor_functions.insert(key, name.clone());
         if let Some(construction) = construction {
             self.construction_functions.insert(construction, name.clone());
@@ -239,9 +239,11 @@ where
         self.local_names = enclosing;
         let parameters = names.iter().cloned().zip(parameter_types).collect();
         let values = names.iter().map(|name| identifier_expression(name)).collect();
-        let composite = self.composite(&layout, constructor, values);
-        let constructed =
-            if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite };
+        let composite = composite(&layout, constructor, values);
+        let constructed = match layout.boxed {
+            true => GoExpression::Address(Box::new(composite)),
+            false => composite,
+        };
         let line = self.constructor_line(data, &constructors[constructor])?;
         let mut statements = vec![];
         lines::push_at(line, GoStatement::Return(Some(constructed)), &mut statements);

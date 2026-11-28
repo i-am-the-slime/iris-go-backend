@@ -1,16 +1,17 @@
 use rustc_hash::FxHashSet;
 
+use super::maybe::constructor_field;
 use super::packages::Spelling;
 use super::{
-    DataKind, Emitter, binary, builtin_call, call, field, identifier_expression, is_simple,
-    is_untyped_constant, length, path_root, unit_value,
+    DataKind, Emitter, binary, builtin_call, call, composite, field, identifier_expression,
+    is_simple, is_untyped_constant, length, path_root, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, RepresentationChange, UnsupportedState};
 use crate::foreign::GoFunction;
 use crate::go_traversal::each_block;
 use crate::monomorphic::{Expression, ExpressionKind, SourcePosition};
-use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
+use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId, RecordField};
 use crate::syntax::{
     GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoPackage,
     GoStatement, GoType, GoUnaryOperator,
@@ -87,9 +88,8 @@ where
                 let mut keys = Vec::with_capacity(fields.len());
                 let mut values = Vec::with_capacity(fields.len());
                 for record_field in fields.iter() {
-                    let field_value = self.read_field(record.clone(), from, &record_field.label);
-                    let field_value =
-                        self.coerce(field_value, record_field.monotype, element, out)?;
+                    let read = self.read_field(record.clone(), from, &record_field.label);
+                    let field_value = self.coerce(read, record_field.monotype, element, out)?;
                     keys.push((None, GoExpression::String(record_field.label.to_string())));
                     values.push((None, field_value));
                 }
@@ -113,9 +113,8 @@ where
                 let mut values = Vec::with_capacity(fields.len());
                 for record_field in fields.iter() {
                     let label = GoExpression::String(record_field.label.to_string());
-                    let field_value = call(index.clone(), vec![object.clone(), label]);
-                    let field_value =
-                        self.coerce(field_value, element, record_field.monotype, out)?;
+                    let read = call(index.clone(), vec![object.clone(), label]);
+                    let field_value = self.coerce(read, element, record_field.monotype, out)?;
                     values.push((record_field.label.clone(), field_value));
                 }
                 self.record_value(to, values)
@@ -155,10 +154,9 @@ where
                 }
                 let function = self.shared(value, "original", out);
                 let mut values = Vec::with_capacity(fields.len());
-                for record_field in fields.iter() {
-                    let instance =
-                        self.coerce(function.clone(), from, record_field.monotype, out)?;
-                    values.push((record_field.label.clone(), instance));
+                for RecordField { label, monotype } in fields.iter() {
+                    let instance = self.coerce(function.clone(), from, *monotype, out)?;
+                    values.push((label.clone(), instance));
                 }
                 self.record_value(to, values)
             }
@@ -288,8 +286,8 @@ where
                 }
                 let parameter = self.temporary("element");
                 let mut body = vec![];
-                let text =
-                    self.coerce(identifier_expression(&parameter), element, to, &mut body)?;
+                let argument = identifier_expression(&parameter);
+                let text = self.coerce(argument, element, to, &mut body)?;
                 body.push(GoStatement::Return(Some(text)));
                 let render = GoExpression::Function {
                     parameters: vec![(parameter, self.go_type(element)?)],
@@ -404,8 +402,10 @@ where
             }
             source = rest;
         }
-        let returns_value =
-            |monotype| self.monotypes.effect_result(monotype).is_none() && !self.is_unit(monotype);
+        let returns_value = |monotype| {
+            let pure = self.monotypes.effect_result(monotype).is_none();
+            pure && !self.is_unit(monotype)
+        };
         Ok(returns_value(source)
             && returns_value(returned)
             && !self.crosses_interface(source, returned)?)
@@ -482,8 +482,8 @@ where
                 let remaining = self.monotypes.result_after(to, position);
                 let canonical = self.canonical(remaining)?;
                 let type_ = self.go_type(canonical)?;
-                let asserted =
-                    GoExpression::TypeAssertion { value: Box::new(callable.function), type_ };
+                let value = Box::new(callable.function);
+                let asserted = GoExpression::TypeAssertion { value, type_ };
                 callable = self.value_callable(asserted, canonical);
                 source = canonical;
             }
@@ -531,10 +531,10 @@ where
             type_: GoType::Slice(Box::new(GoType::String)),
             fields: keys,
         };
-        let values =
-            GoExpression::Composite { type_: GoType::Slice(Box::new(GoType::Any)), fields: values };
-        let record =
-            self.go_function(GoFunction { package: GoPackage::Direct, name: "ForeignRecord" });
+        let type_ = GoType::Slice(Box::new(GoType::Any));
+        let values = GoExpression::Composite { type_, fields: values };
+        let foreign_record = GoFunction { package: GoPackage::Direct, name: "ForeignRecord" };
+        let record = self.go_function(foreign_record);
         Ok(call(record, vec![keys, values]))
     }
 
@@ -609,9 +609,7 @@ where
     fn erase_arguments(&mut self, data: &DataType) -> GoResult<DataType> {
         let erased = self.context.types.erased(Erasure::Boxing);
         let arguments = data.arguments.iter().map(|_| erased).collect();
-        let erased =
-            self.monotypes.data_type(&mut self.context, data.file_id, data.item, arguments)?;
-        Ok(erased)
+        Ok(self.monotypes.data_type(&mut self.context, data.file_id, data.item, arguments)?)
     }
 
     pub(super) fn shared(
@@ -719,8 +717,8 @@ where
                     result: Some(self.go_type(to_element)?),
                     body: each,
                 };
-                let map =
-                    self.go_function(GoFunction { package: GoPackage::Object, name: "FmapObject" });
+                let fmap = GoFunction { package: GoPackage::Object, name: "FmapObject" };
+                let map = self.go_function(fmap);
                 body.push(GoStatement::Return(Some(call(map, vec![value, convert]))));
             }
             (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
@@ -808,13 +806,13 @@ where
                 // Records of one row differ only in their fields' representations. Rows that
                 // differ arise from a rank-N value whose instantiations at one type were never
                 // requested before an `unsafeCoerce` to another (Yoga.Om's `expandErr`).
-                let missing: Vec<&str> = to_fields
+                let missing = to_fields
                     .iter()
                     .filter(|to_field| {
                         from_fields.iter().all(|from_field| from_field.label != to_field.label)
                     })
-                    .map(|to_field| to_field.label.as_str())
-                    .collect();
+                    .map(|to_field| to_field.label.as_str());
+                let missing: Vec<&str> = missing.collect();
                 if !missing.is_empty() {
                     let missing = missing.join(", ");
                     let state = if self.monotypes.is_instantiated_record(to) {
@@ -968,21 +966,15 @@ where
         {
             let mut statements = vec![];
             let mut values = vec![];
-            for (position, ((_, from_monotype), (_, to_monotype))) in
+            for (index, ((_, from_monotype), (_, to_monotype))) in
                 from_constructor.fields.iter().zip(to_constructor.fields.iter()).enumerate()
             {
-                let field_value =
-                    self.constructor_field(&from_layout, constructor, position, value.clone());
-                values.push(self.coerce(
-                    field_value,
-                    *from_monotype,
-                    *to_monotype,
-                    &mut statements,
-                )?);
+                let read = constructor_field(&from_layout, constructor, index, value.clone());
+                values.push(self.coerce(read, *from_monotype, *to_monotype, &mut statements)?);
             }
             let constructed = match &origin {
                 Some(origin) => {
-                    let mut composite = self.composite(&to_layout, constructor, values);
+                    let mut composite = composite(&to_layout, constructor, values);
                     if let GoExpression::Composite { fields, .. } = &mut composite {
                         fields.push((Some("Origin".into()), origin.clone()));
                     }
@@ -1023,15 +1015,14 @@ where
             }
             return Ok(round_trip);
         }
-        let mut cases: Vec<GoCase> = arms
-            .into_iter()
-            .zip(&from_layout.constructors)
-            .map(|((_, statements), from_constructor)| GoCase {
+        let cases = arms.into_iter().zip(&from_layout.constructors).map(
+            |((_, statements), from_constructor)| GoCase {
                 values: vec![identifier_expression(&from_constructor.tag)],
                 body: statements,
                 line: None,
-            })
-            .collect();
+            },
+        );
+        let mut cases: Vec<GoCase> = cases.collect();
         let default = GoDefault::covering(&mut cases);
         body.push(GoStatement::Switch {
             value: Some(field(value, "Tag")),
@@ -1057,11 +1048,11 @@ where
         let last = constructors.len().saturating_sub(1);
         for (index, constructor) in constructors.iter().enumerate() {
             let mut statements = vec![];
-            let read = self.constructor_field(&layout, index, 0, value.clone());
+            let read = constructor_field(&layout, index, 0, value.clone());
             let boxed = self.coerce(read, constructor.fields[0], payload, &mut statements)?;
             let label = GoExpression::String(constructor.name.to_string());
-            let fields =
-                vec![(SmolStr::new_static("type"), label), (SmolStr::new_static("value"), boxed)];
+            let tag = (SmolStr::new_static("type"), label);
+            let fields = vec![tag, (SmolStr::new_static("value"), boxed)];
             let built = self.record_value(representation, fields)?;
             statements.push(GoStatement::Return(Some(built)));
             match self.constructor_test(&layout, index, value.clone()) {
@@ -1128,13 +1119,10 @@ where
             .map_err(Failure::in_code_generation)?;
         let mut arms = vec![];
         for (index, constructor) in from_constructors.iter().enumerate() {
-            let Some(target) =
-                to_constructors.iter().position(|candidate| candidate.name == constructor.name)
-            else {
-                continue;
-            };
+            let same_name = |candidate: &DataConstructor| candidate.name == constructor.name;
+            let Some(target) = to_constructors.iter().position(same_name) else { continue };
             let mut statements = vec![];
-            let read = self.constructor_field(&layout, index, 0, value.clone());
+            let read = constructor_field(&layout, index, 0, value.clone());
             let field = self.coerce(
                 read,
                 constructor.fields[0],
@@ -1175,9 +1163,8 @@ where
                 filled.extend(round_trip.remembers);
                 continue;
             }
-            let GoDeclaration::Function { body, .. } =
-                &mut self.type_declarations[round_trip.converter]
-            else {
+            let converter = &mut self.type_declarations[round_trip.converter];
+            let GoDeclaration::Function { body, .. } = converter else {
                 unreachable!("invariant violated: a round trip names its converter")
             };
             if round_trip.checks
@@ -1192,9 +1179,8 @@ where
             }
         }
         for position in remembering.difference(&filled) {
-            if let GoDeclaration::Type { type_: GoType::Struct(fields), .. } =
-                &mut self.type_declarations[*position]
-            {
+            let declaration = &mut self.type_declarations[*position];
+            if let GoDeclaration::Type { type_: GoType::Struct(fields), .. } = declaration {
                 fields.retain(|field| field.name != "Origin");
             }
         }

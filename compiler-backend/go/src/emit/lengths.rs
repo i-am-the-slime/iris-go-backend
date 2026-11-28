@@ -68,8 +68,8 @@ fn counted_code_points(value: &mut GoExpression) {
     if !function.is_builtin(GoBuiltin::Len) {
         return;
     }
-    let [GoExpression::Call { function: converted, arguments: converted_arguments }] =
-        arguments.as_mut_slice()
+    let [argument] = arguments.as_mut_slice() else { return };
+    let GoExpression::Call { function: converted, arguments: converted_arguments } = argument
     else {
         return;
     };
@@ -207,8 +207,8 @@ pub fn hoist_loop_invariant_lengths(
 ) {
     for (declaration, names) in declarations.iter_mut().zip(names) {
         let written_by_literals = written_by_literals(declaration);
-        let mut function =
-            Function { names: &mut names.names, locals: &names.locals, written_by_literals, taken };
+        let DeclarationNames { names, locals, .. } = names;
+        let mut function = Function { names, locals, written_by_literals, taken };
         function.declaration(declaration);
     }
 }
@@ -241,10 +241,10 @@ impl Walk for Function<'_> {
                 GoStatement::Loop(looped) | GoStatement::LabeledLoop { body: looped, .. } => {
                     let mut hoisted = self.views(looped, &changed);
                     let changed = self.changed(&mut body[at]);
-                    let (GoStatement::Loop(looped) | GoStatement::LabeledLoop { body: looped, .. }) =
-                        &mut body[at]
-                    else {
-                        unreachable!("invariant violated: a loop stopped being one")
+                    let looped = match &mut body[at] {
+                        GoStatement::Loop(looped)
+                        | GoStatement::LabeledLoop { body: looped, .. } => looped,
+                        _ => unreachable!("invariant violated: a loop stopped being one"),
                     };
                     hoisted.extend(self.invariant_lengths(looped, &changed));
                     hoisted
@@ -288,8 +288,8 @@ impl Function<'_> {
         if read.iter().any(|name| self.written_by_literals.contains(name)) {
             return at;
         }
-        let views: Vec<(&str, &str, &str)> =
-            hoisted.iter().filter_map(|(local, value)| viewed_length(local, value)).collect();
+        let views = hoisted.iter().filter_map(|(local, value)| viewed_length(local, value));
+        let views: Vec<(&str, &str, &str)> = views.collect();
         let mut earliest = at;
         for position in (0..at).rev() {
             let mut changes = false;

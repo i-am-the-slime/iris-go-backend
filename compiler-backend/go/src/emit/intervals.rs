@@ -53,8 +53,8 @@ pub(super) fn prove_bounds(
 ) {
     let keeping = Keeping::of(declarations, effects, helpers);
     let program = FunctionTable::of(declarations, FxHashSet::default());
-    let plans: Vec<Plan> =
-        declarations.iter_mut().map(|declaration| program.plan(declaration)).collect();
+    let plans = declarations.iter_mut().map(|declaration| program.plan(declaration));
+    let plans: Vec<Plan> = plans.collect();
     let (entries, mut rewritten) = program.entries(declarations, &plans, &keeping);
     for (position, (declaration, plan)) in declarations.iter_mut().zip(&plans).enumerate() {
         if plan.rewrites
@@ -78,8 +78,8 @@ pub(super) fn fields_that_fit(
     let mut assumed = candidates.clone();
     while !assumed.is_empty() {
         let program = FunctionTable::of(declarations, assumed.clone());
-        let plans: Vec<Plan> =
-            declarations.iter_mut().map(|declaration| program.plan(declaration)).collect();
+        let plans = declarations.iter_mut().map(|declaration| program.plan(declaration));
+        let plans: Vec<Plan> = plans.collect();
         let (entries, _) = program.entries(declarations, &plans, &keeping);
         let mut proven: FxHashMap<usize, bool> = FxHashMap::default();
         let mut unfit: FxHashSet<String> = FxHashSet::default();
@@ -129,9 +129,8 @@ fn each_field_write(
         fn expression(&mut self, value: &mut GoExpression) {
             if let GoExpression::Composite { fields, .. } = value {
                 for (label, field_value) in fields.iter() {
-                    if let Some(label) =
-                        label.as_deref().filter(|label| self.fields.contains(*label))
-                    {
+                    let tracked = label.as_deref().filter(|label| self.fields.contains(*label));
+                    if let Some(label) = tracked {
                         (self.visit)(site_of(field_value), label);
                     }
                 }

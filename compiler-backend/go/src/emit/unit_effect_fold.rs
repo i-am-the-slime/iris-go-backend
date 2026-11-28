@@ -30,8 +30,8 @@ where
         out.push(GoStatement::Define { names: vec![accumulator.clone()], values: vec![initial] });
         let element = self.temporary("element");
         let previous = self.temporary("previous");
-        let stepped =
-            call(step, vec![identifier_expression(&previous), identifier_expression(&element)]);
+        let previous_value = identifier_expression(&previous);
+        let stepped = call(step, vec![previous_value, identifier_expression(&element)]);
         let chained = GoExpression::Function {
             parameters: vec![],
             result: None,

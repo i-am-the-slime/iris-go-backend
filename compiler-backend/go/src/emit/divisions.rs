@@ -71,7 +71,7 @@ impl Walk for ConstantDivisions {
 }
 
 impl ConstantDivisions {
-    fn within(&mut self, known: Option<String>, walk: impl FnOnce(&mut Self)) {
+    fn within(&mut self, known: Option<String>, walk: impl FnOnce(&mut ConstantDivisions)) {
         let pushed = known.map(|name| self.nonzero.push(name)).is_some();
         walk(self);
         if pushed {
@@ -106,11 +106,9 @@ impl ConstantDivisions {
             Some("IntMod") => GoBinaryOperator::Remainder,
             _ => return None,
         };
-        let [GoExpression::Integer(dividend), GoExpression::Identifier(divisor)] =
-            arguments.as_slice()
-        else {
-            return None;
-        };
+        let [dividend, divisor] = arguments.as_slice() else { return None };
+        let GoExpression::Integer(dividend) = dividend else { return None };
+        let GoExpression::Identifier(divisor) = divisor else { return None };
         if *dividend < 0 || !self.nonzero.contains(divisor) {
             return None;
         }

@@ -16,8 +16,8 @@ struct Callee {
 }
 
 pub(super) fn inline_called_cell_loops(declarations: &mut Vec<GoDeclaration>, structs: &Structs) {
-    let callees: FxHashMap<String, Callee> =
-        declarations.iter().filter_map(|declaration| callee(declaration, structs)).collect();
+    let callees = declarations.iter().filter_map(|declaration| callee(declaration, structs));
+    let callees: FxHashMap<String, Callee> = callees.collect();
     if callees.is_empty() {
         return;
     }
@@ -26,9 +26,7 @@ pub(super) fn inline_called_cell_loops(declarations: &mut Vec<GoDeclaration>, st
         let caller = name.clone();
         let mut names = declaration.all_names();
         let GoDeclaration::Function { body, .. } = declaration else { continue };
-        let mut inliner =
-            Inliner { callees: &callees, caller: &caller, names: &mut names, depth: 0 };
-        inliner.block(body);
+        Inliner { callees: &callees, caller: &caller, names: &mut names, depth: 0 }.block(body);
     }
     drop_inlined_everywhere(declarations, &callees);
 }
@@ -61,8 +59,8 @@ fn drop_inlined_everywhere(
 }
 
 pub(super) fn inline_cell_constructors(declarations: &mut [GoDeclaration]) {
-    let constructors: FxHashMap<String, Vec<GoStatement>> =
-        declarations.iter().filter_map(constructor).collect();
+    let constructors = declarations.iter().filter_map(constructor);
+    let constructors: FxHashMap<String, Vec<GoStatement>> = constructors.collect();
     if constructors.is_empty() {
         return;
     }
@@ -77,9 +75,8 @@ pub(super) fn inline_cell_constructors(declarations: &mut [GoDeclaration]) {
                     position += 1;
                     continue;
                 };
-                let ([local], [GoExpression::Call { function, arguments }]) =
-                    (defined.as_slice(), values.as_slice())
-                else {
+                let definition = (defined.as_slice(), values.as_slice());
+                let ([local], [GoExpression::Call { function, arguments }]) = definition else {
                     position += 1;
                     continue;
                 };
@@ -115,11 +112,10 @@ pub(super) fn inline_cell_constructors(declarations: &mut [GoDeclaration]) {
 }
 
 fn constructor(declaration: &GoDeclaration) -> Option<(String, Vec<GoStatement>)> {
-    let GoDeclaration::Function { name, parameters, result: Some(GoType::Pointer(_)), body } =
-        declaration
-    else {
+    let GoDeclaration::Function { name, parameters, result, body } = declaration else {
         return None;
     };
+    let Some(GoType::Pointer(_)) = result else { return None };
     if !parameters.is_empty() {
         return None;
     }

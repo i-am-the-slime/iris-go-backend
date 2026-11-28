@@ -68,11 +68,11 @@ fn appending_fold(expression: &Expression, monotypes: &Monotypes) -> Option<Expr
     let callback = ExpressionKind::Lambda { parameters: parameters.clone(), body: Box::new(body) };
     let callback = Expression::new(callback, callback_monotype);
     let empty = Expression::new(ExpressionKind::Array(vec![]), expression.monotype);
-    let appended =
-        ExpressionKind::Foreign { foreign, arguments: vec![callback, empty, array.clone()] };
+    let arguments = vec![callback, empty, array.clone()];
+    let appended = ExpressionKind::Foreign { foreign, arguments };
     let appended = Expression::new(appended, expression.monotype);
-    let reverse =
-        ExpressionKind::Foreign { foreign: &Foreign::OwnedReverse, arguments: vec![appended] };
+    let arguments = vec![appended];
+    let reverse = ExpressionKind::Foreign { foreign: &Foreign::OwnedReverse, arguments };
     let reversed = Expression::new(reverse, expression.monotype);
     if matches!(&initial.kind, ExpressionKind::Array(elements) if elements.is_empty()) {
         return Some(reversed);
@@ -147,8 +147,8 @@ impl Results {
         }
         let [prefix, rest] = arguments.as_slice() else { return None };
         let ExpressionKind::Array(elements) = &prefix.kind else { return None };
-        let is_accumulator =
-            matches!(rest.kind, ExpressionKind::Local(id) if id == self.accumulator);
+        let accumulator = self.accumulator;
+        let is_accumulator = matches!(rest.kind, ExpressionKind::Local(id) if id == accumulator);
         (!elements.is_empty() && is_accumulator).then_some(elements)
     }
 

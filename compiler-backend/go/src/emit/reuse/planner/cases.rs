@@ -208,10 +208,10 @@ impl<C: Cells> Planner<'_, C> {
                     }
                     None => {
                         let local = self.fresh();
-                        self.plan.pattern_cells.insert(std::ptr::from_ref(pattern), local);
+                        let pattern_pointer = std::ptr::from_ref(pattern);
+                        self.plan.pattern_cells.insert(pattern_pointer, local);
                         self.plan.materialized.insert(local);
-                        let origin =
-                            Origin::Field { pattern: std::ptr::from_ref(pattern), alternative };
+                        let origin = Origin::Field { pattern: pattern_pointer, alternative };
                         (local, origin)
                     }
                 };
@@ -222,8 +222,8 @@ impl<C: Cells> Planner<'_, C> {
                     }
                     let usable = is_spare_usable(placing.body, &owners);
                     if usable {
-                        let condition =
-                            (!is_true(&place.companion)).then(|| place.companion.clone());
+                        let conditional = !is_true(&place.companion);
+                        let condition = conditional.then(|| place.companion.clone());
                         let data = data.clone();
                         placing.stock.push(Spare { local, data, origin, owners, condition });
                     }
@@ -243,8 +243,8 @@ impl<C: Cells> Planner<'_, C> {
                         continue;
                     }
                     let companion = self.fresh();
-                    let edge =
-                        Edge { data: data.clone(), constructor: *constructor, field: position };
+                    let constructor = *constructor;
+                    let edge = Edge { data: data.clone(), constructor, field: position };
                     let cell = Expression::new(ExpressionKind::Local(local), pattern.monotype);
                     let owned = Box::new(place.companion.clone());
                     let edge = ExpressionKind::UniqueEdge { owned, cell: Box::new(cell), edge };

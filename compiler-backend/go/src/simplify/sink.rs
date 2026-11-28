@@ -35,9 +35,8 @@ impl Simplifier<'_> {
             *bindings = kept;
             if bindings.is_empty() {
                 let monotype = expression.monotype;
-                let ExpressionKind::Let { body, .. } =
-                    std::mem::replace(&mut expression.kind, ExpressionKind::Unit)
-                else {
+                let kind = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
+                let ExpressionKind::Let { body, .. } = kind else {
                     unreachable!("invariant violated: the expression was just matched as a let")
                 };
                 *expression = *body;
@@ -80,8 +79,8 @@ impl Simplifier<'_> {
                 return;
             }
             let monotype = expression.monotype;
-            let inner =
-                std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
+            let placeholder = Expression::new(ExpressionKind::Unit, monotype);
+            let inner = std::mem::replace(expression, placeholder);
             *expression = Expression::new(
                 ExpressionKind::Let { bindings: vec![copy], body: Box::new(inner) },
                 monotype,

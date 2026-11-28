@@ -49,9 +49,8 @@ where
                 self.monotypes.uncurried_fields.insert(record, uncurried);
             }
             let owner = (module_name.clone(), struct_name.clone());
-            if let Some((other_module, other_struct)) =
-                self.monotypes.foreign_records.insert(record, owner)
-            {
+            let previous = self.monotypes.foreign_records.insert(record, owner);
+            if let Some((other_module, other_struct)) = previous {
                 return Err(GoError::SharedRecordStruct {
                     first: format!(
                         "{}.{other_struct}",
@@ -92,10 +91,8 @@ where
                     let binder = self.context.queries.lookup_forall_binder(*binder);
                     let Some(&argument) = instantiations.get(&binder.name) else {
                         let variable = self.variable_text(binder.name)?;
-                        return Err(self.unsupported(
-                            scope,
-                            UnsupportedState::UninstantiatedVariable { variable },
-                        ));
+                        return Err(scope
+                            .unsupported(UnsupportedState::UninstantiatedVariable { variable }));
                     };
                     types.push(argument);
                 }
@@ -149,15 +146,14 @@ where
                 }
                 let result = self.spelled(current)?;
                 let arities: &'static [usize] = Box::leak(arities.into_boxed_slice());
-                let signature: &'static Signature =
-                    Box::leak(Box::new(Signature { parameters, result }));
+                let signature = Box::new(Signature { parameters, result });
+                let signature: &'static Signature = Box::leak(signature);
                 self.callback_arities.insert((file_id, term), (arities, signature));
                 (arities, signature)
             }
         };
-        let (arities, signature) = declared;
-        let boundary =
-            Boundary { callback_arities: arities, signature: Some(signature), ..boundary };
+        let (callback_arities, signature) = declared;
+        let boundary = Boundary { callback_arities, signature: Some(signature), ..boundary };
         let learned = match *foreign {
             Foreign::Call { function, arity, .. } => Foreign::Call { function, arity, boundary },
             Foreign::Perform { function, arity, .. } => {
@@ -180,14 +176,14 @@ where
         let declared = module
             .checked
             .lookup_term_item_type(term)
-            .ok_or_else(|| self.unsupported(scope, UnsupportedState::MissingDeclaration))?;
+            .ok_or_else(|| scope.unsupported(UnsupportedState::MissingDeclaration))?;
         let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
         let (names, body) = self.context.types.peel_quantifiers(declared);
         let element = names.get(accumulator.element).and_then(|name| instantiations.get(name));
         let Some(&element) = element else {
             let variable = format!("accumulator element {}", accumulator.element);
             let state = UnsupportedState::UninstantiatedVariable { variable };
-            return Err(self.unsupported(scope, state));
+            return Err(scope.unsupported(state));
         };
         let cons_list = self.context.types.cons_list();
         let cons_list = self.context.queries.intern_type(Type::Application(cons_list, element));
@@ -204,7 +200,7 @@ where
             }
         };
         let Some(parameter) = parameter else {
-            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
         let parameter = self.context.types.substitute(parameter, instantiations);
         if let Some(scheme) = rank_n_scheme(&mut self.context, parameter)?
@@ -292,7 +288,7 @@ where
                 let Some(&argument) = instantiations.get(&quantifier) else {
                     let variable = self.variable_text(quantifier)?;
                     let state = UnsupportedState::UninstantiatedVariable { variable };
-                    return Err(self.unsupported(scope, state));
+                    return Err(scope.unsupported(state));
                 };
                 type_arguments.push(self.closed_monotype(scope, argument)?);
             }

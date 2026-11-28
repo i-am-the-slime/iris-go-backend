@@ -99,8 +99,8 @@ impl Function<'_> {
                 && is_invariant(iterable, &names)
                 && !writes(inner, element)
             {
-                let base =
-                    if element == "_" { "elements".to_string() } else { format!("{element}s") };
+                let discarded = element == "_";
+                let base = if discarded { "elements".to_string() } else { format!("{element}s") };
                 let local = self.fresh(&base);
                 let literal = std::mem::replace(iterable, GoExpression::Identifier(local.clone()));
                 hoisted.push(GoStatement::Define { names: vec![local], values: vec![literal] });
@@ -133,11 +133,7 @@ fn loop_names(looped: &mut GoStatement, written_by_literals: &FxHashSet<String>)
     let mut changed = written_by_literals.clone();
     let mut bindings: FxHashMap<String, usize> = FxHashMap::default();
     statements_names(std::slice::from_mut(looped), &mut |name| match name {
-        Name::Binder(name) => {
-            *bindings.entry(name.clone()).or_default() += 1;
-            changed.insert(name.clone());
-        }
-        Name::Written(name) => {
+        Name::Binder(name) | Name::Written(name) => {
             *bindings.entry(name.clone()).or_default() += 1;
             changed.insert(name.clone());
         }

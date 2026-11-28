@@ -144,8 +144,8 @@ pub const GO_PREDECLARED: &[&str] = &[
 
 /// `LayoutTree` is `layoutTree`, `HTMLNode` is `htmlNode`, `URL` is `url`.
 pub fn lower_camel(name: &str) -> String {
-    let characters: Vec<char> =
-        name.chars().filter(|character| character.is_alphanumeric() || *character == '_').collect();
+    let is_kept = |character: &char| character.is_alphanumeric() || *character == '_';
+    let characters: Vec<char> = name.chars().filter(is_kept).collect();
     let leading = characters.iter().take_while(|character| character.is_uppercase()).count();
     let lowered = match leading {
         0 | 1 => leading,
@@ -154,20 +154,17 @@ pub fn lower_camel(name: &str) -> String {
         _ if characters[leading].is_lowercase() => leading - 1,
         _ => leading,
     };
-    characters
-        .iter()
-        .enumerate()
-        .flat_map(|(index, character)| {
-            let lower = index < lowered;
-            let mut out: Vec<char> = vec![];
-            if lower {
-                out.extend(character.to_lowercase());
-            } else {
-                out.push(*character);
-            }
-            out
-        })
-        .collect()
+    let lower_camel = characters.iter().enumerate().flat_map(|(index, character)| {
+        let lower = index < lowered;
+        let mut out: Vec<char> = vec![];
+        if lower {
+            out.extend(character.to_lowercase());
+        } else {
+            out.push(*character);
+        }
+        out
+    });
+    lower_camel.collect()
 }
 
 /// Names a global or a package-level identifier must not take: Go's keywords and
@@ -268,13 +265,10 @@ pub fn identifier(name: &str) -> String {
 
 /// A name with each character a Go identifier cannot hold, as the prime of `xs'`, made `_`.
 pub fn identifier_characters(name: &str) -> String {
-    name.chars()
-        .map(
-            |character| {
-                if character.is_alphanumeric() || character == '_' { character } else { '_' }
-            },
-        )
-        .collect()
+    let go_character = |character: char| {
+        if character.is_alphanumeric() || character == '_' { character } else { '_' }
+    };
+    name.chars().map(go_character).collect()
 }
 
 /// A label's or constructor's Go name, exported so that code in any package can use it: the
@@ -312,8 +306,8 @@ pub fn go_fields(labels: &[&str]) -> Vec<String> {
             continue;
         }
         let base = &bases[index];
-        let unavailable =
-            |name: &str| taken.contains(name) || bases.iter().any(|other| other == name);
+        let is_base = |name: &str| bases.iter().any(|other| other == name);
+        let unavailable = |name: &str| taken.contains(name) || is_base(name);
         let suffixed = format!("{base}_");
         let starts_upper = labels[index].starts_with(char::is_uppercase);
         let name = if starts_upper && !unavailable(&suffixed) {
@@ -463,8 +457,8 @@ pub fn resolve(ladders: &[Vec<String>], taken: &dyn Fn(&str) -> bool) -> Vec<Str
             *slot = Some(name.to_string());
         }
     }
-    let mut counted: Vec<usize> =
-        (0..ladders.len()).filter(|&index| names[index].is_none()).collect();
+    let unnamed = (0..ladders.len()).filter(|&index| names[index].is_none());
+    let mut counted: Vec<usize> = unnamed.collect();
     counted.sort_by_key(|&index| (steps[index], index));
     for index in counted {
         let base = wanted(index);
@@ -600,8 +594,8 @@ mod tests {
 
     #[test]
     fn names_that_would_climb_alike_are_counted_where_they_are() {
-        let ladders =
-            ladders(&[&["MaybeArgs", "MaybeRecordInput"], &["MaybeArgs", "MaybeRecordInput"]]);
+        let ladder: &[&str] = &["MaybeArgs", "MaybeRecordInput"];
+        let ladders = ladders(&[ladder, ladder]);
         assert_eq!(resolve(&ladders, &|_| false), ["MaybeArgs", "MaybeArgs2"]);
     }
 

@@ -23,7 +23,7 @@
 
 use rustc_hash::FxHashSet;
 
-use super::{DataKind, DataLayout, Emitter, call, identifier_expression};
+use super::{DataKind, DataLayout, Emitter, call, composite, identifier_expression};
 use crate::error::GoResult;
 use crate::go_traversal::{self, Walk};
 use crate::monomorphic::{Edge, Expression, ExpressionKind, Kept, Literal};
@@ -65,7 +65,7 @@ where
             out.extend(stores);
             return Ok(cell);
         }
-        let composite = self.composite(&layout, constructor, values);
+        let composite = composite(&layout, constructor, values);
         let composite = with_unique_mask(composite, mask);
         let target = GoExpression::Unary {
             operator: GoUnaryOperator::Dereference,
@@ -139,8 +139,8 @@ where
                 }
             }
         }
-        let constant =
-            (constant != 0 || terms.is_empty()).then(|| GoExpression::Integer(i64::from(constant)));
+        let keeps_constant = constant != 0 || terms.is_empty();
+        let constant = keeps_constant.then(|| GoExpression::Integer(i64::from(constant)));
         let mask = constant.into_iter().chain(terms).reduce(|left, right| GoExpression::Binary {
             operator: GoBinaryOperator::BitwiseOr,
             left: Box::new(left),
@@ -166,8 +166,8 @@ where
             return None;
         }
         let constructor_layout = &layout.constructors[constructor];
-        let slots: FxHashSet<&str> =
-            constructor_layout.fields.iter().map(|(name, _)| name.as_str()).collect();
+        let slots = constructor_layout.fields.iter().map(|(name, _)| name.as_str());
+        let slots: FxHashSet<&str> = slots.collect();
         let others_with_fields = layout
             .constructors
             .iter()

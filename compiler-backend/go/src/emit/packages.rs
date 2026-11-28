@@ -123,15 +123,15 @@ struct Places<'a> {
 
 impl Places<'_> {
     fn new(modules: &Modules) -> Places<'_> {
-        let mut places =
-            Places { modules, meeting: vec![], sees: vec![], index: FxHashMap::default() };
+        let index = FxHashMap::default();
+        let mut places = Places { modules, meeting: vec![], sees: vec![], index };
         for module in 0..modules.len() {
             places.intern(vec![ModuleIndex(module as u32)]);
         }
         places
     }
 
-    fn module(&self, module: ModuleIndex) -> Place {
+    fn module(module: ModuleIndex) -> Place {
         Place(module.0)
     }
 
@@ -154,12 +154,10 @@ impl Places<'_> {
     /// that sees all the others, or else where the needed modules that no
     /// other needed module sees meet.
     fn needing(&mut self, need: &ModuleSet) -> Place {
-        let upstream: Vec<ModuleIndex> = need
-            .iter()
-            .filter(|&module| {
-                !need.iter().any(|other| other != module && self.modules.sees(other, module))
-            })
-            .collect();
+        let upstream = need.iter().filter(|&module| {
+            !need.iter().any(|other| other != module && self.modules.sees(other, module))
+        });
+        let upstream: Vec<ModuleIndex> = upstream.collect();
         self.intern(upstream)
     }
 
@@ -186,41 +184,11 @@ impl Packaging<'_> {
                 unit_of.insert(name.clone(), index);
             }
         }
-        let references = self.references(&mut units, &unit_of);
+        let references = references(&mut units, &unit_of);
         let mut places = Places::new(self.modules);
         let placements = self.place(&units, &references, &mut places);
         let packages = self.packages(&placements, &places)?;
         self.render(units, &unit_of, &placements, &places, &packages)
-    }
-
-    /// The units each unit refers to.
-    fn references(
-        &self,
-        units: &mut [Unit],
-        unit_of: &FxHashMap<String, usize>,
-    ) -> Vec<Vec<usize>> {
-        units
-            .iter_mut()
-            .enumerate()
-            .map(|(index, unit)| {
-                let mut targets = BTreeSet::new();
-                for declaration in &mut unit.declarations {
-                    declaration.for_each_reference_mut(&mut |reference| {
-                        let name = match reference {
-                            Reference::Value(GoExpression::Identifier(name)) => name,
-                            Reference::Type(name) => name,
-                            _ => return,
-                        };
-                        if let Some(&target) = unit_of.get(name.as_str())
-                            && target != index
-                        {
-                            targets.insert(target);
-                        }
-                    });
-                }
-                targets.into_iter().collect()
-            })
-            .collect()
     }
 
     /// The place of each unit. A unit needs its home and whatever the units
@@ -260,17 +228,14 @@ impl Packaging<'_> {
             }
         }
         let mut placements: Vec<Option<Place>> = vec![None; components.len()];
-        let entry = places.module(self.modules.entry());
+        let entry = Places::module(self.modules.entry());
         // Users come before what they use.
         for index in (0..components.len()).rev() {
             let natural = places.needing(&needs[index]);
-            let user_places: BTreeSet<Place> = users[index]
-                .iter()
-                .map(|&user| {
-                    placements[user]
-                        .expect("invariant violated: a user is placed after what it uses")
-                })
-                .collect();
+            let user_places = users[index].iter().map(|&user| {
+                placements[user].expect("invariant violated: a user is placed after what it uses")
+            });
+            let user_places: BTreeSet<Place> = user_places.collect();
             let only_user = match user_places.len() {
                 1 => user_places.first().copied(),
                 _ => None,
@@ -289,11 +254,10 @@ impl Packaging<'_> {
             };
             placements[index] = Some(place);
         }
-        (0..units.len())
-            .map(|unit| {
-                placements[component_of[unit]].expect("invariant violated: unit left unplaced")
-            })
-            .collect()
+        let unit_placements = (0..units.len()).map(|unit| {
+            placements[component_of[unit]].expect("invariant violated: unit left unplaced")
+        });
+        unit_placements.collect()
     }
 
     /// The Go package of each place that holds declarations.
@@ -302,7 +266,7 @@ impl Packaging<'_> {
         placements: &[Place],
         places: &Places,
     ) -> GoResult<FxHashMap<Place, Package>> {
-        let entry = places.module(self.modules.entry());
+        let entry = Places::module(self.modules.entry());
         let shared_directory = self.shared_directory();
         let mut packages: FxHashMap<Place, Package> = FxHashMap::default();
         for &place in placements {
@@ -325,8 +289,8 @@ impl Packaging<'_> {
                 [module] => Package::module(self.modules.name(*module)),
                 [] => Package::shared(&shared_directory),
                 meeting => {
-                    let names: Vec<&str> =
-                        meeting.iter().map(|&module| self.modules.name(module)).collect();
+                    let names = meeting.iter().map(|&module| self.modules.name(module));
+                    let names: Vec<&str> = names.collect();
                     Package::meeting(&shared_directory, &names)
                 }
             };
@@ -407,18 +371,15 @@ impl Packaging<'_> {
                 }
             }
         }
-        let record_values: Vec<String> = self
-            .typed_records
-            .iter()
-            .map(|global| {
-                let name = global.as_ref().and_then(|global| {
-                    let &unit = unit_of.get(global.as_str())?;
-                    Some(naming.name(global, placements[unit]))
-                });
-                let name = name.unwrap_or_else(|| "record".into());
-                go_safe(&lower_camel(&name)).to_string()
-            })
-            .collect();
+        let record_values = self.typed_records.iter().map(|global| {
+            let name = global.as_ref().and_then(|global| {
+                let &unit = unit_of.get(global.as_str())?;
+                Some(naming.name(global, placements[unit]))
+            });
+            let name = name.unwrap_or_else(|| "record".into());
+            go_safe(&lower_camel(&name)).to_string()
+        });
+        let record_values: Vec<String> = record_values.collect();
         let support = self.support_aliases();
         let mut files = vec![];
         for &place in &ordered {
@@ -433,8 +394,7 @@ impl Packaging<'_> {
             // Per declaration, its locals spelled as a global is: a global named lazily, as a
             // support function is, may take a name an earlier declaration already gave a local,
             // and that local's uses stay the local's.
-            let mut locals_named_as_globals: Vec<FxHashSet<String>> =
-                Vec::with_capacity(declarations.len());
+            let mut locals_named_as_globals = Vec::with_capacity(declarations.len());
             for declaration in &mut declarations {
                 for name in declared_names(declaration) {
                     avoided.insert(naming.name(&name, place));
@@ -476,14 +436,14 @@ impl Packaging<'_> {
                 locals_named_as_globals.push(locals);
             }
             let qualifiers: FxHashMap<Place, String> = match places.meeting(place) {
-                [module] => referenced
-                    .iter()
-                    .filter_map(|&target| {
+                [module] => {
+                    let qualifiers = referenced.iter().filter_map(|&target| {
                         let [imported] = places.meeting(target) else { return None };
                         let qualifier = self.modules.qualifier(*module, *imported)?;
                         Some((target, lowercase(qualifier)))
-                    })
-                    .collect(),
+                    });
+                    qualifiers.collect()
+                }
                 _ => FxHashMap::default(),
             };
             let mut support_aliases =
@@ -530,16 +490,14 @@ impl Packaging<'_> {
                 requalify_support(declaration, &support_aliases);
                 super::locals::settle(declaration, &record_values);
             }
-            let mut imports: Vec<GoImport> = support_imports
-                .into_iter()
-                .map(|path| {
-                    let alias = support_aliases
-                        .iter()
-                        .find(|(name, _)| support.get(*name) == Some(&path))
-                        .map(|(_, alias)| alias.clone());
-                    GoImport { path, alias }
-                })
-                .collect();
+            let imports = support_imports.into_iter().map(|path| {
+                let alias = support_aliases
+                    .iter()
+                    .find(|(name, _)| support.get(*name) == Some(&path))
+                    .map(|(_, alias)| alias.clone());
+                GoImport { path, alias }
+            });
+            let mut imports: Vec<GoImport> = imports.collect();
             for home in &referenced {
                 let target = &packages[home];
                 let alias = &aliases[home];
@@ -548,8 +506,8 @@ impl Packaging<'_> {
                 imports.push(GoImport { path, alias });
             }
             imports.sort();
-            let file =
-                GoFile { constraint: None, package: package.name.clone(), imports, declarations };
+            let package_name = package.name.clone();
+            let file = GoFile { constraint: None, package: package_name, imports, declarations };
             files.push(GoSourceFile { path: package.file_path(), file });
         }
         Ok(files)
@@ -557,14 +515,36 @@ impl Packaging<'_> {
 
     /// The name each standard or support package is imported as.
     fn support_aliases(&self) -> FxHashMap<String, String> {
-        self.imports
-            .iter()
-            .map(|path| {
-                let alias = path.rsplit('/').next().unwrap_or(path).to_string();
-                (alias, path.clone())
-            })
-            .collect()
+        let aliases = self.imports.iter().map(|path| {
+            let alias = path.rsplit('/').next().unwrap_or(path).to_string();
+            (alias, path.clone())
+        });
+        aliases.collect()
     }
+}
+
+/// The units each unit refers to.
+fn references(units: &mut [Unit], unit_of: &FxHashMap<String, usize>) -> Vec<Vec<usize>> {
+    let references = units.iter_mut().enumerate().map(|(index, unit)| {
+        let mut targets = BTreeSet::new();
+        for declaration in &mut unit.declarations {
+            declaration.for_each_reference_mut(&mut |reference| {
+                let name = match reference {
+                    Reference::Value(GoExpression::Identifier(name)) | Reference::Type(name) => {
+                        name
+                    }
+                    _ => return,
+                };
+                if let Some(&target) = unit_of.get(name.as_str())
+                    && target != index
+                {
+                    targets.insert(target);
+                }
+            });
+        }
+        targets.into_iter().collect()
+    });
+    references.collect()
 }
 
 struct Package {
@@ -592,8 +572,8 @@ impl Package {
     /// after its last segment.
     fn module(module_name: &str) -> Package {
         let segments: Vec<&str> = module_name.split('.').collect();
-        let directory: Vec<String> =
-            segments.iter().map(|segment| directory_segment(segment)).collect();
+        let directory = segments.iter().map(|segment| directory_segment(segment));
+        let directory: Vec<String> = directory.collect();
         let aliases = suffix_names(&segments);
         let name = aliases.first().cloned().unwrap_or_else(|| "module".into());
         let file = format!("{}.go", lowercase(segments.last().unwrap_or(&module_name)));
@@ -661,8 +641,8 @@ fn suffix_names(segments: &[&str]) -> Vec<String> {
 /// that `Yoga.Json.Extra` beside `Yoga.JSON` is in `Yoga/Json_/Extra`. Directories are settled in
 /// order of their spelling, and a renamed directory renames the directories inside it.
 fn case_distinct_directories(packages: &mut FxHashMap<Place, Package>) {
-    let mut directories: Vec<String> =
-        packages.values().map(|package| package.directory.clone()).collect();
+    let directories = packages.values().map(|package| package.directory.clone());
+    let mut directories: Vec<String> = directories.collect();
     directories.sort();
     directories.dedup();
     let mut settled: FxHashMap<String, String> = FxHashMap::default();
@@ -967,8 +947,8 @@ fn generic_candidates(spellings: &[Option<GenericSpelling>]) -> Vec<Vec<String>>
             .unwrap_or(0);
         let mut chosen: Vec<Vec<usize>> = vec![];
         for &index in indices {
-            let mut alike: Vec<usize> =
-                indices.iter().copied().filter(|&other| other != index).collect();
+            let alike = indices.iter().copied().filter(|&other| other != index);
+            let mut alike: Vec<usize> = alike.collect();
             let mut positions: Vec<usize> = vec![];
             while !alike.is_empty() {
                 let best = (0..longest)
@@ -993,8 +973,8 @@ fn generic_candidates(spellings: &[Option<GenericSpelling>]) -> Vec<Vec<String>>
             positions.iter().map(|&position| argument(indices[member], position)).collect()
         };
         loop {
-            let names: Vec<String> =
-                (0..indices.len()).map(|member| spelled(member, &chosen[member])).collect();
+            let names = (0..indices.len()).map(|member| spelled(member, &chosen[member]));
+            let names: Vec<String> = names.collect();
             let mut widened = false;
             for member in 0..indices.len() {
                 let clashes = (0..indices.len())
@@ -1012,11 +992,10 @@ fn generic_candidates(spellings: &[Option<GenericSpelling>]) -> Vec<Vec<String>>
         for (member, &index) in indices.iter().enumerate() {
             let spelling = spellings[index].as_ref().expect("invariant violated: grouped by base");
             let distinguished = spelled(member, &chosen[member]);
-            candidates[index] =
-                [spelling.base.clone(), format!("{}{distinguished}", spelling.base)]
-                    .iter()
-                    .map(|candidate| super::identifier(candidate))
-                    .collect();
+            let distinguished_spelling = format!("{}{distinguished}", spelling.base);
+            let spellings_tried = [spelling.base.clone(), distinguished_spelling];
+            let identifiers = spellings_tried.iter().map(|candidate| super::identifier(candidate));
+            candidates[index] = identifiers.collect();
         }
     }
     candidates
@@ -1098,64 +1077,57 @@ impl Naming<'_> {
             return;
         }
         let members = self.members.get(&place).cloned().unwrap_or_default();
-        let (constructors, members): (Vec<String>, Vec<String>) =
-            members.into_iter().partition(|global| {
-                matches!(self.spellings.get(global), Some(Spelling::Constructor { .. }))
-            });
+        let (constructors, members) = members.into_iter().partition::<Vec<String>, _>(|global| {
+            matches!(self.spellings.get(global), Some(Spelling::Constructor { .. }))
+        });
         let (composed, simple): (Vec<String>, Vec<String>) = members
             .into_iter()
             .filter(|global| !matches!(self.spellings.get(global), Some(Spelling::Derived { .. })))
             .partition(|global| {
                 matches!(self.spellings.get(global), Some(Spelling::Composed { .. }))
             });
-        let simple_ladders: Vec<Vec<String>> = simple
-            .iter()
-            .map(|global| match self.spellings.get(global) {
-                Some(Spelling::Base(base)) => vec![base.clone()],
-                Some(Spelling::Ladder(ladder)) => ladder.clone(),
-                _ => vec![global.clone()],
-            })
-            .collect();
+        let simple_ladders = simple.iter().map(|global| match self.spellings.get(global) {
+            Some(Spelling::Base(base)) => vec![base.clone()],
+            Some(Spelling::Ladder(ladder)) => ladder.clone(),
+            _ => vec![global.clone()],
+        });
+        let simple_ladders: Vec<Vec<String>> = simple_ladders.collect();
         self.choose(place, simple, simple_ladders);
         let mut generic_spellings = vec![];
-        let mut composed_ladders: Vec<Vec<String>> = composed
-            .iter()
-            .map(|global| {
-                let Some(Spelling::Composed { parts, full }) = self.spellings.get(global) else {
-                    unreachable!("invariant violated: a composed name lost its parts")
-                };
-                let (parts, full) = (parts.clone(), full.clone());
-                let at_home = self.is_home(global, place);
-                let mut spelled: Vec<String> = vec![];
-                for part in &parts {
-                    spelled.push(match part {
-                        SpelledPart::Text(text) | SpelledPart::Stutter(text) => text.clone(),
-                        SpelledPart::Record { global: Some(global), name } => {
-                            self.record_name(global, place).unwrap_or_else(|| name.clone())
-                        }
-                        SpelledPart::Record { global: None, name } => name.clone(),
-                        SpelledPart::Argument => String::new(),
-                    });
-                }
-                generic_spellings.push(GenericSpelling::of(&parts, &spelled));
-                let stuttering = |keep_stutter: bool| -> Option<String> {
-                    let kept =
-                        parts.iter().zip(&spelled).enumerate().filter(|(index, (part, _))| {
-                            !matches!(part, SpelledPart::Stutter(_))
-                                || keep_stutter
-                                || (*index == 0 && !at_home)
-                        });
-                    let text: String = kept.map(|(_, (_, text))| text.as_str()).collect();
-                    (!text.is_empty()).then(|| super::identifier(&text))
-                };
-                let mut ladder: Vec<String> = [stuttering(false), stuttering(true), Some(full)]
-                    .into_iter()
-                    .flatten()
-                    .collect();
-                ladder.dedup();
-                ladder
-            })
-            .collect();
+        let composed_ladders = composed.iter().map(|global| {
+            let Some(Spelling::Composed { parts, full }) = self.spellings.get(global) else {
+                unreachable!("invariant violated: a composed name lost its parts")
+            };
+            let (parts, full) = (parts.clone(), full.clone());
+            let at_home = self.is_home(global, place);
+            let mut spelled: Vec<String> = vec![];
+            for part in &parts {
+                spelled.push(match part {
+                    SpelledPart::Text(text) | SpelledPart::Stutter(text) => text.clone(),
+                    SpelledPart::Record { global: Some(global), name } => {
+                        self.record_name(global, place).unwrap_or_else(|| name.clone())
+                    }
+                    SpelledPart::Record { global: None, name } => name.clone(),
+                    SpelledPart::Argument => String::new(),
+                });
+            }
+            generic_spellings.push(GenericSpelling::of(&parts, &spelled));
+            let stuttering = |keep_stutter: bool| -> Option<String> {
+                let numbered = parts.iter().zip(&spelled).enumerate();
+                let kept = numbered.filter(|(index, (part, _))| {
+                    !matches!(part, SpelledPart::Stutter(_))
+                        || keep_stutter
+                        || (*index == 0 && !at_home)
+                });
+                let text: String = kept.map(|(_, (_, text))| text.as_str()).collect();
+                (!text.is_empty()).then(|| super::identifier(&text))
+            };
+            let candidates = [stuttering(false), stuttering(true), Some(full)];
+            let mut ladder: Vec<String> = candidates.into_iter().flatten().collect();
+            ladder.dedup();
+            ladder
+        });
+        let mut composed_ladders: Vec<Vec<String>> = composed_ladders.collect();
         let generic_ladders = generic_candidates(&generic_spellings);
         for (ladder, generic) in composed_ladders.iter_mut().zip(generic_ladders) {
             let rest = std::mem::take(ladder);

@@ -1,6 +1,7 @@
 use super::{Rewrite, Split};
 use crate::emit::fallible::syntax::joined_results;
 use crate::emit::fallible::{Conversion, EitherShape, LEFT, failure_test_of, is_no_failure};
+use crate::emit::index_arrays::is_line;
 use crate::emit::{call, identifier_expression};
 use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement};
 
@@ -139,26 +140,24 @@ impl Rewrite<'_> {
                 then: self.block(then, own),
                 otherwise: self.block(otherwise, own),
             },
-            GoStatement::Switch { value, cases, default } => GoStatement::Switch {
-                value: value.map(|value| self.expression(value)),
-                cases: cases
-                    .into_iter()
-                    .map(|case| GoCase {
-                        values: case
-                            .values
-                            .into_iter()
-                            .map(|value| self.expression(value))
-                            .collect(),
-                        body: self.block(case.body, own),
-                        line: case.line,
-                    })
-                    .collect(),
-                default: default.map(|default| GoDefault {
-                    covers: default.covers,
-                    body: self.block(default.body, own),
-                    line: default.line,
-                }),
-            },
+            GoStatement::Switch { value, cases, default } => {
+                let value = value.map(|value| self.expression(value));
+                let cases = cases.into_iter().map(|case| {
+                    let values = case.values.into_iter().map(|value| self.expression(value));
+                    let values = values.collect();
+                    GoCase { values, body: self.block(case.body, own), line: case.line }
+                });
+                let cases = cases.collect();
+                GoStatement::Switch {
+                    value,
+                    cases,
+                    default: default.map(|default| GoDefault {
+                        covers: default.covers,
+                        body: self.block(default.body, own),
+                        line: default.line,
+                    }),
+                }
+            }
             GoStatement::IfAssert { name, value, type_, then } => GoStatement::IfAssert {
                 name,
                 value: self.expression(value),
@@ -402,12 +401,9 @@ fn with_line(line: Option<crate::syntax::SourceLine>, body: Vec<GoStatement>) ->
 /// failure and a `Right`'s value unchanged: `err = e` and `value, err = v, F{}`.
 fn moved_results(left: &[GoStatement], right: &[GoStatement], from: &Split) -> Option<GoStatement> {
     let only = |statements: &[GoStatement]| -> Option<(Vec<GoExpression>, Vec<GoExpression>)> {
-        let mut rest =
-            statements.iter().filter(|statement| !matches!(statement, GoStatement::Line(_)));
-        let (Some(GoStatement::Assign { targets, values }), None) = (rest.next(), rest.next())
-        else {
-            return None;
-        };
+        let mut rest = statements.iter().filter(|statement| !is_line(statement));
+        let first_two = (rest.next(), rest.next());
+        let (Some(GoStatement::Assign { targets, values }), None) = first_two else { return None };
         Some((targets.clone(), values.clone()))
     };
     let (failure_targets, failure_values) = only(left)?;

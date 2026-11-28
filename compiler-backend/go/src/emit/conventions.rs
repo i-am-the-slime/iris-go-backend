@@ -266,9 +266,8 @@ where
         let applied = self.apply_arguments(callable, supplied, &mut body)?;
         // Applying either side performs an effectful result, so only the value converts.
         let returned = self.monotypes.effect_result(result).unwrap_or(result);
-        let converted =
-            self.convert_convention(applied, returned, direction, crossing, &mut body)?;
-        body.push(returning(converted, target_result.is_some()));
+        let value = self.convert_convention(applied, returned, direction, crossing, &mut body)?;
+        body.push(returning(value, target_result.is_some()));
         Ok(GoExpression::Function {
             parameters: vec![(parameter, parameters[0].clone())],
             result: target_result.map(|type_| *type_),
@@ -354,6 +353,7 @@ where
             {
                 continue;
             }
+            let uncurried = boundary.uncurried.iter().find(|(callback, _)| *callback == position);
             let value = match boundary.maybe {
                 _ if let Some(destructor) = boundary.maybe_destructor
                     && destructor.position == position =>
@@ -403,9 +403,7 @@ where
                     let value = self.value(argument, out)?;
                     self.unit_valued(value, argument.monotype, out)?
                 }
-                _ if let Some(&(_, arity)) =
-                    boundary.uncurried.iter().find(|(callback, _)| *callback == position) =>
-                {
+                _ if let Some(&(_, arity)) = uncurried => {
                     self.uncurried_callback(argument, arity, boundary.uncurried_perform, out)?
                 }
                 _ if uniform
@@ -425,11 +423,10 @@ where
                         Some(Spelled::Scalar) => value,
                         Some(declared) if declared.arrows() > 0 => {
                             let arrows = declared.arrows();
-                            let callback =
-                                self.curried_callback(value, argument.monotype, arrows, out)?;
-                            if self.is_unit(self.monotypes.result_after(argument.monotype, arrows))
-                            {
-                                self.unit_valued(callback, argument.monotype, out)?
+                            let monotype = argument.monotype;
+                            let callback = self.curried_callback(value, monotype, arrows, out)?;
+                            if self.is_unit(self.monotypes.result_after(monotype, arrows)) {
+                                self.unit_valued(callback, monotype, out)?
                             } else {
                                 callback
                             }

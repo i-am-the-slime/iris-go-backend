@@ -11,15 +11,13 @@ pub(super) struct Zeros {
 
 impl Zeros {
     pub(super) fn new(type_declarations: &[GoDeclaration]) -> Zeros {
-        let declared = type_declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                GoDeclaration::Type { name, type_, .. }
-                | GoDeclaration::Alias { name, type_, .. } => Some((name.clone(), type_.clone())),
-                _ => None,
-            })
-            .collect();
-        Zeros { declared }
+        let declared = type_declarations.iter().filter_map(|declaration| match declaration {
+            GoDeclaration::Type { name, type_, .. } | GoDeclaration::Alias { name, type_, .. } => {
+                Some((name.clone(), type_.clone()))
+            }
+            _ => None,
+        });
+        Zeros { declared: declared.collect() }
     }
 
     pub(super) fn zero(&self, type_: &GoType) -> GoExpression {

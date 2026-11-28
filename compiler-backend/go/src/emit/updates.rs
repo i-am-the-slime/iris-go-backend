@@ -108,11 +108,8 @@ fn assigned_field<'s>(
     copy: &str,
 ) -> Option<(&'s str, &'s GoExpression)> {
     let GoStatement::Assign { targets, values } = statement else { return None };
-    let ([GoExpression::Field { value, name }], [assigned]) =
-        (targets.as_slice(), values.as_slice())
-    else {
-        return None;
-    };
+    let [GoExpression::Field { value, name }] = targets.as_slice() else { return None };
+    let [assigned] = values.as_slice() else { return None };
     is_named(value, copy).then_some((name.as_str(), assigned))
 }
 
@@ -138,7 +135,7 @@ struct SourceReads<'a> {
 }
 
 impl<'a> SourceReads<'a> {
-    fn of(value: &GoExpression, source: &'a str) -> Self {
+    fn of(value: &GoExpression, source: &'a str) -> SourceReads<'a> {
         let mut reads = SourceReads { source, copy: false, whole: false, fields: vec![] };
         let mut value = value.clone();
         reads.expression(&mut value);

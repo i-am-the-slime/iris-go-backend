@@ -63,15 +63,15 @@ impl Simplifier<'_> {
             Monotype::Effect(_) => foreign::effect_fold(),
             _ => foreign::array_fold(),
         };
-        let fold =
-            ExpressionKind::Foreign { foreign: fold, arguments: vec![step, initial, object_keys] };
+        let arguments = vec![step, initial, object_keys];
+        let fold = ExpressionKind::Foreign { foreign: fold, arguments };
         let fold = Expression::new(fold, monotype);
         let bindings = [bind, function, object]
             .into_iter()
             .map(|(local, value)| Binding { local, value })
             .collect();
-        let folded =
-            Expression::new(ExpressionKind::Let { bindings, body: Box::new(fold) }, monotype);
+        let folded = ExpressionKind::Let { bindings, body: Box::new(fold) };
+        let folded = Expression::new(folded, monotype);
         self.expression(folded)
     }
 

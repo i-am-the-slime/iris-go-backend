@@ -52,14 +52,6 @@ impl Analysis<'_, '_, '_> {
         BoundTest { test: test.clone(), scope, generations, heap }
     }
 
-    fn holds(&self, condition: &BoundTest, state: &State) -> bool {
-        let unchanged = condition.generations.iter().all(|(symbol, generation)| {
-            let now = state.generations.get(symbol).copied();
-            now == *generation && now != Some(0)
-        });
-        unchanged && condition.heap.is_none_or(|heap| heap == state.heap && heap != 0)
-    }
-
     /// Whether assuming the test can tell anything: it reads a tracked symbol, a name bound to
     /// a test, or a constant.
     pub(super) fn informs(&self, test: &GoExpression) -> bool {
@@ -166,7 +158,7 @@ impl Analysis<'_, '_, '_> {
             GoExpression::Identifier(name) => {
                 let Some(symbol) = self.lookup(name) else { return };
                 let Some(condition) = self.conditions.get(&symbol).cloned() else { return };
-                if !self.holds(&condition, state) {
+                if !holds(&condition, state) {
                     return;
                 }
                 self.scopes.push(condition.scope);
@@ -190,4 +182,12 @@ impl Analysis<'_, '_, '_> {
             None
         }
     }
+}
+
+fn holds(condition: &BoundTest, state: &State) -> bool {
+    let unchanged = condition.generations.iter().all(|(symbol, generation)| {
+        let now = state.generations.get(symbol).copied();
+        now == *generation && now != Some(0)
+    });
+    unchanged && condition.heap.is_none_or(|heap| heap == state.heap && heap != 0)
 }

@@ -4,6 +4,7 @@ use super::{Specializer, symbol_text};
 use crate::context::ModuleData;
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::error::{GoError, GoResult, UnsupportedState};
+use crate::monotype::expand_synonyms;
 use crate::types::Substitution;
 use checking::TypeId;
 use checking::core::Type;
@@ -224,11 +225,11 @@ where
                     construct: "superclasses of instances with type variables",
                 }));
             };
-            let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
-            let head = crate::monotype::expand_synonyms(&mut self.context, head)?;
+            let constraint = expand_synonyms(&mut self.context, constraint)?;
+            let head = expand_synonyms(&mut self.context, head)?;
             if !self.context.types.match_type(head, constraint, &names, &mut bindings) {
-                let pretty =
-                    checking::core::pretty::Pretty::new(self.context.queries, &module.checked);
+                let queries = self.context.queries;
+                let pretty = checking::core::pretty::Pretty::new(queries, &module.checked);
                 let instance = match self.declared_instance_name(origin)? {
                     Some(name) => name,
                     None => pretty.render(head).ok().unwrap_or_default(),
@@ -247,9 +248,8 @@ where
                 continue;
             };
             let constraint = self.context.types.substitute(constraint, scope.substitution);
-            let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
-            let instance_constraint =
-                crate::monotype::expand_synonyms(&mut self.context, instance_constraint)?;
+            let constraint = expand_synonyms(&mut self.context, constraint)?;
+            let instance_constraint = expand_synonyms(&mut self.context, instance_constraint)?;
             self.context.types.match_type(instance_constraint, constraint, &names, &mut bindings);
             recorded.push(Some(constraint));
         }
@@ -258,8 +258,8 @@ where
             match bindings.get(name) {
                 Some(&bound) => types.push(bound),
                 None => {
-                    let unconstrained =
-                        self.context.queries.intern_type(Type::Unification(u32::MAX));
+                    let unification = Type::Unification(u32::MAX);
+                    let unconstrained = self.context.queries.intern_type(unification);
                     types.push(unconstrained);
                 }
             }
@@ -283,8 +283,8 @@ where
         if let tree::InstanceImplementation::Delegate { constraint, evidence } =
             instance.implementation
         {
-            let (substitution, givens) =
-                self.instance_environment(&module, declaration, &dictionary)?;
+            let environment = self.instance_environment(&module, declaration, &dictionary)?;
+            let (substitution, givens) = environment;
             let constraint = self.context.types.substitute(constraint, &substitution);
             let instance_scope = EvidenceScope {
                 module: &module,

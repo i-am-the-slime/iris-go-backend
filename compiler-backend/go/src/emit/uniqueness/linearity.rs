@@ -313,8 +313,7 @@ impl<'f> Counter<'f> {
             }
             ExpressionKind::If { condition, then, otherwise } => {
                 let allowed = self.forced.get(&std::ptr::from_ref(expression));
-                let taken =
-                    |branch: Branch| allowed.is_none_or(|allowed| allowed.contains(&branch));
+                let taken = |branch: Branch| allowed.is_none_or(|forced| forced.contains(&branch));
                 let mut branches = Paths::nothing();
                 if taken(Branch::Then) {
                     branches = branches.or(self.count(shapes, then));

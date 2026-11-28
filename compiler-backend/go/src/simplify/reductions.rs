@@ -113,10 +113,9 @@ impl Simplifier<'_> {
         }
         copied.push(*then);
         arguments.push(*otherwise);
-        let then = self.foreign(consumer, copied, monotype);
-        let otherwise = self.foreign(consumer, arguments, monotype);
-        let chosen =
-            ExpressionKind::If { condition, then: Box::new(then), otherwise: Box::new(otherwise) };
+        let then = Box::new(self.foreign(consumer, copied, monotype));
+        let otherwise = Box::new(self.foreign(consumer, arguments, monotype));
+        let chosen = ExpressionKind::If { condition, then, otherwise };
         Ok(Expression::new(chosen, monotype))
     }
 
@@ -265,14 +264,13 @@ impl Simplifier<'_> {
         let count = self.named_local("count", monotype);
         let one = Expression::new(ExpressionKind::Literal(Literal::Int(1)), monotype);
         let zero = Expression::new(ExpressionKind::Literal(Literal::Int(0)), monotype);
-        let counted =
-            ExpressionKind::If { condition, then: Box::new(one), otherwise: Box::new(zero) };
-        let counted = Expression::new(counted, monotype);
+        let kind = ExpressionKind::If { condition, then: Box::new(one), otherwise: Box::new(zero) };
+        let counted = Expression::new(kind, monotype);
         let body = operation(Operator::IntAdd, vec![count.expression(), counted], monotype);
         let step_type = self.monotypes.function(element.monotype, monotype);
         let step_type = self.monotypes.function(monotype, step_type);
-        let step =
-            ExpressionKind::Lambda { parameters: vec![count, element], body: Box::new(body) };
+        let parameters = vec![count, element];
+        let step = ExpressionKind::Lambda { parameters, body: Box::new(body) };
         let initial = Expression::new(ExpressionKind::Literal(Literal::Int(0)), monotype);
         let folded = ExpressionKind::Foreign {
             foreign: foreign::array_fold(),
@@ -315,11 +313,8 @@ impl Simplifier<'_> {
 
 fn is_positional_choice(array: &Expression) -> bool {
     let ExpressionKind::If { condition, then, otherwise } = &array.kind else { return false };
-    let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } =
-        &condition.kind
-    else {
-        return false;
-    };
+    let ExpressionKind::Foreign { foreign, arguments } = &condition.kind else { return false };
+    let Foreign::Operator(operator) = foreign else { return false };
     let empty = matches!(operator, Operator::Compare(Comparison::Equal))
         && matches!(
             arguments.as_slice(),
@@ -355,11 +350,8 @@ fn positions_of(range: &Expression) -> Option<&Expression> {
         (Operator::IntSubtract, ExpressionKind::Literal(Literal::Int(1)))
             | (Operator::IntAdd, ExpressionKind::Literal(Literal::Int(-1)))
     );
-    let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::ArrayLength), arguments } =
-        &length.kind
-    else {
-        return None;
-    };
+    let ExpressionKind::Foreign { foreign, arguments } = &length.kind else { return None };
+    let Foreign::Operator(Operator::ArrayLength) = foreign else { return None };
     let [array] = arguments.as_slice() else { return None };
     (before_end && matches!(array.kind, ExpressionKind::Local(_))).then_some(array)
 }

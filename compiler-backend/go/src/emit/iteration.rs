@@ -355,19 +355,17 @@ where
         let Callback::Inline { parameters, body } = callback else { return vec![] };
         let accumulator = parameters[accumulator_position].id;
         let body: &'e Expression = body;
-        self.carried_places(monotype)
-            .into_iter()
-            .filter_map(|place| {
-                let nodes = owned_snocs(Carried::updating(accumulator, &place), body)?;
-                (!nodes.is_empty()).then_some((place, nodes))
-            })
-            .collect()
+        let places = self.carried_places(monotype).into_iter().filter_map(|place| {
+            let nodes = owned_snocs(Carried::updating(accumulator, &place), body)?;
+            (!nodes.is_empty()).then_some((place, nodes))
+        });
+        places.collect()
     }
 
     /// The places of an accumulator of this type that hold an array: itself, its record's
     /// fields, or a field of one of its constructors when it is held by value.
     pub(super) fn carried_places(&mut self, monotype: MonotypeId) -> Vec<Place> {
-        let is_array = |emitter: &mut Self, monotype: MonotypeId| {
+        let is_array = |emitter: &mut Emitter<'_, '_, 'q, Q>, monotype: MonotypeId| {
             matches!(emitter.monotypes.get(monotype), Monotype::Array(_) | Monotype::Object(_))
                 || emitter.is_native_hash_map(monotype)
         };
@@ -492,7 +490,7 @@ where
         self.tail_loop = saved;
         out.push(outcome?);
         if let Some(recycled) = &recycled {
-            out.push(Self::rotate(recycled, &mapped));
+            out.push(Emitter::<'_, '_, 'q, Q>::rotate(recycled, &mapped));
         }
         Ok(identifier_expression(&mapped))
     }
@@ -511,8 +509,8 @@ where
         let mut opened = self.open(pipeline, need, slot)?;
         let mut arguments = vec![opened.element];
         if indexed && index != "_" {
-            let slot =
-                opened.index.as_deref().expect("invariant violated: an indexed map has a slot");
+            let slot = opened.index.as_deref();
+            let slot = slot.expect("invariant violated: an indexed map has a slot");
             opened.body.body().push(GoStatement::Define {
                 names: vec![index.clone()],
                 values: vec![identifier_expression(slot)],
@@ -857,9 +855,11 @@ where
         };
         let delayed = effect.is_some() && !perform;
         let unit_valued = mode == Mode::Value && !delayed && self.is_unit(result);
-        let result_type =
-            if unit_valued { Some(GoType::EmptyStruct) } else { self.go_result(result)? };
-        let result_sink = if unit_valued { Sink::Discard } else { Sink::Return };
+        let (result_type, result_sink) = if unit_valued {
+            (Some(GoType::EmptyStruct), Sink::Discard)
+        } else {
+            (self.go_result(result)?, Sink::Return)
+        };
         let saved = self.tail_loop.take();
         let mut parameters = vec![];
         let mut body = vec![];

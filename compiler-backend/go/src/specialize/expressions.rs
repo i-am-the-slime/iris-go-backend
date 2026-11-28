@@ -5,6 +5,7 @@ use checking::evidence::EvidenceVarId;
 use checking::{TypeId, tree};
 use smol_str::{SmolStr, format_smolstr};
 
+use super::instantiation::checked_binder_source;
 use super::{
     IgnoringCallee, Scope, Specializer, case_branch_position, is_foreign_wrapper,
     is_written_lambda, source_position, spine, string_literal,
@@ -172,7 +173,7 @@ where
         let node = &module.checked.tree[id];
         let kind = match &node.kind {
             tree::ExpressionKind::Error => {
-                return Err(self.unsupported(scope, UnsupportedState::ExpressionError));
+                return Err(scope.unsupported(UnsupportedState::ExpressionError));
             }
             tree::ExpressionKind::String { value, .. } => {
                 ExpressionKind::Literal(string_literal(value))
@@ -219,8 +220,8 @@ where
                 let mut record = self.expression(scope, *record_id)?;
                 for label in labels.iter() {
                     let monotype = self.field_monotype(scope, record.monotype, label)?;
-                    let kind =
-                        ExpressionKind::Access { record: Box::new(record), label: label.clone() };
+                    let label = label.clone();
+                    let kind = ExpressionKind::Access { record: Box::new(record), label };
                     record = Expression::new(kind, monotype);
                 }
                 return self.instantiated_field(scope, id, (*record_id, labels), record);
@@ -250,7 +251,7 @@ where
                 return self.reference(scope, id, Substitution::default(), None);
             }
             tree::ExpressionKind::Section { binder } => {
-                return self.local_reference(scope, self.checked_binder_source(scope, *binder));
+                return self.local_reference(scope, checked_binder_source(scope, *binder));
             }
             tree::ExpressionKind::TermApplication { .. } => return self.application(scope, id),
             tree::ExpressionKind::EvidenceAbstraction { binder, expression } => {
@@ -287,8 +288,8 @@ where
                 }
                 let body = self.expression(scope, *expression)?;
                 let monotype = body.monotype;
-                let scrutinees: Vec<Expression> =
-                    parameters.iter().map(Local::expression).collect();
+                let scrutinees = parameters.iter().map(Local::expression);
+                let scrutinees: Vec<Expression> = scrutinees.collect();
                 let body = Guarded::Unconditional(body);
                 let position = source_position(&module, id);
                 let alternative = Alternative { patterns, body, position };
@@ -341,11 +342,8 @@ where
         (record, labels): (tree::ExpressionId, &[SmolStr]),
         field: Expression,
     ) -> GoResult<Expression> {
-        let Some((closed, instantiations)) =
-            self.accessed_field_scheme(scope, access, record, labels)?
-        else {
-            return Ok(field);
-        };
+        let field_scheme = self.accessed_field_scheme(scope, access, record, labels)?;
+        let Some((closed, instantiations)) = field_scheme else { return Ok(field) };
         let scheme = self.monotypes.scheme_for(&mut self.context, closed)?;
         if !scheme.is_some_and(|scheme| scheme.constraints.is_empty()) {
             return Ok(field);
@@ -364,10 +362,10 @@ where
         {
             return Ok(field.monotype);
         }
-        Err(self.unsupported(
-            scope,
-            UnsupportedState::OpenType { rendered: format!("{{ {label} }}"), hint: "" },
-        ))
+        Err(scope.unsupported(UnsupportedState::OpenType {
+            rendered: format!("{{ {label} }}"),
+            hint: "",
+        }))
     }
 
     /// An update of a field whose type in the updated record is a specialized rank-N `forall`
@@ -418,13 +416,11 @@ where
                 Expression::new(ExpressionKind::Record(constructed), field_monotype)
             }
         };
-        let fields: Vec<RecordField> = fields
-            .iter()
-            .map(|known| match known.label == *label {
-                true => RecordField { label: known.label.clone(), monotype: field_monotype },
-                false => known.clone(),
-            })
-            .collect();
+        let fields = fields.iter().map(|known| match known.label == *label {
+            true => RecordField { label: known.label.clone(), monotype: field_monotype },
+            false => known.clone(),
+        });
+        let fields: Vec<RecordField> = fields.collect();
         let updated = self.monotypes.intern(Monotype::Record(Arc::from(fields)));
         Ok(Some((RecordUpdate::Leaf { label: label.clone(), value }, updated)))
     }
@@ -443,18 +439,16 @@ where
         if !self.context.types.match_type(body, value_type, &names, &mut bindings) {
             return None;
         }
-        names
-            .iter()
-            .map(|name| {
-                let bound = self.context.types.strip_annotations(*bindings.get(name)?);
-                match self.context.types.lookup(bound) {
-                    Type::Rigid(skolem, _, _) if !scope.substitution.contains_key(skolem) => {
-                        Some(*skolem)
-                    }
-                    _ => None,
+        let skolems = names.iter().map(|name| {
+            let bound = self.context.types.strip_annotations(*bindings.get(name)?);
+            match self.context.types.lookup(bound) {
+                Type::Rigid(skolem, _, _) if !scope.substitution.contains_key(skolem) => {
+                    Some(*skolem)
                 }
-            })
-            .collect()
+                _ => None,
+            }
+        });
+        skolems.collect()
     }
 
     fn record_updates(
@@ -474,7 +468,7 @@ where
                     updates: self.record_updates(scope, updates)?,
                 },
                 tree::RecordExpressionUpdate::Error => {
-                    return Err(self.unsupported(scope, UnsupportedState::ExpressionError));
+                    return Err(scope.unsupported(UnsupportedState::ExpressionError));
                 }
             });
         }
@@ -561,10 +555,9 @@ where
                 self.trailed_reference(scope, head, result_instantiations.clone(), None, trailing)
             }
             _ if trailing.is_empty() => self.expression(scope, head),
-            _ => Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct { construct: "evidence applied to a non-reference" },
-            )),
+            _ => Err(scope.unsupported(UnsupportedState::Construct {
+                construct: "evidence applied to a non-reference",
+            })),
         };
         let mut function = match function {
             Ok(function) => function,

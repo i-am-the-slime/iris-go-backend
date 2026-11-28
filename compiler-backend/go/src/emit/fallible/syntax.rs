@@ -10,11 +10,8 @@ pub(super) fn joined_results(value: &GoExpression) -> Option<(String, String, St
     let GoExpression::Identifier(converter) = function.unattributed() else { return None };
     let shape = converter.strip_prefix('\u{0}')?.strip_suffix(Conversion::FromResults.suffix())?;
     let [value, failure] = arguments.as_slice() else { return None };
-    let (GoExpression::Identifier(value), GoExpression::Identifier(failure)) =
-        (value.unattributed(), failure.unattributed())
-    else {
-        return None;
-    };
+    let GoExpression::Identifier(value) = value.unattributed() else { return None };
+    let GoExpression::Identifier(failure) = failure.unattributed() else { return None };
     Some((shape.to_string(), value.clone(), failure.clone()))
 }
 

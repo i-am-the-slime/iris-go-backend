@@ -142,31 +142,7 @@ impl Together<'_, '_, '_> {
         if run.sites.len() <= run.tests.len() {
             return None;
         }
-        self.scoped(block, run)
-    }
-
-    /// The run, with the variables it declares to be hoisted before it, or nothing when the
-    /// rest of the block reads another name it defines.
-    fn scoped(&self, block: &mut [GoStatement], mut run: Run) -> Option<Run> {
-        let mut later = FxHashSet::default();
-        for statement in &mut block[run.end..] {
-            go_traversal::each_expression_in_statement(statement, |expression| {
-                if let GoExpression::Identifier(name) = expression {
-                    later.insert(name.clone());
-                }
-            });
-        }
-        for (position, statement) in block.iter().enumerate().take(run.end).skip(run.start) {
-            match statement {
-                GoStatement::Variable { value: None, .. } => run.hoisted.push(position),
-                statement => {
-                    if defined_names(statement).iter().any(|name| later.contains(name)) {
-                        return None;
-                    }
-                }
-            }
-        }
-        Some(run)
+        scoped(block, run)
     }
 
     /// Replaces the run with its combined test, and returns the position after it. When the run
@@ -178,8 +154,8 @@ impl Together<'_, '_, '_> {
             .into_iter()
             .enumerate()
             .partition(|(offset, _)| run.hoisted.contains(&(run.start + offset)));
-        let hoisted: Vec<GoStatement> =
-            hoisted.into_iter().map(|(_, statement)| statement).collect();
+        let hoisted = hoisted.into_iter().map(|(_, statement)| statement);
+        let hoisted: Vec<GoStatement> = hoisted.collect();
         let passed = self.decided(&run, &statements, true);
         let failed = match run.tests.len() {
             1 => self.decided(&run, &statements, false),
@@ -251,6 +227,30 @@ impl Together<'_, '_, '_> {
         }
         statements
     }
+}
+
+/// The run, with the variables it declares to be hoisted before it, or nothing when the
+/// rest of the block reads another name it defines.
+fn scoped(block: &mut [GoStatement], mut run: Run) -> Option<Run> {
+    let mut later = FxHashSet::default();
+    for statement in &mut block[run.end..] {
+        go_traversal::each_expression_in_statement(statement, |expression| {
+            if let GoExpression::Identifier(name) = expression {
+                later.insert(name.clone());
+            }
+        });
+    }
+    for (position, statement) in block.iter().enumerate().take(run.end).skip(run.start) {
+        match statement {
+            GoStatement::Variable { value: None, .. } => run.hoisted.push(position),
+            statement => {
+                if defined_names(statement).iter().any(|name| later.contains(name)) {
+                    return None;
+                }
+            }
+        }
+    }
+    Some(run)
 }
 
 /// Whether the block reads every name it defines, as Go requires: a branch without an access

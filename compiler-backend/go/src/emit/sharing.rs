@@ -58,8 +58,8 @@ fn repeated_construction(
 fn is_pure_construction(expression: &GoExpression) -> bool {
     let GoExpression::Composite { type_, fields } = expression else { return false };
     let is_struct = matches!(type_, GoType::Named(_) | GoType::Generic { .. } | GoType::Struct(_));
-    let reads_locals =
-        fields.iter().any(|(_, value)| matches!(value.unattributed(), GoExpression::Identifier(_)));
+    let mut values = fields.iter().map(|(_, value)| value.unattributed());
+    let reads_locals = values.any(|value| matches!(value, GoExpression::Identifier(_)));
     let only_names = fields.iter().all(|(label, value)| {
         label.is_some()
             && matches!(
@@ -72,13 +72,11 @@ fn is_pure_construction(expression: &GoExpression) -> bool {
 
 fn identifiers(construction: &GoExpression) -> Vec<String> {
     let GoExpression::Composite { fields, .. } = construction else { return vec![] };
-    fields
-        .iter()
-        .filter_map(|(_, value)| match value.unattributed() {
-            GoExpression::Identifier(name) => Some(name.clone()),
-            _ => None,
-        })
-        .collect()
+    let identifiers = fields.iter().filter_map(|(_, value)| match value.unattributed() {
+        GoExpression::Identifier(name) => Some(name.clone()),
+        _ => None,
+    });
+    identifiers.collect()
 }
 
 fn construction_name(
@@ -109,8 +107,8 @@ fn share(
         .into_iter()
         .filter(|name| bindings.binders.contains_key(name))
         .collect();
-    let bound_by_parameters: FxHashSet<String> =
-        wanted.iter().filter(|name| parameters.contains(name)).cloned().collect();
+    let bound_by_parameters = wanted.iter().filter(|name| parameters.contains(name)).cloned();
+    let bound_by_parameters: FxHashSet<String> = bound_by_parameters.collect();
     let total = occurrences(body, construction);
     let mut placement = Placement {
         construction,
@@ -150,8 +148,8 @@ impl Walk for Placement<'_> {
             self.placed = true;
             return;
         }
-        let bound_here: Vec<String> =
-            body.iter().flat_map(defined_names).filter(|name| self.wanted.contains(name)).collect();
+        let defined = body.iter().flat_map(defined_names);
+        let bound_here: Vec<String> = defined.filter(|name| self.wanted.contains(name)).collect();
         let before = self.bound_outside.clone();
         self.bound_outside.extend(bound_here);
         body.iter_mut().for_each(|statement| self.statement(statement));
@@ -179,8 +177,8 @@ impl Placement<'_> {
         if !self.wanted.iter().all(|name| bound.contains(name)) {
             return None;
         }
-        let counts: Vec<usize> =
-            body.iter_mut().map(|statement| occurrences_in(statement, self.construction)).collect();
+        let counts = body.iter_mut().map(|statement| occurrences_in(statement, self.construction));
+        let counts: Vec<usize> = counts.collect();
         let first = counts.iter().position(|&count| count > 0)?;
         let found: usize = counts[first..].iter().sum();
         (first >= after && found == self.total).then_some(first)

@@ -14,7 +14,7 @@
 //!
 //! Each field is itself turned into a `Foreign`, as a record's or an array's would be.
 
-use super::maybe::MaybeLayout;
+use super::maybe::{MaybeLayout, constructor_field};
 use super::{Emitter, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::GoFunction;
@@ -46,11 +46,8 @@ where
         let mut next = 0;
         while let Some(&monotype) = self.foreign_data.get(next) {
             next += 1;
-            let (Monotype::Data(data) | Monotype::Recursive(data)) =
-                self.monotypes.get(monotype).clone()
-            else {
-                continue;
-            };
+            let foreign_type = self.monotypes.get(monotype).clone();
+            let (Monotype::Data(data) | Monotype::Recursive(data)) = foreign_type else { continue };
             if let Some(registration) = self.foreign_data_registration(&data)?
                 && registered.insert(registration.name().unwrap_or_default().to_string())
             {
@@ -79,7 +76,7 @@ where
             let mut branch = vec![];
             let mut fields = Vec::with_capacity(constructor.fields.len());
             for (position, (_, field_type)) in constructor.fields.iter().enumerate() {
-                let read = self.constructor_field(&layout, index, position, value.clone());
+                let read = constructor_field(&layout, index, position, value.clone());
                 fields.push((None, self.coerce(read, *field_type, opaque, &mut branch)?));
             }
             let fields = if fields.is_empty() {
@@ -98,8 +95,8 @@ where
                 }
             }
         }
-        let register =
-            self.go_function(GoFunction { package: GoPackage::ForeignValue, name: "DataFields" });
+        let data_fields = GoFunction { package: GoPackage::ForeignValue, name: "DataFields" };
+        let register = self.go_function(data_fields);
         let fields = GoExpression::Function {
             parameters: vec![("value".into(), value_type)],
             result: Some(GoType::Slice(Box::new(GoType::Any))),

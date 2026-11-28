@@ -36,17 +36,17 @@ impl Simplifier<'_> {
             let template = Local { id: LocalId(0), name, monotype: scrutinee.monotype };
             let whole = self.fresh(&template);
             let fields: Vec<Local> = match &scrutinee.kind {
-                ExpressionKind::Construct { arguments, .. } => arguments
-                    .iter()
-                    .map(|argument| {
+                ExpressionKind::Construct { arguments, .. } => {
+                    let fields = arguments.iter().map(|argument| {
                         let template = Local {
                             id: LocalId(0),
                             name: "field".into(),
                             monotype: argument.monotype,
                         };
                         self.fresh(&template)
-                    })
-                    .collect(),
+                    });
+                    fields.collect()
+                }
                 _ => vec![],
             };
             let mut kept = Vec::with_capacity(alternatives.len());
@@ -58,8 +58,8 @@ impl Simplifier<'_> {
                             Some(FieldPath { position, labels }) => labels.into_iter().fold(
                                 fields[position].expression(),
                                 |record, (label, monotype)| {
-                                    let kind =
-                                        ExpressionKind::Access { record: Box::new(record), label };
+                                    let record = Box::new(record);
+                                    let kind = ExpressionKind::Access { record, label };
                                     Expression::new(kind, monotype)
                                 },
                             ),
@@ -116,20 +116,18 @@ impl Simplifier<'_> {
             let ExpressionKind::Construct { data, constructor, arguments } = scrutinee.kind else {
                 unreachable!("invariant violated: only a construction is split")
             };
-            let fields: Vec<Expression> = arguments
-                .into_iter()
-                .map(|argument| {
-                    if is_trivial(&argument) {
-                        return argument;
-                    }
-                    let template =
-                        Local { id: LocalId(0), name: "field".into(), monotype: argument.monotype };
-                    let field = self.fresh(&template);
-                    let expression = field.expression();
-                    bindings.push(Binding { local: field, value: argument });
-                    expression
-                })
-                .collect();
+            let fields = arguments.into_iter().map(|argument| {
+                if is_trivial(&argument) {
+                    return argument;
+                }
+                let monotype = argument.monotype;
+                let template = Local { id: LocalId(0), name: "field".into(), monotype };
+                let field = self.fresh(&template);
+                let expression = field.expression();
+                bindings.push(Binding { local: field, value: argument });
+                expression
+            });
+            let fields: Vec<Expression> = fields.collect();
             let monotypes: Vec<MonotypeId> = fields.iter().map(|field| field.monotype).collect();
             let kind = ExpressionKind::Construct { data, constructor, arguments: fields.clone() };
             let rebuilt = Expression::new(kind, monotype);
@@ -178,9 +176,9 @@ pub(super) fn reachable(alternatives: Vec<Alternative>) -> Vec<Alternative> {
 pub(super) fn decided_guards(branches: Vec<GuardedBranch>) -> Guarded {
     let mut kept: Vec<GuardedBranch> = Vec::with_capacity(branches.len());
     let mut dropped = None;
+    let always_false = |guard: &Guard| literal_guard(guard) == Some(false);
     for mut branch in branches {
-        let never_taken =
-            branch.guards.iter().position(|guard| literal_guard(guard) == Some(false));
+        let never_taken = branch.guards.iter().position(always_false);
         if let Some(position) = never_taken
             && branch.guards[..position].iter().all(|guard| !can_fail(guard_value(guard)))
         {
@@ -470,8 +468,8 @@ fn field_patterns(
     monotypes: &[MonotypeId],
     whole: &mut Vec<LocalId>,
 ) -> Option<Vec<Pattern>> {
-    let wildcards =
-        || monotypes.iter().map(|&monotype| Pattern { kind: PatternKind::Wildcard, monotype });
+    let wildcard = |&monotype: &MonotypeId| Pattern { kind: PatternKind::Wildcard, monotype };
+    let wildcards = || monotypes.iter().map(wildcard);
     match pattern.kind {
         PatternKind::Wildcard => Some(wildcards().collect()),
         PatternKind::Variable(local) => {

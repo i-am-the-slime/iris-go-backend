@@ -33,7 +33,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 pub(super) use values::lower_type;
 
 use super::packages::Spelling;
-use super::{DataKind, Emitter, binary, identifier_expression};
+use super::{DataKind, Emitter, binary, composite, identifier_expression};
 use crate::error::GoResult;
 use crate::go_traversal::{self};
 use crate::monotype::DataType;
@@ -270,8 +270,8 @@ where
 
     /// The `Either` types whose Go struct has a tag and one field for each side.
     fn either_shapes(&mut self) -> GoResult<FxHashMap<String, EitherShape>> {
-        let mut layouts: Vec<(DataType, super::DataLayout)> =
-            self.data_layouts.iter().map(|(data, layout)| (data.clone(), layout.clone())).collect();
+        let layouts = self.data_layouts.iter().map(|(data, layout)| (data.clone(), layout.clone()));
+        let mut layouts: Vec<(DataType, super::DataLayout)> = layouts.collect();
         layouts.sort_by(|left, right| left.1.name.cmp(&right.1.name));
         let mut shapes = FxHashMap::default();
         let mut failures: FxHashMap<String, String> = FxHashMap::default();
@@ -285,11 +285,8 @@ where
                 continue;
             }
             let [left, right] = layout.constructors.as_slice() else { continue };
-            let ([(left_field, left_type)], [(right_field, right_type)]) =
-                (left.fields.as_slice(), right.fields.as_slice())
-            else {
-                continue;
-            };
+            let [(left_field, left_type)] = left.fields.as_slice() else { continue };
+            let [(right_field, right_type)] = right.fields.as_slice() else { continue };
             let value_name = self.value_base(*right_type);
             let left_go = self.go_type(*left_type)?;
             let failure = match failures.get(&format!("{left_go:?}")) {
@@ -342,8 +339,8 @@ where
         declarations: &mut Vec<GoDeclaration>,
     ) -> GoResult<String> {
         let layout = self.data_layout(&shape.data)?;
-        let name =
-            self.global_name(Spelling::derived("", layout.name.clone(), conversion.suffix()));
+        let spelling = Spelling::derived("", layout.name.clone(), conversion.suffix());
+        let name = self.global_name(spelling);
         self.homes.insert(name.clone(), shape.data.file_id);
         let either = GoType::Named(layout.name.clone());
         let declaration = match conversion {
@@ -365,14 +362,14 @@ where
                     body: vec![
                         GoStatement::If {
                             condition: failure_test_of(&err_name, true),
-                            then: vec![GoStatement::Return(Some(self.composite(
+                            then: vec![GoStatement::Return(Some(composite(
                                 &layout,
                                 0,
                                 vec![left],
                             )))],
                             otherwise: vec![],
                         },
-                        GoStatement::Return(Some(self.composite(&layout, 1, vec![value]))),
+                        GoStatement::Return(Some(composite(&layout, 1, vec![value]))),
                     ],
                 }
             }
@@ -478,8 +475,8 @@ impl SupportFunctions {
             GoDeclaration::Function { name, .. } => self.names.contains(name),
             _ => false,
         };
-        let (support, program): (Vec<GoDeclaration>, Vec<GoDeclaration>) =
-            std::mem::take(declarations).into_iter().partition(is_support);
+        let emitted = std::mem::take(declarations);
+        let (support, program): (Vec<_>, Vec<_>) = emitted.into_iter().partition(is_support);
         *declarations = program;
         let mut support = self.positions.iter().copied().zip(support).peekable();
         let mut restored = Vec::with_capacity(type_declarations.len() + self.positions.len());

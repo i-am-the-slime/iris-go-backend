@@ -105,7 +105,7 @@ where
             };
             Ok(Expression::new(kind, result))
         })?;
-        let body = self.case(value.expression(), alternatives, result);
+        let body = case_expression(value.expression(), alternatives, result);
         Ok(Some(self.lambda(vec![proxy, handler, fallback, value], body)))
     }
 
@@ -132,7 +132,7 @@ where
         let alternatives = self.alternatives(scope, &data, variant, |this, name, hidden| {
             this.reinject(scope, &wider, result, name, hidden)
         })?;
-        let body = self.case(value.expression(), alternatives, result);
+        let body = case_expression(value.expression(), alternatives, result);
         Ok(Some(self.lambda(vec![value], body)))
     }
 
@@ -155,7 +155,7 @@ where
             };
             this.apply_handler(handler, hidden, result)
         })?;
-        let body = self.case(value.expression(), alternatives, result);
+        let body = case_expression(value.expression(), alternatives, result);
         Ok(Some(self.lambda(vec![handlers, value], body)))
     }
 
@@ -181,7 +181,7 @@ where
             };
             Ok(Expression::new(kind, result))
         })?;
-        let body = self.case(value.expression(), alternatives, result);
+        let body = case_expression(value.expression(), alternatives, result);
         Ok(Some(self.lambda(vec![handlers, fallback, value], body)))
     }
 
@@ -219,7 +219,7 @@ where
                 )),
             }
         })?;
-        let body = self.case(value.expression(), alternatives, unvariant);
+        let body = case_expression(value.expression(), alternatives, unvariant);
         Ok(Some(self.lambda(vec![value], body)))
     }
 
@@ -242,15 +242,15 @@ where
         let value = self.fresh_local(self.monotypes.value_name(variant), variant);
         let mut alternatives = Vec::with_capacity(continuations.len() + 1);
         for (label, field) in &continuations {
-            let hidden =
-                self.fresh_local(self.monotypes.value_name(payload.monotype), payload.monotype);
+            let hidden_name = self.monotypes.value_name(payload.monotype);
+            let hidden = self.fresh_local(hidden_name, payload.monotype);
             let body = self.run_continuation(unvariant, field, &hidden);
             let tag = Pattern {
                 kind: PatternKind::Literal(Literal::String(label.to_string())),
                 monotype: tag.monotype,
             };
-            let payload =
-                Pattern { kind: PatternKind::Variable(hidden), monotype: payload.monotype };
+            let variable = PatternKind::Variable(hidden);
+            let payload = Pattern { kind: variable, monotype: payload.monotype };
             let kind = PatternKind::Record(vec![
                 (SmolStr::new_static("type"), tag),
                 (SmolStr::new_static("value"), payload),
@@ -263,7 +263,7 @@ where
         }
         let scrutinee = value.expression();
         alternatives.push(Alternative::match_failure(std::slice::from_ref(&scrutinee), unvariant));
-        let body = self.case(scrutinee, alternatives, unvariant);
+        let body = case_expression(scrutinee, alternatives, unvariant);
         Ok(Some(self.lambda(vec![value], body)))
     }
 
@@ -391,8 +391,8 @@ where
             }
             dictionaries.push(Dictionary::Trivial);
         }
-        let types: Option<Vec<TypeId>> =
-            continuation.names.iter().map(|name| solved.get(name).copied()).collect();
+        let types = continuation.names.iter().map(|name| solved.get(name).copied());
+        let types: Option<Vec<TypeId>> = types.collect();
         Ok(types.map(|types| (types, dictionaries)))
     }
 
@@ -402,8 +402,8 @@ where
         let Type::Row(row) = *self.context.types.lookup(row) else { return None };
         let row = self.context.queries.lookup_row_type(row).clone();
         let field = row.fields.iter().find(|field| field.label == label)?.id;
-        let remaining: Vec<RowField> =
-            row.fields.iter().filter(|field| field.label != label).cloned().collect();
+        let remaining = row.fields.iter().filter(|field| field.label != label).cloned();
+        let remaining: Vec<RowField> = remaining.collect();
         let remaining = RowType { fields: Arc::from(remaining), tail: row.tail };
         let remaining = self.context.queries.intern_row_type(remaining);
         Some((field, self.context.queries.intern_type(Type::Row(remaining))))
@@ -430,15 +430,10 @@ where
         };
         match self.monotypes.get(unvariant).clone() {
             Monotype::Record(answers) => {
-                let fields = answers
-                    .iter()
-                    .map(|answer| {
-                        (
-                            answer.label.clone(),
-                            self.run_continuation(answer.monotype, field, hidden),
-                        )
-                    })
-                    .collect();
+                let fields = answers.iter().map(|answer| {
+                    (answer.label.clone(), self.run_continuation(answer.monotype, field, hidden))
+                });
+                let fields = fields.collect();
                 Expression::new(ExpressionKind::Record(fields), unvariant)
             }
             Monotype::Function(continuation, answer) => {
@@ -485,7 +480,7 @@ where
         scope: &Scope,
         data: &DataType,
         variant: MonotypeId,
-        mut body: impl FnMut(&mut Self, SmolStr, Local) -> GoResult<Expression>,
+        mut body: impl FnMut(&mut Specializer<'q, Q>, SmolStr, Local) -> GoResult<Expression>,
     ) -> GoResult<Vec<Alternative>> {
         let constructors = self
             .monotypes
@@ -496,28 +491,15 @@ where
             let payload = constructor.fields[0];
             let hidden = self.fresh_local(self.monotypes.value_name(payload), payload);
             let expression = body(self, constructor.name.clone(), hidden.clone())?;
-            let arguments =
-                vec![Pattern { kind: PatternKind::Variable(hidden), monotype: payload }];
-            let kind =
-                PatternKind::Constructor { data: data.clone(), constructor: index, arguments };
+            let variable = PatternKind::Variable(hidden);
+            let arguments = vec![Pattern { kind: variable, monotype: payload }];
+            let data = data.clone();
+            let kind = PatternKind::Constructor { data, constructor: index, arguments };
             let patterns = vec![Pattern { kind, monotype: variant }];
             let body = Guarded::Unconditional(expression);
             alternatives.push(Alternative { patterns, body, position: None });
         }
         Ok(alternatives)
-    }
-
-    fn case(
-        &mut self,
-        scrutinee: Expression,
-        mut alternatives: Vec<Alternative>,
-        result: MonotypeId,
-    ) -> Expression {
-        let scrutinees = vec![scrutinee];
-        if alternatives.is_empty() {
-            alternatives.push(Alternative::match_failure(&scrutinees, result));
-        }
-        Expression::new(ExpressionKind::Case { scrutinees, alternatives }, result)
     }
 
     fn apply_handler(
@@ -634,16 +616,13 @@ where
     }
 
     pub(super) fn note_variant_crossing(&mut self, source: &DataType, target: &DataType) {
-        let (Some(from), Some(to)) =
-            (self.monotypes.variant_row(source), self.monotypes.variant_row(target))
-        else {
-            return;
-        };
+        let rows = (self.monotypes.variant_row(source), self.monotypes.variant_row(target));
+        let (Some(from), Some(to)) = rows else { return };
         if from == to {
             return;
         }
         self.variant_crossings.push((from, to));
-        let labels = |this: &mut Self, data: &DataType| -> Vec<SmolStr> {
+        let labels = |this: &mut Specializer<'q, Q>, data: &DataType| -> Vec<SmolStr> {
             match this.monotypes.constructors(&mut this.context, data) {
                 Ok(constructors) => {
                     constructors.iter().map(|constructor| constructor.name.clone()).collect()
@@ -721,4 +700,16 @@ where
             _ => false,
         }
     }
+}
+
+fn case_expression(
+    scrutinee: Expression,
+    mut alternatives: Vec<Alternative>,
+    result: MonotypeId,
+) -> Expression {
+    let scrutinees = vec![scrutinee];
+    if alternatives.is_empty() {
+        alternatives.push(Alternative::match_failure(&scrutinees, result));
+    }
+    Expression::new(ExpressionKind::Case { scrutinees, alternatives }, result)
 }

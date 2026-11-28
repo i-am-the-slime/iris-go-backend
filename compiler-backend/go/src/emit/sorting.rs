@@ -200,9 +200,8 @@ where
         let [compare, from_ordering, array] = arguments else {
             unreachable!("invariant violated: sortBy has three arguments")
         };
-        let (Monotype::Array(element) | Monotype::MutableArray(element)) =
-            *self.monotypes.get(array.monotype)
-        else {
+        let array_type = self.monotypes.get(array.monotype);
+        let (Monotype::Array(element) | Monotype::MutableArray(element)) = *array_type else {
             unreachable!("invariant violated: sortBy sorts an array")
         };
         let element_type = self.go_type(element)?;
@@ -248,8 +247,8 @@ where
                 (left, right, call(compared, arguments))
             }
         };
-        let signs: Option<Vec<i64>> =
-            (0..3).map(|constructor| sign(from_ordering, constructor)).collect();
+        let signs = (0..3).map(|constructor| sign(from_ordering, constructor));
+        let signs: Option<Vec<i64>> = signs.collect();
         let decided = match (self.monotypes.get(ordering).clone(), signs) {
             (Monotype::Data(data), Some(signs)) => {
                 let mut cases = vec![];
@@ -314,8 +313,8 @@ where
         let right = self.value(right, body)?;
         let right = self.hoist(right, "key", body);
         if ordering.primitive == Primitive::String {
-            let compare =
-                self.go_function(GoFunction { package: GoPackage::Prim, name: "CompareString" });
+            let compare_string = GoFunction { package: GoPackage::Prim, name: "CompareString" };
+            let compare = self.go_function(compare_string);
             body.push(GoStatement::Return(Some(call(compare, vec![left, right]))));
             return Ok(());
         }
@@ -379,8 +378,8 @@ where
             return None;
         }
         let [first, second] = parameters.map(|parameter| parameter.id);
-        let (first, second) =
-            if free[0].contains(&second) { (second, first) } else { (first, second) };
+        let swapped = free[0].contains(&second);
+        let (first, second) = if swapped { (second, first) } else { (first, second) };
         if free[0].contains(&second) || free[1].contains(&first) {
             return None;
         }

@@ -30,18 +30,14 @@ use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOpe
 pub(super) type Structs = FxHashMap<String, Vec<(String, GoType)>>;
 
 pub(super) fn structs_of(declarations: &[GoDeclaration]) -> Structs {
-    declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            GoDeclaration::Type { name, type_: GoType::Struct(fields), .. }
-                if !fields.is_empty() =>
-            {
-                let fields = fields.iter().map(|field| (field.name.clone(), field.type_.clone()));
-                Some((name.clone(), fields.collect()))
-            }
-            _ => None,
-        })
-        .collect()
+    let structs = declarations.iter().filter_map(|declaration| match declaration {
+        GoDeclaration::Type { name, type_: GoType::Struct(fields), .. } if !fields.is_empty() => {
+            let fields = fields.iter().map(|field| (field.name.clone(), field.type_.clone()));
+            Some((name.clone(), fields.collect()))
+        }
+        _ => None,
+    });
+    structs.collect()
 }
 
 pub(super) fn split_struct_locals(declarations: &mut [GoDeclaration], structs: &Structs) {
@@ -119,8 +115,8 @@ fn apply(declaration: &mut GoDeclaration, split: &Split, names: &mut FxHashSet<S
         };
         body.splice(0..0, split.needed.iter().map(read));
     }
-    let types: FxHashMap<&str, &GoType> =
-        split.fields.iter().map(|(field, type_)| (locals[field].as_str(), type_)).collect();
+    let types = split.fields.iter().map(|(field, type_)| (locals[field].as_str(), type_));
+    let types: FxHashMap<&str, &GoType> = types.collect();
     go_traversal::each_block_in_declaration(declaration, |block| {
         for name in &introduced {
             define_at_first_write(block, name, types[name.as_str()]);
@@ -171,15 +167,14 @@ fn parts(value: &GoExpression, split: &Split) -> FxHashMap<String, GoExpression>
             .iter()
             .filter_map(|(field, value)| Some((field.clone()?, value.clone())))
             .collect(),
-        place => split
-            .fields
-            .iter()
-            .map(|(field, _)| {
-                let read =
-                    GoExpression::Field { value: Box::new(place.clone()), name: field.clone() };
+        place => {
+            let reads = split.fields.iter().map(|(field, _)| {
+                let value = Box::new(place.clone());
+                let read = GoExpression::Field { value, name: field.clone() };
                 (field.clone(), read)
-            })
-            .collect(),
+            });
+            reads.collect()
+        }
     }
 }
 
@@ -249,9 +244,8 @@ fn define_at_first_write(block: &mut Vec<GoStatement>, name: &str, type_: &GoTyp
         _ => false,
     };
     let Some(definition_at) = block.iter().position(defines) else { return };
-    let Some(offset) =
-        block[definition_at + 1..].iter_mut().position(|statement| mentions(statement, name))
-    else {
+    let mut later_statements = block[definition_at + 1..].iter_mut();
+    let Some(offset) = later_statements.position(|statement| mentions(statement, name)) else {
         return;
     };
     let write = definition_at + 1 + offset;
@@ -341,7 +335,7 @@ struct Census<'a> {
 }
 
 impl<'a> Census<'a> {
-    fn new(local: &'a str, fields: &'a [(String, GoType)], parameter: bool) -> Self {
+    fn new(local: &'a str, fields: &'a [(String, GoType)], parameter: bool) -> Census<'a> {
         Census {
             local,
             fields,
@@ -372,8 +366,8 @@ impl<'a> Census<'a> {
         let builds_unread = self.whole == 0
             && self.targets.is_empty()
             && self.defined_fields.iter().any(|field| !read(field));
-        let worthwhile =
-            if self.parameter { carried } else { self.written_in_loop || carried || builds_unread };
+        let worthwhile_local = self.written_in_loop || carried || builds_unread;
+        let worthwhile = if self.parameter { carried } else { worthwhile_local };
         if self.refused || !self.defined || !worthwhile {
             return None;
         }
@@ -440,8 +434,8 @@ impl Walk for Census<'_> {
                     self.refused = true;
                 }
                 if let Some(GoExpression::Composite { fields, .. }) = values.first() {
-                    self.defined_fields =
-                        fields.iter().filter_map(|(field, _)| field.clone()).collect();
+                    let defined_fields = fields.iter().filter_map(|(field, _)| field.clone());
+                    self.defined_fields = defined_fields.collect();
                 }
                 self.defined = true;
                 self.defined_at = self.depth;
@@ -574,7 +568,7 @@ struct Types<'s> {
 }
 
 impl<'s> Types<'s> {
-    fn of(declaration: &mut GoDeclaration, structs: &'s Structs) -> Self {
+    fn of(declaration: &mut GoDeclaration, structs: &'s Structs) -> Types<'s> {
         let mut types = Types {
             structs,
             values: FxHashMap::default(),
@@ -785,11 +779,10 @@ pub(super) fn store_fields_in_place(declarations: &mut [GoDeclaration], structs:
 
 fn stored_fields(statement: &GoStatement, structs: &Structs) -> Option<Vec<GoStatement>> {
     let GoStatement::Assign { targets, values } = statement else { return None };
-    let ([target @ GoExpression::Index { value: elements, index }], [composite]) =
-        (targets.as_slice(), values.as_slice())
-    else {
+    let [target @ GoExpression::Index { value: elements, index }] = targets.as_slice() else {
         return None;
     };
+    let [composite] = values.as_slice() else { return None };
     let GoExpression::Composite { type_: GoType::Named(type_name), fields } = composite else {
         return None;
     };
@@ -802,25 +795,21 @@ fn stored_fields(statement: &GoStatement, structs: &Structs) -> Option<Vec<GoSta
     {
         return None;
     }
-    let mentioned =
-        identifiers(&GoExpression::Index { value: elements.clone(), index: index.clone() });
+    let element = GoExpression::Index { value: elements.clone(), index: index.clone() };
+    let mentioned = identifiers(&element);
     let independent =
         |value: &GoExpression| is_pure(value) && identifiers(value).is_disjoint(&mentioned);
     if !fields.iter().all(|(_, value)| independent(value)) {
         return None;
     }
-    Some(
-        fields
-            .iter()
-            .map(|(field, value)| GoStatement::Assign {
-                targets: vec![GoExpression::Field {
-                    value: Box::new(target.clone()),
-                    name: field.clone().expect("a named field"),
-                }],
-                values: vec![value.clone()],
-            })
-            .collect(),
-    )
+    let assignments = fields.iter().map(|(field, value)| GoStatement::Assign {
+        targets: vec![GoExpression::Field {
+            value: Box::new(target.clone()),
+            name: field.clone().expect("a named field"),
+        }],
+        values: vec![value.clone()],
+    });
+    Some(assignments.collect())
 }
 
 fn identifiers(value: &GoExpression) -> FxHashSet<String> {

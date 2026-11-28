@@ -1,3 +1,4 @@
+use super::maybe::constructor_field;
 use super::operators::float_constant;
 use super::sorting::Placement;
 use super::{
@@ -5,7 +6,7 @@ use super::{
     mutable, unit_value,
 };
 use crate::error::{GoError, GoResult};
-use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, Operator};
+use crate::foreign::{Comparison, Foreign, GoFunction, Operator};
 use crate::monomorphic::{Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{
@@ -77,7 +78,7 @@ where
         let (result, body) = match position {
             Some(position) => {
                 let (_, field_monotype) = layout.constructors[index].fields[position];
-                let read = self.constructor_field(&layout, index, position, parameter);
+                let read = constructor_field(&layout, index, position, parameter);
                 (self.go_type(field_monotype)?, read)
             }
             None => {
@@ -187,8 +188,8 @@ where
             names: vec![name],
             values: vec![call(clone, vec![elements])],
         });
-        let element =
-            GoExpression::Index { value: Box::new(updated.clone()), index: Box::new(index) };
+        let index = Box::new(index);
+        let element = GoExpression::Index { value: Box::new(updated.clone()), index };
         out.push(GoStatement::Assign { targets: vec![element], values: vec![value] });
         updated
     }
@@ -210,8 +211,8 @@ where
             out.push(self.copy_once(&target, &copied));
             self.copied_flags.insert(copied);
         }
-        let element =
-            GoExpression::Index { value: Box::new(target.clone()), index: Box::new(index) };
+        let index = Box::new(index);
+        let element = GoExpression::Index { value: Box::new(target.clone()), index };
         out.push(GoStatement::Assign { targets: vec![element], values: vec![value] });
         target
     }
@@ -368,14 +369,10 @@ where
         for node in owned.iter().flatten() {
             self.owned_updates.remove(node);
         }
-        flags
-            .into_iter()
-            .filter(|flag| self.copied_flags.remove(flag))
-            .map(|flag| GoStatement::Define {
-                names: vec![flag],
-                values: vec![GoExpression::Boolean(false)],
-            })
-            .collect()
+        let flags = flags.into_iter().filter(|flag| self.copied_flags.remove(flag)).map(|flag| {
+            GoStatement::Define { names: vec![flag], values: vec![GoExpression::Boolean(false)] }
+        });
+        flags.collect()
     }
 
     fn int_from_number(
@@ -399,8 +396,8 @@ where
             return self.construct(&data, nothing, vec![]);
         }
         let number = self.hoist(number, "number", out);
-        let integer =
-            GoExpression::Conversion { type_: GoType::Int, value: Box::new(number.clone()) };
+        let value = Box::new(number.clone());
+        let integer = GoExpression::Conversion { type_: GoType::Int, value };
         let found = self.construct(&data, just, vec![integer])?;
         let missing = self.construct(&data, nothing, vec![])?;
         self.import(GoPackage::Math);
@@ -570,8 +567,8 @@ where
             return self.lazy_defer(&arguments[0], monotype);
         }
         if let Foreign::LazyForce = foreign {
-            if let ExpressionKind::Foreign { foreign: Foreign::LazyDefer, arguments: deferred } =
-                &arguments[0].kind
+            if let ExpressionKind::Foreign { foreign, arguments: deferred } = &arguments[0].kind
+                && let Foreign::LazyDefer = foreign
                 && let ExpressionKind::Lambda { parameters, body } = &deferred[0].kind
                 && let [parameter] = parameters.as_slice()
             {
@@ -636,8 +633,8 @@ where
         {
             return self.fused_length(&arguments[0], monotype, out);
         }
-        if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } =
-            *foreign
+        if let Foreign::Call { boundary, .. } = foreign
+            && let Some(iteration) = boundary.iteration
             && let Some(iterated) = self.iteration(iteration, arguments, monotype, out)?
         {
             return Ok(iterated);
@@ -798,11 +795,8 @@ fn dropped_from_end(arguments: &[Expression]) -> Option<i64> {
         } => measured,
         _ => return None,
     };
-    let [ExpressionKind::Local(measured)] =
-        measured.iter().map(|m| &m.kind).collect::<Vec<_>>()[..]
-    else {
-        return None;
-    };
+    let kinds = measured.iter().map(|m| &m.kind).collect::<Vec<_>>();
+    let [ExpressionKind::Local(measured)] = kinds[..] else { return None };
     (*measured == sliced && dropped >= 0).then_some(dropped)
 }
 

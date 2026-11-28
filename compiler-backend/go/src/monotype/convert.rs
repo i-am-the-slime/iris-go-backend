@@ -149,8 +149,8 @@ impl Monotypes {
                     };
                     if let Some(accumulator) = accumulator {
                         let (names, inner) = context.types.peel_quantifiers(type_id);
-                        let substitution: crate::types::Substitution =
-                            names.into_iter().map(|name| (name, accumulator)).collect();
+                        let substitution = names.into_iter().map(|name| (name, accumulator));
+                        let substitution: crate::types::Substitution = substitution.collect();
                         let inner = context.types.substitute(inner, &substitution);
                         return self.convert(context, inner, expansions);
                     }
@@ -165,8 +165,8 @@ impl Monotypes {
                     };
                     let (names, inner) = context.types.peel_quantifiers(type_id);
                     let erased = context.types.erased(erasure);
-                    let substitution: crate::types::Substitution =
-                        names.into_iter().map(|name| (name, erased)).collect();
+                    let substitution = names.into_iter().map(|name| (name, erased));
+                    let substitution: crate::types::Substitution = substitution.collect();
                     let inner = context.types.substitute(inner, &substitution);
                     return self.convert(context, inner, expansions);
                 }
@@ -313,20 +313,17 @@ impl Monotypes {
             ("Data.Functor.Variant", "VariantF" | "VariantFRep")
                 if arguments.iter().any(|&argument| context.types.erasure(argument).is_none()) =>
             {
-                let Some(representation) =
-                    module.indexed.items.iter_types().find_map(|(item, indexed)| {
-                        (indexed.name.as_deref() == Some("VariantFRep")).then_some(item)
-                    })
-                else {
+                let mut type_items = module.indexed.items.iter_types();
+                let Some(representation) = type_items.find_map(|(item, indexed)| {
+                    (indexed.name.as_deref() == Some("VariantFRep")).then_some(item)
+                }) else {
                     return Err(open_type(context, type_id)?);
                 };
                 let erased = context.types.erased(Erasure::VariantRow);
-                let representation =
-                    context.queries.intern_type(Type::Constructor(file_id, representation));
-                let representation =
-                    context.queries.intern_type(Type::Application(representation, erased));
-                let representation =
-                    context.queries.intern_type(Type::Application(representation, erased));
+                let intern = |type_| context.queries.intern_type(type_);
+                let representation = intern(Type::Constructor(file_id, representation));
+                let representation = intern(Type::Application(representation, erased));
+                let representation = intern(Type::Application(representation, erased));
                 return self.convert(context, representation, expansions);
             }
             // `Variant` is `foreign import data`, built and taken apart through
@@ -351,20 +348,17 @@ impl Monotypes {
                 let Some(internal) = context.queries.module_file("Data.Variant.Internal") else {
                     return Err(open_type(context, type_id)?);
                 };
-                let Some(representation) =
-                    context.module(internal)?.indexed.items.iter_types().find_map(
-                        |(item, indexed)| {
-                            (indexed.name.as_deref() == Some("VariantRep")).then_some(item)
-                        },
-                    )
-                else {
+                let internal_module = context.module(internal)?;
+                let mut type_items = internal_module.indexed.items.iter_types();
+                let Some(representation) = type_items.find_map(|(item, indexed)| {
+                    (indexed.name.as_deref() == Some("VariantRep")).then_some(item)
+                }) else {
                     return Err(open_type(context, type_id)?);
                 };
                 let erased = context.types.erased(Erasure::VariantRow);
-                let representation =
-                    context.queries.intern_type(Type::Constructor(internal, representation));
-                let representation =
-                    context.queries.intern_type(Type::Application(representation, erased));
+                let intern = |type_| context.queries.intern_type(type_);
+                let representation = intern(Type::Constructor(internal, representation));
+                let representation = intern(Type::Application(representation, erased));
                 return self.convert(context, representation, expansions);
             }
             ("Data.Exists", "Exists") => {
@@ -450,7 +444,7 @@ impl Monotypes {
                 Monotype::Reference(unary(self, context, arguments.get(1))?)
             }
             ("Data.HashMap", "HashMap") => {
-                self.hash_map(context, (file_id, item), &arguments, expansions)?
+                Monotypes::hash_map(context, (file_id, item), &arguments, expansions)?
             }
             _ => match &module.indexed.items[item].kind {
                 IndexedTypeItemKind::Newtype { constructors, .. } => {
@@ -473,9 +467,8 @@ impl Monotypes {
                     if self.expanding.contains(&type_id) {
                         return Ok(self.intern(Monotype::Erased(Erasure::NewtypeCycle)));
                     }
-                    let Some(underlying) =
-                        newtype_underlying(context, file_id, constructor, type_id)?
-                    else {
+                    let underlying = newtype_underlying(context, file_id, constructor, type_id)?;
+                    let Some(underlying) = underlying else {
                         return Err(open_type(context, type_id)?);
                     };
                     let owner = format!("{}.{name}", module.name);
@@ -615,11 +608,8 @@ impl Monotypes {
                 return Ok(None);
             };
             let module = context.module(file_id)?;
-            let IndexedTypeItemKind::Newtype { constructors, .. } =
-                &module.indexed.items[item].kind
-            else {
-                return Ok(None);
-            };
+            let kind = &module.indexed.items[item].kind;
+            let IndexedTypeItemKind::Newtype { constructors, .. } = kind else { return Ok(None) };
             let Some(&constructor) = constructors.first() else { return Ok(None) };
             if is_recursive_newtype(context, file_id, item)? {
                 return Ok(None);
@@ -667,7 +657,7 @@ impl Monotypes {
         {
             return Ok(());
         }
-        let probes = [context.types.erased(Erasure::RankN), self.probe_type(context)];
+        let probes = [context.types.erased(Erasure::RankN), probe_type(context)];
         let mut converted = Vec::with_capacity(probes.len());
         for probe in probes {
             let types: Vec<TypeId> = scheme.names.iter().map(|_| probe).collect();
@@ -697,15 +687,6 @@ impl Monotypes {
         } else {
             self.schemes.erase_key(key);
         }
-    }
-
-    /// A closed type no program value can be confused with, to test whether a
-    /// representation depends on a variable.
-    fn probe_type<Q>(&mut self, context: &mut Context<'_, Q>) -> TypeId
-    where
-        Q: checking::ExternalQueries,
-    {
-        context.types.probe()
     }
 
     fn convert_scheme<Q>(
@@ -760,9 +741,8 @@ impl Monotypes {
     /// data type `name`: the name capitalised, with `Type` added if one of the module's values
     /// takes that name.
     fn declared_go_type(&self, module: &crate::context::ModuleData, name: &str) -> Converted<()> {
-        let Some(source) =
-            self.foreign_sources.iter().find(|source| *source.module == *module.name)
-        else {
+        let mut sources = self.foreign_sources.iter();
+        let Some(source) = sources.find(|source| *source.module == *module.name) else {
             return Ok(());
         };
         let mut type_name = crate::naming::capitalise(name);
@@ -796,4 +776,13 @@ impl Monotypes {
             spellings.push(spelling);
         }
     }
+}
+
+/// A closed type no program value can be confused with, to test whether a
+/// representation depends on a variable.
+fn probe_type<Q>(context: &mut Context<'_, Q>) -> TypeId
+where
+    Q: checking::ExternalQueries,
+{
+    context.types.probe()
 }

@@ -172,12 +172,11 @@ where
         let loops = !function.parameters.is_empty()
             && has_tail_call(&function.body, id, function.parameters.len(), mode);
         let captured: Vec<usize> = if loops {
-            (0..function.parameters.len())
-                .filter(|&position| {
-                    let parameter = std::slice::from_ref(&function.parameters[position]);
-                    captures_parameters(&function.body, parameter, mode, self.monotypes)
-                })
-                .collect()
+            let captured = (0..function.parameters.len()).filter(|&position| {
+                let parameter = std::slice::from_ref(&function.parameters[position]);
+                captures_parameters(&function.body, parameter, mode, self.monotypes)
+            });
+            captured.collect()
         } else {
             vec![]
         };
@@ -212,13 +211,13 @@ where
         } else {
             vec![]
         };
-        let mut owned_nodes: Vec<*const Expression> =
-            owned.iter().flat_map(|(_, _, nodes)| nodes.iter().copied()).collect();
+        let owned_nodes = owned.iter().flat_map(|(_, _, nodes)| nodes.iter().copied());
+        let mut owned_nodes: Vec<*const Expression> = owned_nodes.collect();
         owned_nodes.extend(strings.into_iter().flat_map(|(_, nodes)| nodes));
         owned_nodes.extend(owned_parameters.iter().copied());
         self.owned_snocs.extend(owned_nodes.iter().copied());
-        let mut owned_places: Vec<Vec<*const Expression>> =
-            owned.iter().map(|(_, _, nodes)| nodes.clone()).collect();
+        let owned_places = owned.iter().map(|(_, _, nodes)| nodes.clone());
+        let mut owned_places: Vec<Vec<*const Expression>> = owned_places.collect();
         let flags = self.own_updates(&function.body, &owned_places);
         self.own_exclusive_updates(&function.body, &owned_parameters);
         owned_places.push(owned_parameters);
@@ -235,7 +234,7 @@ where
                     owned: self.local_name(format!("{parameter}Owned")),
                     spare: self.local_name(format!("{parameter}Spare")),
                 };
-                recycled_buffers.extend(Self::recycled_declarations(&recycled, type_));
+                recycled_buffers.extend(Emitter::<Q>::recycled_declarations(&recycled, type_));
                 for map in maps {
                     self.recycled_maps.insert(map, recycled.clone());
                 }
@@ -248,10 +247,10 @@ where
             excluded.extend(owned.iter().map(|(position, _, _)| *position));
             excluded.extend(recycled_positions);
             state = self.loop_state(id, function, mode, &parameters, &excluded);
-            let mut places: Vec<GoExpression> =
-                parameters.iter().map(|(name, _)| identifier_expression(name)).collect();
-            let mut reassigned: Vec<String> =
-                parameters.iter().map(|(name, _)| name.clone()).collect();
+            let places = parameters.iter().map(|(name, _)| identifier_expression(name));
+            let mut places: Vec<GoExpression> = places.collect();
+            let reassigned = parameters.iter().map(|(name, _)| name.clone());
+            let mut reassigned: Vec<String> = reassigned.collect();
             for (position, buffer) in &buffers {
                 places[*position] = identifier_expression(buffer);
                 reassigned[*position] = buffer.clone();
@@ -284,13 +283,11 @@ where
             }
             iteration_copies.append(&mut body);
             body = iteration_copies;
-            let mut clipped: Vec<GoStatement> = owned
-                .iter()
-                .map(|(position, place, _)| {
-                    let monotype = function.parameters[*position].monotype;
-                    self.clip(&parameters[*position].0, place, monotype)
-                })
-                .collect();
+            let clipped = owned.iter().map(|(position, place, _)| {
+                let monotype = function.parameters[*position].monotype;
+                self.clip(&parameters[*position].0, place, monotype)
+            });
+            let mut clipped: Vec<GoStatement> = clipped.collect();
             for (position, buffer) in &buffers {
                 let parameter = identifier_expression(&parameters[*position].0);
                 clipped.push(GoStatement::Define {
@@ -320,14 +317,12 @@ where
         position: usize,
     ) -> Vec<(ownership::Place, Vec<&'e Expression>)> {
         let parameter = &function.parameters[position];
-        self.carried_places(parameter.monotype)
-            .into_iter()
-            .filter_map(|place| {
-                let carried = ownership::Carried::updating(parameter.id, &place);
-                let nodes = ownership::owned_snocs(carried, &function.body)?;
-                (!nodes.is_empty()).then_some((place, nodes))
-            })
-            .collect()
+        let snocs = self.carried_places(parameter.monotype).into_iter().filter_map(|place| {
+            let carried = ownership::Carried::updating(parameter.id, &place);
+            let nodes = ownership::owned_snocs(carried, &function.body)?;
+            (!nodes.is_empty()).then_some((place, nodes))
+        });
+        snocs.collect()
     }
 
     pub(super) fn owning_variant_name(&mut self, id: FunctionId, position: usize) -> String {
@@ -352,8 +347,8 @@ where
         for (position, parameter) in function.parameters.iter().enumerate() {
             let tail_call = ownership::TailCall { function: id, arity, position };
             for place in self.carried_places(parameter.monotype) {
-                let carried =
-                    ownership::Carried::updating(parameter.id, &place).performed(performed);
+                let updating = ownership::Carried::updating(parameter.id, &place);
+                let carried = updating.performed(performed);
                 let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
                 else {
                     continue;
@@ -458,8 +453,8 @@ pub(super) fn recursive_constants(
     let recursive = on_cycles(&edges, &strongly_connected(&edges));
     let mut constants = FxHashSet::default();
     for (position, function) in program.functions.iter().enumerate() {
-        let constant =
-            function.parameters.is_empty() && monotypes.effect_result(function.result).is_none();
+        let pure = monotypes.effect_result(function.result).is_none();
+        let constant = function.parameters.is_empty() && pure;
         if recursive[position] && constant {
             constants.insert(FunctionId(position as u32));
         }

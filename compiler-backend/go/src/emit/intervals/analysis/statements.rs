@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 
 use super::loops::Header;
 use super::values::Computed;
-use super::{Analysis, Frame};
+use super::{Analysis, Frame, restrict};
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO, kind_of_type};
 use crate::emit::intervals::names::shape_of_type;
 use crate::emit::intervals::syntax::{is_bounds_test, is_test};
@@ -22,8 +22,8 @@ impl Analysis<'_, '_, '_> {
             }
             // A bounds test bound to a name is rewritten after it is interpreted, so that the
             // name stands for the test as written.
-            let before =
-                (self.rewriting() && is_bound_bounds_test(&body[position])).then(|| state.clone());
+            let rewrites_test = self.rewriting() && is_bound_bounds_test(&body[position]);
+            let before = rewrites_test.then(|| state.clone());
             let from = self.temporaries.len();
             self.statement(&mut body[position], state);
             self.forget_temporaries(state, from);
@@ -35,7 +35,7 @@ impl Analysis<'_, '_, '_> {
             position += 1;
         }
         self.scopes.pop();
-        self.restrict(state, watermark);
+        restrict(state, watermark);
     }
 
     fn statement(&mut self, statement: &mut GoStatement, state: &mut State) {
@@ -176,11 +176,11 @@ impl Analysis<'_, '_, '_> {
             }
             GoStatement::Counting { variable, start, end, body } => {
                 self.visit(start, state);
-                let typing =
-                    [&*start, &*end].into_iter().find_map(|value| match self.typing(value) {
-                        Some(Typing::Typed(kind)) => Some(kind),
-                        _ => None,
-                    });
+                let bounds = [&*start, &*end];
+                let typing = bounds.into_iter().find_map(|value| match self.typing(value) {
+                    Some(Typing::Typed(kind)) => Some(kind),
+                    _ => None,
+                });
                 let kind = typing.or(Some(Kind::Int));
                 let computed = self.computed(start, state);
                 self.scopes.push(FxHashMap::default());
@@ -236,9 +236,8 @@ impl Analysis<'_, '_, '_> {
             }
             GoStatement::BreakTo(label) => {
                 let state = std::mem::replace(state, State::unreachable());
-                if let Some(frame) =
-                    self.frames.iter_mut().rev().find(|frame| frame.label.as_ref() == Some(label))
-                {
+                let mut enclosing = self.frames.iter_mut().rev();
+                if let Some(frame) = enclosing.find(|frame| frame.label.as_ref() == Some(label)) {
                     frame.breaks = frame.breaks.join(&state);
                 }
             }
@@ -251,12 +250,12 @@ impl Analysis<'_, '_, '_> {
             return true;
         }
         if let GoStatement::Assign { targets, values } = statement
-            && let [GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. }] =
-                targets.as_slice()
+            && let [GoExpression::Unary { operator, .. }] = targets.as_slice()
+            && *operator == GoUnaryOperator::Dereference
         {
             // A store of the slice itself is interpreted by `assign`; its value may still call.
-            let mut values: Vec<GoStatement> =
-                values.iter().map(|value| GoStatement::Expression(value.clone())).collect();
+            let values = values.iter().map(|value| GoStatement::Expression(value.clone()));
+            let mut values: Vec<GoStatement> = values.collect();
             return self.keeping.keeps(&mut values);
         }
         self.keeping.keeps(std::slice::from_mut(statement))
@@ -319,13 +318,11 @@ impl Analysis<'_, '_, '_> {
             }
             return;
         }
-        let computed: Vec<Computed> = values
-            .iter()
-            .map(|value| {
-                let computed = self.computed(value, state);
-                self.hold(computed, state)
-            })
-            .collect();
+        let computed = values.iter().map(|value| {
+            let computed = self.computed(value, state);
+            self.hold(computed, state)
+        });
+        let computed: Vec<Computed> = computed.collect();
         let mut stored = vec![];
         for (target, computed) in targets.iter().zip(computed) {
             match target {

@@ -22,11 +22,11 @@ impl Rewrite<'_> {
             .collect();
         every_block(body, &mut |block| pass_split_once(block, &pairs));
         every_block(body, &mut |block| return_early(block, &self.failure_names));
-        let values: FxHashSet<String> =
-            self.splits.values().map(|split| split.value.clone()).collect();
+        let values = self.splits.values().map(|split| split.value.clone());
+        let values: FxHashSet<String> = values.collect();
         let adopted = adopt_copies(body, &values);
-        let mut split_names: FxHashSet<String> =
-            values.into_iter().map(|value| adopted.get(&value).cloned().unwrap_or(value)).collect();
+        let adopted_name = |value: String| adopted.get(&value).cloned().unwrap_or(value);
+        let mut split_names: FxHashSet<String> = values.into_iter().map(adopted_name).collect();
         split_names.extend(self.failure_names.iter().cloned());
         forward_moves(body, &split_names);
         split_names.extend(call_results(body));
@@ -164,8 +164,8 @@ fn forward_moves(body: &mut Vec<GoStatement>, names: &FxHashSet<String>) {
     every_block(body, &mut |block| {
         let mut index = 0;
         while index < block.len() {
-            let next =
-                (index + 1..block.len()).find(|&at| !matches!(block[at], GoStatement::Line(_)));
+            let is_statement = |&at: &usize| !matches!(block[at], GoStatement::Line(_));
+            let next = (index + 1..block.len()).find(is_statement);
             if let Some(next) = next
                 && let GoStatement::Define { names: defined, values: called } = &block[index]
                 && let [call] = called.as_slice()
@@ -249,8 +249,8 @@ fn adopt_copies(
     every_block(body, &mut |block| {
         block.retain(|statement| {
             if let GoStatement::Define { names, values: copied } = statement
-                && let ([copy], [GoExpression::Identifier(value)]) =
-                    (names.as_slice(), copied.as_slice())
+                && let [copy] = names.as_slice()
+                && let [GoExpression::Identifier(value)] = copied.as_slice()
                 && values.contains(value)
                 && uses.get(value) == Some(&1)
                 && binders.get(copy) == Some(&1)
@@ -436,8 +436,8 @@ fn captured(body: &mut [GoStatement]) -> FxHashSet<String> {
     impl Walk for Literals {
         fn expression(&mut self, value: &mut GoExpression) {
             if let GoExpression::Function { parameters, body, .. } = value {
-                let mut bound: FxHashSet<String> =
-                    parameters.iter().map(|(parameter, _)| parameter.clone()).collect();
+                let bound = parameters.iter().map(|(parameter, _)| parameter.clone());
+                let mut bound: FxHashSet<String> = bound.collect();
                 let mut referred = FxHashSet::default();
                 crate::syntax::statements_names(body, &mut |name| match name {
                     Name::Binder(name) => {

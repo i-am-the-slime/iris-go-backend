@@ -470,14 +470,11 @@ where
     }
 
     fn substitute_row(&self, type_id: TypeId, row: RowType, substitution: &Substitution) -> TypeId {
-        let mut fields: Vec<RowField> = row
-            .fields
-            .iter()
-            .map(|field| RowField {
-                label: field.label.clone(),
-                id: self.substitute_nodes(field.id, substitution),
-            })
-            .collect();
+        let fields = row.fields.iter().map(|field| RowField {
+            label: field.label.clone(),
+            id: self.substitute_nodes(field.id, substitution),
+        });
+        let mut fields: Vec<RowField> = fields.collect();
         let mut tail = row.tail.map(|tail| self.substitute_nodes(tail, substitution));
         if self.is_same_row(&row, &fields, tail) {
             return type_id;
@@ -655,11 +652,8 @@ where
                 self.match_type(pattern, spelled, variables, bindings)
             }
             (Type::Function(..), _) | (_, Type::Function(..)) => {
-                let (Some(pattern_parts), Some(target_parts)) =
-                    (self.function_parts(pattern), self.function_parts(target))
-                else {
-                    return false;
-                };
+                let parts = (self.function_parts(pattern), self.function_parts(target));
+                let (Some(pattern_parts), Some(target_parts)) = parts else { return false };
                 self.match_type(pattern_parts.0, target_parts.0, variables, bindings)
                     && self.match_type(pattern_parts.1, target_parts.1, variables, bindings)
             }
@@ -687,8 +681,8 @@ where
                 if !variables.contains(&bound) {
                     return self.match_type(*pattern_inner, *target_inner, variables, bindings);
                 }
-                let free: Vec<Name> =
-                    variables.iter().copied().filter(|&name| name != bound).collect();
+                let free = variables.iter().copied().filter(|&name| name != bound);
+                let free: Vec<Name> = free.collect();
                 self.match_type(*pattern_inner, *target_inner, &free, bindings)
             }
             _ => self.equivalent(pattern, target),

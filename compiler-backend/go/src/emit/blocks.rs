@@ -181,9 +181,8 @@ impl Function<'_> {
         };
         for (_, field) in fields {
             if cell_type(field).as_ref() == Some(type_) {
-                let GoExpression::Address(nested) =
-                    std::mem::replace(field, GoExpression::Integer(0))
-                else {
+                let cell = std::mem::replace(field, GoExpression::Integer(0));
+                let GoExpression::Address(nested) = cell else {
                     unreachable!("invariant violated: a cell is the address of a composite")
                 };
                 *field = GoExpression::Address(Box::new(element(slice, cells.len())));

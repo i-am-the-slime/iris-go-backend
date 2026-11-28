@@ -44,9 +44,8 @@ where
     let Some((argument, result)) = context.types.function_parts(body) else { return Ok(false) };
     let (argument_head, argument_arguments) = context.types.spine(argument);
     let (result_head, result_arguments) = context.types.spine(result);
-    let (Type::Rigid(argument_variable, ..), Type::Rigid(result_variable, ..)) =
-        (context.types.lookup(argument_head), context.types.lookup(result_head))
-    else {
+    let heads = (context.types.lookup(argument_head), context.types.lookup(result_head));
+    let (Type::Rigid(argument_variable, ..), Type::Rigid(result_variable, ..)) = heads else {
         return Ok(false);
     };
     let ([left], [right]) = (&argument_arguments[..], &result_arguments[..]) else {
@@ -68,9 +67,8 @@ fn apart<Q>(context: &mut Context<'_, Q>, left: TypeId, right: TypeId) -> bool
 where
     Q: checking::ExternalQueries,
 {
-    if let (Some((left_argument, left_result)), Some((right_argument, right_result))) =
-        (context.types.function_parts(left), context.types.function_parts(right))
-    {
+    let parts = (context.types.function_parts(left), context.types.function_parts(right));
+    if let (Some((left_argument, left_result)), Some((right_argument, right_result))) = parts {
         return apart(context, left_argument, right_argument)
             || apart(context, left_result, right_result);
     }
@@ -280,11 +278,11 @@ where
                 crate::primitives::known_type(&module.name, name)
                     == Some(crate::primitives::KnownType::SignedLong)
             });
+            let kind = &module.indexed.items[item].kind;
             if erase
                 && !signed_long
                 && !is_recursive_newtype(context, file_id, item)?
-                && let IndexedTypeItemKind::Newtype { constructors, .. } =
-                    &module.indexed.items[item].kind
+                && let IndexedTypeItemKind::Newtype { constructors, .. } = kind
                 && let Some(&constructor) = constructors.first()
                 && let Some(underlying) =
                     newtype_underlying(context, file_id, constructor, type_id)?

@@ -30,15 +30,14 @@ pub(super) fn promote_array_parameters(
         if !loops_without_defers(body) {
             continue;
         }
-        let mut uses = Uses { array: &array, escapes: false, dereferences: 0, writes: 0 };
+        let mut uses = Uses::new(&array);
         uses.block(body);
         if uses.escapes || uses.writes == 0 {
             continue;
         }
         let local = fresh(&array, &mut names);
         let original = body.clone();
-        let mut promotion =
-            Promotion { array: &array, local: &local, helpers, reaches_the_array: false };
+        let mut promotion = Promotion::new(&array, &local, helpers);
         promotion.rewrite(body);
         if promotion.reaches_the_array {
             *body = original;
@@ -48,8 +47,8 @@ pub(super) fn promote_array_parameters(
         if result.is_none() && falls_through {
             body.push(promotion.write_back());
         }
-        let read =
-            GoStatement::Define { names: vec![local.clone()], values: vec![dereference(&array)] };
+        let values = vec![dereference(&array)];
+        let read = GoStatement::Define { names: vec![local.clone()], values };
         body.insert(0, read);
     }
 }
@@ -61,9 +60,7 @@ fn promotable_parameter(declaration: &GoDeclaration) -> Option<String> {
     if arrays.next().is_some() {
         return None;
     }
-    let others_are_scalars =
-        parameters.iter().all(|(name, type_)| name == array || is_scalar(type_));
-    others_are_scalars.then(|| array.clone())
+    parameters.iter().all(|(name, type_)| name == array || is_scalar(type_)).then(|| array.clone())
 }
 
 fn is_array_cell(type_: &GoType) -> bool {
@@ -111,6 +108,12 @@ struct Uses<'a> {
     writes: usize,
 }
 
+impl<'a> Uses<'a> {
+    fn new(array: &'a str) -> Uses<'a> {
+        Uses { array, escapes: false, dereferences: 0, writes: 0 }
+    }
+}
+
 impl Walk for Uses<'_> {
     fn statement(&mut self, statement: &mut GoStatement) {
         if let GoStatement::Assign { targets, .. } = statement {
@@ -139,8 +142,7 @@ impl Walk for Uses<'_> {
             _ if is_dereference(value, self.array) => self.dereferences += 1,
             GoExpression::Identifier(name) if name == self.array => self.escapes = true,
             GoExpression::Function { .. } => {
-                let mut inner =
-                    Uses { array: self.array, escapes: false, dereferences: 0, writes: 0 };
+                let mut inner = Uses::new(self.array);
                 go_traversal::expression(&mut inner, value);
                 self.escapes |= inner.escapes || inner.dereferences > 0;
             }
@@ -156,7 +158,11 @@ struct Promotion<'a> {
     reaches_the_array: bool,
 }
 
-impl Promotion<'_> {
+impl<'a> Promotion<'a> {
+    fn new(array: &'a str, local: &'a str, helpers: &'a FxHashSet<String>) -> Promotion<'a> {
+        Promotion { array, local, helpers, reaches_the_array: false }
+    }
+
     fn write_back(&self) -> GoStatement {
         GoStatement::Assign {
             targets: vec![dereference(self.array)],

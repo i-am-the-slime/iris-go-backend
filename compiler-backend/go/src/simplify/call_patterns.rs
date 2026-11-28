@@ -32,8 +32,8 @@ impl Shape {
                 })
             }
             ExpressionKind::Record(fields) if !fields.is_empty() => {
-                let mut labels: Vec<(SmolStr, MonotypeId)> =
-                    fields.iter().map(|(label, value)| (label.clone(), value.monotype)).collect();
+                let labels = fields.iter().map(|(label, value)| (label.clone(), value.monotype));
+                let mut labels: Vec<(SmolStr, MonotypeId)> = labels.collect();
                 labels.sort_by(|(left, _), (right, _)| left.cmp(right));
                 Some(Shape::Record { labels })
             }
@@ -71,16 +71,16 @@ impl Shape {
                 .zip(kept)
                 .filter_map(|(argument, &kept)| kept.then_some(argument))
                 .collect(),
-            (Shape::Record { labels }, ExpressionKind::Record(mut fields)) => labels
-                .iter()
-                .map(|(label, _)| {
+            (Shape::Record { labels }, ExpressionKind::Record(mut fields)) => {
+                let values = labels.iter().map(|(label, _)| {
                     let position = fields
                         .iter()
                         .position(|(given, _)| given == label)
                         .expect("invariant violated: a matched record has every label");
                     fields.swap_remove(position).1
-                })
-                .collect(),
+                });
+                values.collect()
+            }
             _ => unreachable!("invariant violated: only a matched argument is taken apart"),
         }
     }
@@ -152,9 +152,8 @@ impl Simplifier<'_> {
                 })
         };
         loop {
-            let unused =
-                bindings.iter().position(|binding| !mentioned(binding.local.id, &bindings, &body));
-            let Some(unused) = unused else { break };
+            let unmentioned = |binding: &Binding| !mentioned(binding.local.id, &bindings, &body);
+            let Some(unused) = bindings.iter().position(unmentioned) else { break };
             bindings.remove(unused);
         }
         (bindings, body)
@@ -186,10 +185,10 @@ impl Simplifier<'_> {
                 if !worth_copying(lambda_body, parameter.id, Loop::Local(local), index) {
                     continue;
                 }
+                let monotype = parameter.monotype;
                 let shape = calls.iter().find_map(|arguments| {
                     let argument = &arguments[index];
-                    let typed =
-                        self.monotypes.same_without_causes(argument.monotype, parameter.monotype);
+                    let typed = self.monotypes.same_without_causes(argument.monotype, monotype);
                     let shape = typed.then(|| Shape::of(argument)).flatten()?;
                     if parameters.len() == 1 && shape.is_empty() {
                         return None;
@@ -303,16 +302,10 @@ impl Simplifier<'_> {
                 (locals, Expression::new(kind, parameter.monotype), name)
             }
             Shape::Record { labels } => {
-                let locals: Vec<Local> = labels
-                    .iter()
-                    .map(|(label, monotype)| {
-                        self.fresh(&Local {
-                            id: LocalId(0),
-                            name: label.clone(),
-                            monotype: *monotype,
-                        })
-                    })
-                    .collect();
+                let locals = labels.iter().map(|(label, monotype)| {
+                    self.fresh(&Local { id: LocalId(0), name: label.clone(), monotype: *monotype })
+                });
+                let locals: Vec<Local> = locals.collect();
                 let fields = labels
                     .iter()
                     .zip(&locals)
@@ -418,9 +411,8 @@ fn matched_names(body: &Expression, parameter: LocalId, shape: &Shape) -> Vec<Op
             return;
         };
         for alternative in alternatives {
-            let PatternKind::Constructor { constructor: matched, arguments, .. } =
-                &alternative.patterns[column].kind
-            else {
+            let kind = &alternative.patterns[column].kind;
+            let PatternKind::Constructor { constructor: matched, arguments, .. } = kind else {
                 continue;
             };
             if matched != constructor {
@@ -582,18 +574,16 @@ impl Simplifier<'_> {
         {
             return None;
         }
-        function.parameters.iter().zip(arguments).enumerate().find_map(
-            |(index, (parameter, argument))| {
-                let typed =
-                    self.monotypes.same_without_causes(argument.monotype, parameter.monotype);
-                let shape = typed.then(|| Shape::of(argument)).flatten()?;
-                if function.parameters.len() == 1 && shape.is_empty() {
-                    return None;
-                }
-                let loop_ = Loop::Function(callee);
-                worth_copying(&function.body, parameter.id, loop_, index).then_some((index, shape))
-            },
-        )
+        let mut parameters = function.parameters.iter().zip(arguments).enumerate();
+        parameters.find_map(|(index, (parameter, argument))| {
+            let typed = self.monotypes.same_without_causes(argument.monotype, parameter.monotype);
+            let shape = typed.then(|| Shape::of(argument)).flatten()?;
+            if function.parameters.len() == 1 && shape.is_empty() {
+                return None;
+            }
+            let loop_ = Loop::Function(callee);
+            worth_copying(&function.body, parameter.id, loop_, index).then_some((index, shape))
+        })
     }
 
     fn top_level_copy(&mut self, callee: FunctionId, index: usize, shape: Shape) -> TopLevelCopy {
@@ -680,10 +670,10 @@ impl Simplifier<'_> {
         for (field, kept) in (index..).zip(made.kept.iter_mut().filter(|kept| **kept)) {
             *kept = !unread.contains(&field);
         }
-        made.monotype =
-            function.parameters.iter().rev().fold(function.result, |result, parameter| {
-                self.monotypes.function(parameter.monotype, result)
-            });
+        let parameters = function.parameters.iter().rev();
+        made.monotype = parameters.fold(function.result, |result, parameter| {
+            self.monotypes.function(parameter.monotype, result)
+        });
         let entry = self
             .call_pattern_copies
             .made

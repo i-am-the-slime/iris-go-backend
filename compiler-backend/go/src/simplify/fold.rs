@@ -41,46 +41,6 @@ impl Simplifier<'_> {
         }
     }
 
-    /// A Long operation, worked out when its operands are constants, so that
-    /// a `let` of one inlines and the zero test of a constant divisor goes.
-    pub(super) fn int64_operation(
-        &mut self,
-        foreign: &'static Foreign,
-        arguments: Vec<Expression>,
-        monotype: MonotypeId,
-    ) -> Expression {
-        let Foreign::Int64 { operation, signedness } = *foreign else {
-            unreachable!("invariant violated: a Long operation is an Int64 foreign")
-        };
-        let operands: Option<Vec<i64>> = match (operation, arguments.as_slice()) {
-            // `fromInt_ i flag`'s flag is the signedness the foreign already has.
-            (Int64Operation::FromInt, [integer, flags @ ..]) => match integer.kind {
-                ExpressionKind::Literal(Literal::Int(value))
-                    if flags.iter().all(is_discardable) =>
-                {
-                    Some(vec![value])
-                }
-                _ => None,
-            },
-            _ => arguments.iter().map(long_constant).collect(),
-        };
-        let value = operands.and_then(|operands| operation.evaluate(signedness, &operands));
-        let kind = match value {
-            Some(Int64Value::Long(bits)) => {
-                let operation = Int64Operation::Constant(bits);
-                let foreign = Foreign::Int64 { operation, signedness }.interned();
-                ExpressionKind::Foreign { foreign, arguments: vec![] }
-            }
-            Some(Int64Value::Boolean(value)) => ExpressionKind::Literal(Literal::Boolean(value)),
-            Some(Int64Value::Int(value)) => ExpressionKind::Literal(Literal::Int(i64::from(value))),
-            Some(Int64Value::Number(value)) => {
-                ExpressionKind::Literal(Literal::Number(format!("{value:?}").into()))
-            }
-            None => ExpressionKind::Foreign { foreign, arguments },
-        };
-        Expression::new(kind, monotype)
-    }
-
     /// `if c then true else false` is `c`, and with the branches swapped it is
     /// `not c`; choices by comparisons of the same two values join where they
     /// choose the same, as `joined_comparisons` says.
@@ -293,6 +253,43 @@ impl Simplifier<'_> {
         let kind = ExpressionKind::Case { scrutinees: vec![chosen], alternatives };
         Some(self.expression(Expression::new(kind, monotype)))
     }
+}
+
+/// A Long operation, worked out when its operands are constants, so that
+/// a `let` of one inlines and the zero test of a constant divisor goes.
+pub(super) fn int64_operation(
+    foreign: &'static Foreign,
+    arguments: Vec<Expression>,
+    monotype: MonotypeId,
+) -> Expression {
+    let Foreign::Int64 { operation, signedness } = *foreign else {
+        unreachable!("invariant violated: a Long operation is an Int64 foreign")
+    };
+    let operands: Option<Vec<i64>> = match (operation, arguments.as_slice()) {
+        // `fromInt_ i flag`'s flag is the signedness the foreign already has.
+        (Int64Operation::FromInt, [integer, flags @ ..]) => match integer.kind {
+            ExpressionKind::Literal(Literal::Int(value)) if flags.iter().all(is_discardable) => {
+                Some(vec![value])
+            }
+            _ => None,
+        },
+        _ => arguments.iter().map(long_constant).collect(),
+    };
+    let value = operands.and_then(|operands| operation.evaluate(signedness, &operands));
+    let kind = match value {
+        Some(Int64Value::Long(bits)) => {
+            let operation = Int64Operation::Constant(bits);
+            let foreign = Foreign::Int64 { operation, signedness }.interned();
+            ExpressionKind::Foreign { foreign, arguments: vec![] }
+        }
+        Some(Int64Value::Boolean(value)) => ExpressionKind::Literal(Literal::Boolean(value)),
+        Some(Int64Value::Int(value)) => ExpressionKind::Literal(Literal::Int(i64::from(value))),
+        Some(Int64Value::Number(value)) => {
+            ExpressionKind::Literal(Literal::Number(format!("{value:?}").into()))
+        }
+        None => ExpressionKind::Foreign { foreign, arguments },
+    };
+    Expression::new(kind, monotype)
 }
 
 /// Addition and appending are associative, so literals that meet once

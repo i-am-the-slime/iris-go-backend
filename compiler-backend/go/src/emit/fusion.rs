@@ -233,7 +233,11 @@ impl Loop {
 
 impl<'e> Pipeline<'e> {
     /// The pipeline followed by a `concatMap` stage.
-    pub(super) fn then_bind(mut self, callback: Callback<'e>, produces: MonotypeId) -> Self {
+    pub(super) fn then_bind(
+        mut self,
+        callback: Callback<'e>,
+        produces: MonotypeId,
+    ) -> Pipeline<'e> {
         self.stages.push(Stage { kind: StageKind::Bind, callback, produces, state: None });
         self
     }
@@ -412,9 +416,8 @@ where
                 current = body;
                 continue;
             }
-            let Some(StageParts { kind, callback, inner, initial }) =
-                self.stage_parts(current, demand, positional)
-            else {
+            let parts = self.stage_parts(current, demand, positional);
+            let Some(StageParts { kind, callback, inner, initial }) = parts else {
                 break;
             };
             positional |= kind == StageKind::MapWithIndex;
@@ -479,8 +482,8 @@ where
                     GoExpression::Integer(count) => GoExpression::Integer(count.max(0)),
                     count if is_go_length(&count) => count,
                     count => {
-                        let count =
-                            builtin_call(GoBuiltin::Max, vec![count, GoExpression::Integer(0)]);
+                        let zero = GoExpression::Integer(0);
+                        let count = builtin_call(GoBuiltin::Max, vec![count, zero]);
                         self.hoist(count, "count", out)
                     }
                 };
@@ -571,8 +574,8 @@ where
             self.hoist(start, "first", out)
         };
         let end = self.value(last, out)?;
-        let range_steps =
-            self.go_function(GoFunction { package: GoPackage::Array, name: "RangeSteps" });
+        let function = GoFunction { package: GoPackage::Array, name: "RangeSteps" };
+        let range_steps = self.go_function(function);
         let step = if read { self.temporary("step") } else { "_".into() };
         let count = self.temporary("count");
         let steps = super::call(range_steps, vec![start.clone(), end]);
@@ -657,21 +660,20 @@ where
                     super::unit_value()
                 }
                 StageKind::Map | StageKind::MapWithIndex => {
+                    let callback = &stage.callback;
                     let mut arguments = vec![];
                     if stage.kind == StageKind::MapWithIndex {
                         let index = index.as_deref().unwrap_or("_");
-                        arguments.push(self.receive_index(&stage.callback, index, body.body()));
+                        arguments.push(self.receive_index(callback, index, body.body()));
                     }
                     let position = arguments.len();
-                    let argument =
-                        self.receive(flow, &stage.callback, position, true, body.body())?;
+                    let argument = self.receive(flow, callback, position, true, body.body())?;
                     arguments.push(argument);
                     if takes_expression(remaining.make_contiguous(), need) {
-                        self.callback_value(&stage.callback, arguments, body.body())?
+                        self.callback_value(callback, arguments, body.body())?
                     } else {
                         let name = self.element_name(remaining.make_contiguous(), 0, need);
                         let sink = Sink::Define(name.clone());
-                        let callback = &stage.callback;
                         self.apply_callback(
                             callback,
                             arguments,
@@ -683,11 +685,11 @@ where
                     }
                 }
                 StageKind::Filter => {
-                    let argument =
-                        self.receive(flow, &stage.callback, 0, !downstream, body.body())?;
-                    let condition =
-                        self.callback_value(&stage.callback, vec![argument.clone()], body.body())?;
-                    let line = match &stage.callback {
+                    let callback = &stage.callback;
+                    let argument = self.receive(flow, callback, 0, !downstream, body.body())?;
+                    let arguments = vec![argument.clone()];
+                    let condition = self.callback_value(callback, arguments, body.body())?;
+                    let line = match callback {
                         Callback::Inline { body, .. } => self.branch_line(body.position)?,
                         Callback::Direct { .. } => None,
                     };
@@ -696,8 +698,9 @@ where
                     argument
                 }
                 StageKind::Bind => {
-                    let argument = self.receive(flow, &stage.callback, 0, true, body.body())?;
-                    let source = match self.nested_pipeline(&stage.callback) {
+                    let callback = &stage.callback;
+                    let argument = self.receive(flow, callback, 0, true, body.body())?;
+                    let source = match self.nested_pipeline(callback) {
                         Some(inner) => {
                             let demand = Demand { nested: true, ..Demand::FORWARD };
                             let nested =
@@ -708,7 +711,7 @@ where
                             nested.source
                         }
                         None => {
-                            if let Callback::Inline { body: returned, .. } = &stage.callback
+                            if let Callback::Inline { body: returned, .. } = callback
                                 && let Some((bindings, single)) = singleton(returned)
                             {
                                 for bound in bindings {
@@ -717,8 +720,8 @@ where
                                 flow = self.value(single, body.body())?;
                                 continue;
                             }
-                            let produced =
-                                self.callback_value(&stage.callback, vec![argument], body.body())?;
+                            let arguments = vec![argument];
+                            let produced = self.callback_value(callback, arguments, body.body())?;
                             if remaining.is_empty() && matches!(need, Need::Value) {
                                 return Ok(Opened { body, element: produced, index, spread: true });
                             }
@@ -945,8 +948,8 @@ where
                             GoStatement::Define { names: vec![element], values: vec![indexed] },
                         );
                     }
-                    let last =
-                        binary(GoBinaryOperator::Subtract, length(array), GoExpression::Integer(1));
+                    let one = GoExpression::Integer(1);
+                    let last = binary(GoBinaryOperator::Subtract, length(array), one);
                     GoStatement::CountingDown { variable: index, start: last, body }
                 }
                 Header::Stepping { index, element, steps, order } => {
@@ -1123,14 +1126,16 @@ where
             return Ok(None);
         }
         let zipped = matches!(self.generated(array), Some(Generated::Zip { .. }));
-        if zipped
-            && let Some(vectorised) =
-                self.vectorised(Iteration::ZipWith, arguments, array.monotype, out)?
-        {
+        let vectorised = if zipped {
+            self.vectorised(Iteration::ZipWith, arguments, array.monotype, out)?
+        } else {
+            None
+        };
+        if let Some(vectorised) = vectorised {
             return Ok(Some(vectorised));
         }
-        let scanned =
-            foreign.calls(ARRAY_SCANL) && self.stage_parts(array, Demand::FORWARD, false).is_some();
+        let calls_scanl = foreign.calls(ARRAY_SCANL);
+        let scanned = calls_scanl && self.stage_parts(array, Demand::FORWARD, false).is_some();
         if zipped || scanned {
             let pipeline = self.pipeline(array, Demand::FORWARD, Need::Value, out)?;
             return self.materialized(pipeline, vec![], spare, array.monotype, out).map(Some);
@@ -1233,8 +1238,8 @@ where
                 } else {
                     opened.element
                 };
-                let appended =
-                    builtin_call(GoBuiltin::Append, vec![identifier_expression(&built), element]);
+                let arguments = vec![identifier_expression(&built), element];
+                let appended = builtin_call(GoBuiltin::Append, arguments);
                 GoStatement::Assign {
                     targets: vec![identifier_expression(&built)],
                     values: vec![appended],
@@ -1416,11 +1421,8 @@ fn literal_range(array: &Expression) -> Option<(i64, i64)> {
 }
 
 fn literal_bounds(first: &Expression, last: &Expression) -> Option<(i64, i64)> {
-    let (ExpressionKind::Literal(Literal::Int(first)), ExpressionKind::Literal(Literal::Int(last))) =
-        (&first.kind, &last.kind)
-    else {
-        return None;
-    };
+    let ExpressionKind::Literal(Literal::Int(first)) = &first.kind else { return None };
+    let ExpressionKind::Literal(Literal::Int(last)) = &last.kind else { return None };
     Some((*first, *last))
 }
 

@@ -1,6 +1,8 @@
 use crate::syntax::GoPackage;
 use smol_str::SmolStr;
 
+use super::coverage::{ColumnOutcome, column_outcomes};
+use super::fold::int64_operation;
 use super::{Simplifier, choice, three_way};
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::monomorphic::{
@@ -13,16 +15,15 @@ const PUSHED_CONTINUATION_SIZE: usize = 80;
 
 const VIEWING_CONTINUATION_SIZE: usize = 320;
 
-impl Simplifier<'_> {
+impl<'m> Simplifier<'m> {
     pub(super) fn foreign(
         &mut self,
         foreign: &'static Foreign,
         arguments: Vec<Expression>,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
-        if let Some(outside) =
-            choice::negative_within(foreign, &arguments, monotype, self.monotypes)
-        {
+        let outside = choice::negative_within(foreign, &arguments, monotype, self.monotypes);
+        if let Some(outside) = outside {
             return outside;
         }
         if let Some(elements) = choice::negative_update(foreign, &arguments) {
@@ -94,9 +95,9 @@ impl Simplifier<'_> {
                 Expression::new(ExpressionKind::EffectPure(Box::new(value)), monotype)
             }
             Foreign::EffectBind => {
-                let continuation =
-                    arguments.pop().expect("invariant violated: bind has two arguments");
-                let action = arguments.pop().expect("invariant violated: bind has two arguments");
+                let invariant = "invariant violated: bind has two arguments";
+                let continuation = arguments.pop().expect(invariant);
+                let action = arguments.pop().expect(invariant);
                 let (local, body) = self.open_continuation(continuation, action.monotype);
                 self.effect_bind(action, local, body, monotype)
             }
@@ -105,9 +106,9 @@ impl Simplifier<'_> {
             | Foreign::EffectTraverseArray
             | Foreign::EffectForArrayResults
             | Foreign::EffectTraverseArrayResults => {
-                let second =
-                    arguments.pop().expect("invariant violated: foreach has two arguments");
-                let first = arguments.pop().expect("invariant violated: foreach has two arguments");
+                let invariant = "invariant violated: foreach has two arguments";
+                let second = arguments.pop().expect(invariant);
+                let first = arguments.pop().expect(invariant);
                 let (array, function) = match foreign {
                     Foreign::EffectTraverseArray | Foreign::EffectTraverseArrayResults => {
                         (second, first)
@@ -140,8 +141,8 @@ impl Simplifier<'_> {
             Foreign::EffectMap => {
                 let action = arguments.pop().expect("invariant violated: map has two arguments");
                 let function = arguments.pop().expect("invariant violated: map has two arguments");
-                let value =
-                    self.monotypes.effect_result(action.monotype).unwrap_or(action.monotype);
+                let action_type = action.monotype;
+                let value = self.monotypes.effect_result(action_type).unwrap_or(action_type);
                 let (local, mapped) = self.open_function(function, value);
                 let body = Expression::new(ExpressionKind::EffectPure(Box::new(mapped)), monotype);
                 self.effect_bind(action, local, body, monotype)
@@ -166,7 +167,7 @@ impl Simplifier<'_> {
             }
             Foreign::Ordering => self.ordering(arguments, monotype),
             Foreign::Operator(_) => self.operator(foreign, arguments, monotype),
-            Foreign::Int64 { .. } => self.int64_operation(foreign, arguments, monotype),
+            Foreign::Int64 { .. } => int64_operation(foreign, arguments, monotype),
             foreign
                 if foreign.calls(crate::foreign::ARRAY_CONCAT)
                     && matches!(arguments[0].kind, ExpressionKind::Array(_)) =>
@@ -180,9 +181,9 @@ impl Simplifier<'_> {
                     && matches!(&arguments[0].kind, ExpressionKind::Foreign { foreign, .. }
                         if foreign.calls(crate::foreign::FROM_CHAR_ARRAY)) =>
             {
-                let ExpressionKind::Foreign { mut arguments, .. } =
-                    arguments.pop().expect("invariant violated: toCharArray has one argument").kind
-                else {
+                let invariant = "invariant violated: toCharArray has one argument";
+                let from_char_array = arguments.pop().expect(invariant);
+                let ExpressionKind::Foreign { mut arguments, .. } = from_char_array.kind else {
                     unreachable!("invariant violated: the argument was just matched as a foreign")
                 };
                 arguments.pop().expect("invariant violated: fromCharArray has one argument")
@@ -217,14 +218,14 @@ impl Simplifier<'_> {
     }
 
     fn sequential_apply(&mut self, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
-        let [functions, values]: [Expression; 2] =
-            arguments.try_into().expect("invariant violated: a parallel apply has two arguments");
-        let function_type =
-            self.monotypes.effect_result(functions.monotype).unwrap_or(functions.monotype);
+        let [functions, values] = <[Expression; 2]>::try_from(arguments)
+            .expect("invariant violated: a parallel apply has two arguments");
+        let effect_type = functions.monotype;
+        let function_type = self.monotypes.effect_result(effect_type).unwrap_or(effect_type);
         let value_type = self.monotypes.effect_result(values.monotype).unwrap_or(values.monotype);
         let result = self.monotypes.effect_result(monotype).unwrap_or(monotype);
-        let template =
-            Local { id: LocalId(0), name: SmolStr::new_static("f"), monotype: function_type };
+        let name = SmolStr::new_static("f");
+        let template = Local { id: LocalId(0), name, monotype: function_type };
         let function = self.fresh(&template);
         let template = Local {
             id: LocalId(0),
@@ -249,8 +250,8 @@ impl Simplifier<'_> {
     }
 
     fn ordering(&mut self, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
-        let [less, equal, greater, left, right]: [Expression; 5] =
-            arguments.try_into().expect("invariant violated: ordering has five arguments");
+        let [less, equal, greater, left, right] = <[Expression; 5]>::try_from(arguments)
+            .expect("invariant violated: ordering has five arguments");
         let mut bindings = vec![];
         let left = self.shared_operand(left, "compared", &mut bindings);
         let right = self.shared_operand(right, "compared", &mut bindings);
@@ -288,8 +289,8 @@ impl Simplifier<'_> {
         if is_trivial(&operand) {
             return operand;
         }
-        let template =
-            Local { id: LocalId(0), name: SmolStr::new_static(name), monotype: operand.monotype };
+        let monotype = operand.monotype;
+        let template = Local { id: LocalId(0), name: SmolStr::new_static(name), monotype };
         let local = self.fresh(&template);
         let reference = local.expression();
         bindings.push(Binding { local, value: operand });
@@ -367,8 +368,8 @@ impl Simplifier<'_> {
                     && builds_safely(&body)
                     && !self.defers_work(&local, &body) =>
             {
-                let value_monotype =
-                    self.monotypes.effect_result(action.monotype).unwrap_or(local.monotype);
+                let produced = self.monotypes.effect_result(action.monotype);
+                let value_monotype = produced.unwrap_or(local.monotype);
                 let value = self.map_choices(action, value_monotype, &mut |_, chosen| {
                     let ExpressionKind::EffectPure(value) = chosen.kind else {
                         unreachable!("invariant violated: every choice was checked to be pure")
@@ -381,9 +382,8 @@ impl Simplifier<'_> {
                 if PushedContinuation::measure(&action, &body, local.id)
                     .is_some_and(|pushed| pushed.fits()) =>
             {
+                let copied = (local.clone(), body.clone());
                 let mut original = Some((local, body));
-                let copied =
-                    original.clone().expect("invariant violated: the continuation is there");
                 self.push_into_choices(action, monotype, &mut |simplifier, chosen| {
                     let (local, body) = match original.take() {
                         Some(kept) => kept,
@@ -416,7 +416,7 @@ impl Simplifier<'_> {
         &mut self,
         expression: Expression,
         monotype: MonotypeId,
-        chosen: &mut impl FnMut(&mut Self, Expression) -> Expression,
+        chosen: &mut impl FnMut(&mut Simplifier<'m>, Expression) -> Expression,
     ) -> Expression {
         match expression.kind {
             ExpressionKind::Let { bindings, body } => {
@@ -638,11 +638,10 @@ impl<'e> PushedContinuation<'e> {
         match &expression.kind {
             ExpressionKind::EffectPure(value) if !returned => self.choice(value, true)?,
             ExpressionKind::Construct { .. } if returned => {
-                let outcomes =
-                    super::coverage::column_outcomes(expression, self.alternatives, self.column)?;
-                let chosen = outcomes.iter().position(|outcome| {
-                    matches!(outcome, super::coverage::ColumnOutcome::Matches)
-                })?;
+                let outcomes = column_outcomes(expression, self.alternatives, self.column)?;
+                let chosen = outcomes
+                    .iter()
+                    .position(|outcome| matches!(outcome, ColumnOutcome::Matches))?;
                 self.constructions += 1;
                 self.viewed |= self.builds_view(expression);
                 self.copies

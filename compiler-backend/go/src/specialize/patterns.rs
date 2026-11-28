@@ -11,6 +11,8 @@ use checking::core::Type;
 use checking::{TypeId, tree};
 use smol_str::{SmolStr, format_smolstr};
 
+use super::equations::unwrap_typed;
+use super::instantiation::checked_binder_source;
 use super::{LocalSource, Scope, Specializer, string_literal};
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::monomorphic::{
@@ -209,8 +211,8 @@ where
     }
 
     fn pattern_error(&mut self, state: UnsupportedState) -> GoError {
-        let definition =
-            self.current.map(|id| self.function_keys[id.0 as usize].definition.clone());
+        let current_key = self.current.map(|id| &self.function_keys[id.0 as usize]);
+        let definition = current_key.map(|key| key.definition.clone());
         let definition = match definition.map(|definition| self.describe_definition(definition)) {
             Some(Ok(definition)) => definition,
             Some(Err(error)) => return error,
@@ -247,7 +249,7 @@ where
         let kind = match &binder.kind {
             tree::BinderKind::Typed { binder, .. } => return self.pattern(scope, *binder),
             tree::BinderKind::Error => {
-                return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                return Err(scope.unsupported(UnsupportedState::BinderError));
             }
             tree::BinderKind::Integer { value } => {
                 PatternKind::Literal(Literal::Int(i64::from(*value)))
@@ -259,14 +261,14 @@ where
             tree::BinderKind::Variable => {
                 let name = self.binder_name(scope, binder_id);
                 let local = self.fresh_local(name, monotype);
-                let source = self.checked_binder_source(scope, binder_id);
+                let source = checked_binder_source(scope, binder_id);
                 scope.locals.insert(source, local.clone());
                 self.register_scheme_local(scope, source, binder.type_id)?;
                 PatternKind::Variable(local)
             }
             tree::BinderKind::Named { name, binder: inner } => {
                 let local = self.fresh_local(name.clone(), monotype);
-                let source = self.checked_binder_source(scope, binder_id);
+                let source = checked_binder_source(scope, binder_id);
                 scope.locals.insert(source, local.clone());
                 self.register_scheme_local(scope, source, binder.type_id)?;
                 let pattern = self.pattern(scope, *inner)?;
@@ -291,8 +293,8 @@ where
                             patterns.push((label.clone(), self.pattern(scope, *binder)?));
                         }
                         tree::RecordBinderField::Pun { label } => {
-                            let Some(pun) = self.record_pun_source(scope, binder_id, label) else {
-                                return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                            let Some(pun) = record_pun_source(scope, binder_id, label) else {
+                                return Err(scope.unsupported(UnsupportedState::BinderError));
                             };
                             let field_monotype = self.field_monotype(scope, monotype, label)?;
                             let local = self.fresh_local(label.clone(), field_monotype);
@@ -315,7 +317,7 @@ where
             tree::BinderKind::Constructor { resolution, arguments } => {
                 if self.is_newtype_constructor(*resolution)? {
                     let [argument] = arguments.as_ref() else {
-                        return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                        return Err(scope.unsupported(UnsupportedState::BinderError));
                     };
                     let mut pattern = self.pattern(scope, *argument)?;
                     if let Monotype::Recursive(data) = self.monotypes.get(monotype).clone() {
@@ -339,7 +341,7 @@ where
                     return Ok(pattern);
                 }
                 let Monotype::Data(data) = self.monotypes.get(monotype).clone() else {
-                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                    return Err(scope.unsupported(UnsupportedState::BinderError));
                 };
                 let constructors = self
                     .monotypes
@@ -349,7 +351,7 @@ where
                     .iter()
                     .position(|constructor| constructor.term == Some(resolution.1))
                 else {
-                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                    return Err(scope.unsupported(UnsupportedState::BinderError));
                 };
                 let mut patterns = Vec::with_capacity(arguments.len());
                 for &argument in arguments.iter() {
@@ -368,8 +370,8 @@ where
         pattern: &mut Pattern,
         monotype: MonotypeId,
     ) {
-        let (binder, _) = self.unwrap_typed(scope, binder);
-        let source = self.checked_binder_source(scope, binder);
+        let (binder, _) = unwrap_typed(scope, binder);
+        let source = checked_binder_source(scope, binder);
         if let PatternKind::Variable(local) | PatternKind::Named { local, .. } = &mut pattern.kind {
             local.monotype = monotype;
             scope.locals.insert(source, local.clone());
@@ -425,26 +427,22 @@ where
             _ => SmolStr::new_static(crate::naming::VALUE),
         }
     }
+}
 
-    fn record_pun_source(
-        &self,
-        scope: &Scope,
-        binder_id: tree::BinderId,
-        label: &str,
-    ) -> Option<lowering::RecordPunId> {
-        let tree::BinderSource::Binder(source) = scope.module.checked.tree[binder_id].source else {
+fn record_pun_source(
+    scope: &Scope,
+    binder_id: tree::BinderId,
+    label: &str,
+) -> Option<lowering::RecordPunId> {
+    let tree::BinderSource::Binder(source) = scope.module.checked.tree[binder_id].source else {
+        return None;
+    };
+    let binder_kind = scope.module.lowered.tree.get_binder_kind(source)?;
+    let lowering::BinderKind::Record { record } = binder_kind else { return None };
+    record.iter().find_map(|field| {
+        let lowering::BinderRecordItem::RecordPun { id, name } = field else {
             return None;
         };
-        let lowering::BinderKind::Record { record } =
-            scope.module.lowered.tree.get_binder_kind(source)?
-        else {
-            return None;
-        };
-        record.iter().find_map(|field| {
-            let lowering::BinderRecordItem::RecordPun { id, name } = field else {
-                return None;
-            };
-            name.as_deref().filter(|name| *name == label).map(|_| *id)
-        })
-    }
+        name.as_deref().filter(|name| *name == label).map(|_| *id)
+    })
 }

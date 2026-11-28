@@ -128,7 +128,7 @@ where
         let Type::Application(function, argument) = self.types.lookup(type_id).clone() else {
             return Ok(None);
         };
-        let named = |context: &mut Self, type_id| -> QueryResult<Option<KnownType>> {
+        let named = |context: &mut Context<'q, Q>, type_id| -> QueryResult<Option<KnownType>> {
             let type_id = context.types.strip_annotations(type_id);
             let Type::Constructor(file_id, item) = context.types.lookup(type_id).clone() else {
                 return Ok(None);

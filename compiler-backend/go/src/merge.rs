@@ -30,22 +30,19 @@ pub fn merge_identical_functions(
     kept: &crate::maps::KeptOperations,
 ) -> Program {
     let Program { mut functions, entry } = program;
-    let collapsed: FxHashMap<MonotypeId, MonotypeId> =
-        monotypes.ids().map(|monotype| (monotype, monotypes.without_causes(monotype))).collect();
+    let collapsed = monotypes.ids().map(|monotype| (monotype, monotypes.without_causes(monotype)));
+    let collapsed: FxHashMap<MonotypeId, MonotypeId> = collapsed.collect();
     let mut callers = callers(&functions);
     // The origins of the functions each function stands for.
-    let mut origins: Vec<Vec<Option<FileId>>> =
-        functions.iter().map(|function| vec![function.origin]).collect();
-    let mut shapes: Vec<Option<HashedShape>> = functions
-        .iter()
-        .enumerate()
-        .map(|(index, function)| {
-            let id = FunctionId(index as u32);
-            let mergeable =
-                id != entry && !function.parameters.is_empty() && !kept.keeps(&function.name);
-            mergeable.then(|| HashedShape::of(function, id, &collapsed))
-        })
-        .collect();
+    let origins = functions.iter().map(|function| vec![function.origin]);
+    let mut origins: Vec<Vec<Option<FileId>>> = origins.collect();
+    let shapes = functions.iter().enumerate().map(|(index, function)| {
+        let id = FunctionId(index as u32);
+        let has_parameters = !function.parameters.is_empty();
+        let mergeable = id != entry && has_parameters && !kept.keeps(&function.name);
+        mergeable.then(|| HashedShape::of(function, id, &collapsed))
+    });
+    let mut shapes: Vec<Option<HashedShape>> = shapes.collect();
     loop {
         let redirections = redirections(&shapes);
         if redirections.is_empty() {
@@ -78,8 +75,8 @@ pub fn merge_identical_functions(
 
 /// The origin of a function that stands for functions of these origins.
 fn common_origin(origins: &[Option<FileId>], modules: &Modules) -> Option<FileId> {
-    let homes: Vec<Option<_>> =
-        origins.iter().map(|origin| origin.and_then(|file| modules.index(file))).collect();
+    let homes = origins.iter().map(|origin| origin.and_then(|file| modules.index(file)));
+    let homes: Vec<Option<_>> = homes.collect();
     modules.common_home(&homes).map(|home| modules.file(home))
 }
 

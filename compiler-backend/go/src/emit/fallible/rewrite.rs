@@ -135,8 +135,8 @@ impl<'r> Rewrite<'r> {
         }
         loop {
             let read = reads(body, &names);
-            let unread: FxHashSet<String> =
-                names.iter().filter(|name| !read.contains_key(*name)).cloned().collect();
+            let unread = names.iter().filter(|name| !read.contains_key(*name)).cloned();
+            let unread: FxHashSet<String> = unread.collect();
             let mut dropped = false;
             every_block(body, &mut |block| {
                 block.retain(|statement| match statement {
@@ -222,8 +222,8 @@ impl<'r> Rewrite<'r> {
             survey.candidates.insert(parameter.clone(), Candidate::parameter(shape));
         }
         survey.block(body, own);
-        let mut chosen: Vec<(String, Candidate)> =
-            survey.candidates.into_iter().filter(|(_, candidate)| candidate.splits()).collect();
+        let chosen = survey.candidates.into_iter().filter(|(_, candidate)| candidate.splits());
+        let mut chosen: Vec<(String, Candidate)> = chosen.collect();
         chosen.sort_by(|left, right| left.0.cmp(&right.0));
         for (local, candidate) in chosen {
             let shape = &self.shapes[&candidate.shape];

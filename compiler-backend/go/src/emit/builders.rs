@@ -103,11 +103,10 @@ struct Builder {
 
 impl Builder {
     fn of(declaration: &GoDeclaration) -> Option<Builder> {
-        let GoDeclaration::Function { name, parameters, result: Some(GoType::Pointer(cell)), body } =
-            declaration
-        else {
+        let GoDeclaration::Function { name, parameters, result, body } = declaration else {
             return None;
         };
+        let Some(GoType::Pointer(cell)) = result else { return None };
         let GoType::Named(cell) = cell.as_ref() else { return None };
         if parameters.iter().any(|(_, type_)| might_hold_cells(type_)) {
             return None;
@@ -233,8 +232,8 @@ fn wrapper_body(
     worker: &str,
     chunk: &str,
 ) -> Vec<GoStatement> {
-    let mut arguments: Vec<GoExpression> =
-        parameters.iter().map(|(name, _)| GoExpression::Identifier(name.clone())).collect();
+    let arguments = parameters.iter().map(|(name, _)| GoExpression::Identifier(name.clone()));
+    let mut arguments: Vec<GoExpression> = arguments.collect();
     arguments.push(GoExpression::Address(Box::new(GoExpression::Identifier(chunk.into()))));
     vec![
         GoStatement::Variable { name: chunk.into(), type_: builder.chunk_type(), value: None },

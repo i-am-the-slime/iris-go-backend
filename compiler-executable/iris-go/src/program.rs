@@ -121,8 +121,8 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
     let profiled_status = match config.profile {
         Some(arguments) => {
             let arguments = if arguments.is_empty() { &execution.exec_args } else { &arguments };
-            let run =
-                ProfiledRun { module: &module, cache: &cache, arguments, root: &workspace.root };
+            let root = &workspace.root;
+            let run = ProfiledRun { module: &module, cache: &cache, arguments, root };
             Some(record_profile(run, &recorded_profile)?)
         }
         None => None,
@@ -313,8 +313,8 @@ fn clear_generated(module: &Path) -> Result<(), String> {
         if path.file_name().is_some_and(|name| name == "go.sum") {
             continue;
         }
-        let removed =
-            if path.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
+        let is_directory = path.is_dir();
+        let removed = if is_directory { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
         removed.map_err(|error| format!("could not remove {}: {error}", path.display()))?;
     }
     Ok(())

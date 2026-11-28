@@ -410,12 +410,12 @@ impl Walk {
             let clashes = |candidate: &str| {
                 GO_PREDECLARED.contains(&candidate)
                     || self.free.get(candidate).is_some_and(|scopes| {
-                        scopes.iter().any(|&other| self.within(self.scopes[other], scope))
+                        scopes.iter().any(|&other| within(self.scopes[other], scope))
                     })
                     || by_name.get(candidate).is_some_and(|scopes| {
                         scopes.iter().any(|&other| {
                             let other = self.scopes[other];
-                            self.within(other, scope) || self.within(scope, other)
+                            within(other, scope) || within(scope, other)
                         })
                     })
             };
@@ -430,11 +430,11 @@ impl Walk {
         }
         names.into_iter().map(|name| name.unwrap_or_default()).collect()
     }
+}
 
-    /// Whether `inner` lies within `outer` or is it.
-    fn within(&self, inner: Scope, outer: Scope) -> bool {
-        outer.enter <= inner.enter && inner.exit <= outer.exit
-    }
+/// Whether `inner` lies within `outer` or is it.
+fn within(inner: Scope, outer: Scope) -> bool {
+    outer.enter <= inner.enter && inner.exit <= outer.exit
 }
 
 struct Apply<'a> {
@@ -553,7 +553,7 @@ where
             Some(stem) if IMPORTED_PACKAGES.contains(&stem) => (stem.to_string(), true),
             _ => (base, soft),
         };
-        let taken = |emitter: &Self, candidate: &String| {
+        let taken = |emitter: &Emitter<'_, '_, 'q, Q>, candidate: &String| {
             emitter.local_names.contains(candidate)
                 || emitter.global_names.contains(candidate)
                 || (soft && IMPORTED_PACKAGES.contains(&candidate.as_str()))

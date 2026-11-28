@@ -84,8 +84,8 @@ where
         let field = constructors[index].fields[0];
         let parameter = self.fresh_local(self.monotypes.value_name(payload), payload);
         let argument = self.coerce(parameter.expression(), field);
-        let kind =
-            ExpressionKind::Construct { data, constructor: index, arguments: vec![argument] };
+        let arguments = vec![argument];
+        let kind = ExpressionKind::Construct { data, constructor: index, arguments };
         let body = Expression::new(kind, existential);
         Ok(Some(self.lambda(vec![parameter], body)))
     }
@@ -149,13 +149,13 @@ where
             let function = ExpressionKind::Access { record: Box::new(handler.expression()), label };
             let function = Expression::new(function, field.monotype);
             let argument = self.coerce(hidden.expression(), parameter);
-            let kind =
-                ExpressionKind::Apply { function: Box::new(function), arguments: vec![argument] };
+            let arguments = vec![argument];
+            let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
             let applied = self.coerce(Expression::new(kind, answer), result);
-            let arguments =
-                vec![Pattern { kind: PatternKind::Variable(hidden), monotype: payload }];
-            let pattern =
-                PatternKind::Constructor { data: data.clone(), constructor: index, arguments };
+            let variable = PatternKind::Variable(hidden);
+            let arguments = vec![Pattern { kind: variable, monotype: payload }];
+            let data = data.clone();
+            let pattern = PatternKind::Constructor { data, constructor: index, arguments };
             let patterns = vec![Pattern { kind: pattern, monotype: existential }];
             let body = Guarded::Unconditional(applied);
             alternatives.push(Alternative { patterns, body, position: None });
@@ -232,8 +232,8 @@ where
         let labels: Vec<SmolStr> = witnesses.iter().map(|known| known.label.clone()).collect();
         let index = labels.len();
         let label = self.fresh_instantiation_label(&[witness], &labels)?;
-        let instantiation =
-            SchemeInstantiation { types: Arc::from([witness]), dictionaries: Arc::from([]), label };
+        let types = Arc::from([witness]);
+        let instantiation = SchemeInstantiation { types, dictionaries: Arc::from([]), label };
         self.monotypes.schemes.add_witness(family, instantiation);
         self.grown = true;
         for key in self.monotypes.schemes.continuations(family).to_vec() {
@@ -293,10 +293,9 @@ where
         if self.grown {
             return Ok(Some(self.pending(monotype)));
         }
-        Err(self.unsupported(
-            scope,
-            UnsupportedState::Construct { construct: "runExists without its continuations" },
-        ))
+        Err(scope.unsupported(UnsupportedState::Construct {
+            construct: "runExists without its continuations",
+        }))
     }
 
     pub(super) fn note_crossings(&mut self, from: MonotypeId, to: MonotypeId) {
@@ -316,9 +315,9 @@ where
                 self.note_variant_narrowing(&target);
             }
             (Monotype::Data(source), Monotype::Data(target)) => {
-                let families =
-                    (self.monotypes.exists_family(&source), self.monotypes.exists_family(&target));
-                match families {
+                let source_family = self.monotypes.exists_family(&source);
+                let target_family = self.monotypes.exists_family(&target);
+                match (source_family, target_family) {
                     (None, None)
                         if (source.file_id, source.item) == (target.file_id, target.item) =>
                     {

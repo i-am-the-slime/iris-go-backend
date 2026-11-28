@@ -199,6 +199,10 @@ impl Scope {
             definition: &self.definition,
         }
     }
+
+    fn unsupported(&self, state: UnsupportedState) -> GoError {
+        GoError::Unsupported { definition: self.definition.clone(), state }
+    }
 }
 
 pub struct Specializer<'q, Q> {
@@ -536,8 +540,8 @@ where
             function.expect("invariant violated: requested specialization was never produced")
         });
         let mut functions: Vec<Function> = functions.collect();
-        let signatures: Vec<MonotypeId> =
-            functions.iter().map(|function| self.signature(function)).collect();
+        let signatures = functions.iter().map(|function| self.signature(function));
+        let signatures: Vec<MonotypeId> = signatures.collect();
         for function in &mut functions {
             self.reconcile_references(&mut function.body, &signatures);
         }
@@ -629,8 +633,8 @@ where
     }
 
     fn types_without_causes(&self, types: &Arc<[TypeId]>) -> Arc<[TypeId]> {
-        let collapsed: Vec<TypeId> =
-            types.iter().map(|&type_id| self.context.types.without_causes(type_id)).collect();
+        let collapsed = types.iter().map(|&type_id| self.context.types.without_causes(type_id));
+        let collapsed: Vec<TypeId> = collapsed.collect();
         if collapsed[..] == types[..] { Arc::clone(types) } else { Arc::from(collapsed) }
     }
 
@@ -646,8 +650,10 @@ where
             Definition::Value { file_id, term } => {
                 let module = self.context.module(*file_id)?;
                 let definition = self.context.qualified_term_name(*file_id, *term)?;
-                let unsupported =
-                    |state| GoError::Unsupported { definition: definition.clone(), state };
+                let unsupported = |state| {
+                    let definition = definition.clone();
+                    GoError::Unsupported { definition, state }
+                };
                 let declaration = module
                     .checked
                     .tree
@@ -658,20 +664,21 @@ where
                     return Err(unsupported(UnsupportedState::MissingDeclaration));
                 };
                 let value = (Arc::clone(&value.abstractions), Arc::clone(&value.equations));
-                let scope =
-                    Scope::new(&module, Substitution::default(), FxHashMap::default(), definition);
+                let givens = FxHashMap::default();
+                let scope = Scope::new(&module, Substitution::default(), givens, definition);
                 (scope, value)
             }
             Definition::Member { dictionary, member } => {
                 let (module, declaration) = self.instance_declaration(dictionary.origin)?;
                 let member_name = self.context.qualified_term_name(member.0, member.1)?;
-                let definition =
-                    format!("{member_name} of {}", self.instance_name(dictionary.origin)?);
-                let unsupported =
-                    |state| GoError::Unsupported { definition: definition.clone(), state };
-                let TermDeclarationKind::Instance(instance) =
-                    &module.checked.tree[declaration].kind
-                else {
+                let instance_name = self.instance_name(dictionary.origin)?;
+                let definition = format!("{member_name} of {}", instance_name);
+                let unsupported = |state| {
+                    let definition = definition.clone();
+                    GoError::Unsupported { definition, state }
+                };
+                let kind = &module.checked.tree[declaration].kind;
+                let TermDeclarationKind::Instance(instance) = kind else {
                     return Err(unsupported(UnsupportedState::MissingDeclaration));
                 };
                 let tree::InstanceImplementation::Members(members) = &instance.implementation
@@ -689,8 +696,8 @@ where
                     Arc::clone(&implementation.abstractions),
                     Arc::clone(&implementation.equations),
                 );
-                let (substitution, givens) =
-                    self.instance_environment(&module, declaration, dictionary)?;
+                let environment = self.instance_environment(&module, declaration, dictionary)?;
+                let (substitution, givens) = environment;
                 let scope = Scope::new(&module, substitution, givens, definition);
                 (scope, value)
             }
@@ -698,8 +705,8 @@ where
         let (abstractions, equations) = value;
         scope.signedness = key.signedness;
         self.bind_abstractions(&mut scope, &abstractions, &key.types, &key.dictionaries)?;
-        let position =
-            equations.first().and_then(|first| definition_position(&scope.module, first.source));
+        let first_source = equations.first().map(|first| first.source);
+        let position = first_source.and_then(|source| definition_position(&scope.module, source));
         let mut body = self.equations(&mut scope, &equations)?;
         if self.reads_json_directly(key)? {
             body = self.json_read(body);
@@ -707,29 +714,7 @@ where
         if !dictionary_parameters.is_empty() {
             body = self.lambda(dictionary_parameters, body);
         }
-        Ok(self.function(name, Some(key.definition.origin()), body, position))
-    }
-
-    fn function(
-        &mut self,
-        name: SmolStr,
-        origin: Option<FileId>,
-        body: Expression,
-        position: Option<SourcePosition>,
-    ) -> Function {
-        let mut parameters = vec![];
-        let mut body = body;
-        while let ExpressionKind::Lambda { .. } = body.kind {
-            let ExpressionKind::Lambda { parameters: lambda_parameters, body: lambda_body } =
-                body.kind
-            else {
-                unreachable!()
-            };
-            parameters.extend(lambda_parameters);
-            body = *lambda_body;
-        }
-        let result = body.monotype;
-        Function { name, origin, parameters, result, body, position }
+        Ok(function_from_lambdas(name, Some(key.definition.origin()), body, position))
     }
 
     fn bind_abstractions(
@@ -745,7 +730,7 @@ where
             match abstraction {
                 DeclarationAbstraction::Type { binder, rigid } => {
                     let Some(&argument) = types.next() else {
-                        return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+                        return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
                     };
                     let binder = self.context.queries.lookup_forall_binder(*binder);
                     scope.substitution.insert(binder.name, argument);
@@ -755,7 +740,7 @@ where
                 }
                 DeclarationAbstraction::Evidence { binder, .. } => {
                     let Some(dictionary) = dictionaries.next() else {
-                        return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+                        return Err(scope.unsupported(UnsupportedState::UnboundEvidence));
                     };
                     scope.givens.insert(*binder, dictionary.clone());
                 }
@@ -763,13 +748,9 @@ where
             }
         }
         if dictionaries.next().is_some() {
-            return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+            return Err(scope.unsupported(UnsupportedState::UnabstractedEvidence));
         }
         Ok(())
-    }
-
-    fn unsupported(&self, scope: &Scope, state: UnsupportedState) -> GoError {
-        GoError::Unsupported { definition: scope.definition.clone(), state }
     }
 
     fn monotype(&mut self, scope: &Scope, type_id: TypeId) -> GoResult<MonotypeId> {
@@ -782,9 +763,11 @@ where
             Type::Synonym(..) => crate::monotype::expand_synonyms(&mut self.context, type_id)?,
             _ => type_id,
         };
-        while let Type::Forall(binder, inner) =
-            self.context.types.lookup(self.context.types.strip_annotations(instantiated)).clone()
-        {
+        loop {
+            let stripped = self.context.types.strip_annotations(instantiated);
+            let Type::Forall(binder, inner) = self.context.types.lookup(stripped).clone() else {
+                break;
+            };
             let binder = self.context.queries.lookup_forall_binder(binder);
             if !scope.substitution.contains_key(&binder.name) {
                 break;
@@ -840,6 +823,26 @@ where
         let monotype = self.monotypes.monotype(&mut self.context, closed);
         monotype.map_err(|failure| failure.at(&scope.definition))
     }
+}
+
+fn function_from_lambdas(
+    name: SmolStr,
+    origin: Option<FileId>,
+    body: Expression,
+    position: Option<SourcePosition>,
+) -> Function {
+    let mut parameters = vec![];
+    let mut body = body;
+    while let ExpressionKind::Lambda { .. } = body.kind {
+        let ExpressionKind::Lambda { parameters: lambda_parameters, body: lambda_body } = body.kind
+        else {
+            unreachable!()
+        };
+        parameters.extend(lambda_parameters);
+        body = *lambda_body;
+    }
+    let result = body.monotype;
+    Function { name, origin, parameters, result, body, position }
 }
 
 fn mismatched_references(

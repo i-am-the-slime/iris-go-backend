@@ -55,8 +55,8 @@ fn probe_once_at(
         if changes(statement, &test) {
             break;
         }
-        let mut substitution =
-            Substitution { entry: &test.entry, value: &old, replaced: &mut replaced };
+        let entry = &test.entry;
+        let mut substitution = Substitution { entry, value: &old, replaced: &mut replaced };
         substitution.statement(statement);
     }
     if !replaced {
@@ -71,8 +71,8 @@ fn probe_once_at(
 
 fn test(statement: &GoStatement) -> Option<Test> {
     let GoStatement::Define { names, values } = statement else { return None };
-    let ([ignored, found], [entry @ GoExpression::Index { value, index }]) =
-        (names.as_slice(), values.as_slice())
+    let names_and_values = (names.as_slice(), values.as_slice());
+    let ([ignored, found], [entry @ GoExpression::Index { value, index }]) = names_and_values
     else {
         return None;
     };

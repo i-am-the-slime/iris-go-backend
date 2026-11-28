@@ -1,4 +1,4 @@
-use super::{Analysis, Frame};
+use super::{Analysis, Frame, restrict};
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO};
 use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement};
 
@@ -88,7 +88,7 @@ impl Analysis<'_, '_, '_> {
         self.block(body, &mut entered);
         let frame = self.frames.pop().expect("the loop's frame");
         let mut back = entered.join(&frame.continues);
-        self.restrict(&mut back, watermark);
+        restrict(&mut back, watermark);
         match header {
             Header::Counting { variable, .. } => self.step(&mut back, *variable, 1),
             Header::CountingDown { variable } => self.step(&mut back, *variable, -1),
@@ -96,7 +96,7 @@ impl Analysis<'_, '_, '_> {
             _ => {}
         }
         exit = exit.join(&frame.breaks);
-        self.restrict(&mut exit, watermark);
+        restrict(&mut exit, watermark);
         (back, exit)
     }
 

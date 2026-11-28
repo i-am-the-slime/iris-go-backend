@@ -149,9 +149,10 @@ impl Simplifier<'_> {
         let mut from = from;
         let mut to = to;
         for _ in 0..arity {
-            let (Some((from_argument, from_result)), Some((to_argument, to_result))) =
-                (self.monotypes.function_parts(from), self.monotypes.function_parts(to))
-            else {
+            let Some((from_argument, from_result)) = self.monotypes.function_parts(from) else {
+                return false;
+            };
+            let Some((to_argument, to_result)) = self.monotypes.function_parts(to) else {
                 return false;
             };
             if !self.monotypes.same_without_causes(from_argument, to_argument) {

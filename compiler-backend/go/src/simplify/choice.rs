@@ -119,8 +119,8 @@ impl Simplifier<'_> {
                     fields.push(argument);
                     continue;
                 }
-                let template =
-                    Local { id: LocalId(0), name: "field".into(), monotype: argument.monotype };
+                let monotype = argument.monotype;
+                let template = Local { id: LocalId(0), name: "field".into(), monotype };
                 let field = self.fresh(&template);
                 fields.push(field.expression());
                 kept.push(Binding { local: field, value: argument });
@@ -141,34 +141,28 @@ impl Simplifier<'_> {
 
     fn foreign_choices_exposed(&mut self, choice: &Expression) -> Option<Expression> {
         let mut exposed = false;
-        let choice =
-            self.map_choices(choice.clone(), choice.monotype, &mut |simplifier, chosen| {
-                let foreign_choice = match &chosen.kind {
-                    ExpressionKind::Foreign { foreign: Foreign::MaybeIndex, arguments } => {
-                        simplifier.index_choice(arguments.clone(), chosen.monotype)
-                    }
-                    ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
-                        simplifier.update_choice(arguments.clone(), chosen.monotype)
-                    }
-                    ExpressionKind::Foreign { foreign, arguments }
-                        if is_positioned_write(foreign) =>
-                    {
-                        simplifier.positioned_write_choice(
-                            foreign,
-                            arguments.clone(),
-                            chosen.monotype,
-                        )
-                    }
-                    _ => None,
-                };
-                match foreign_choice {
-                    Some(foreign_choice) => {
-                        exposed = true;
-                        foreign_choice
-                    }
-                    None => chosen,
+        let monotype = choice.monotype;
+        let choice = self.map_choices(choice.clone(), monotype, &mut |simplifier, chosen| {
+            let foreign_choice = match &chosen.kind {
+                ExpressionKind::Foreign { foreign: Foreign::MaybeIndex, arguments } => {
+                    simplifier.index_choice(arguments.clone(), chosen.monotype)
                 }
-            });
+                ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
+                    simplifier.update_choice(arguments.clone(), chosen.monotype)
+                }
+                ExpressionKind::Foreign { foreign, arguments } if is_positioned_write(foreign) => {
+                    simplifier.positioned_write_choice(foreign, arguments.clone(), chosen.monotype)
+                }
+                _ => None,
+            };
+            match foreign_choice {
+                Some(foreign_choice) => {
+                    exposed = true;
+                    foreign_choice
+                }
+                None => chosen,
+            }
+        });
         exposed.then_some(choice)
     }
 
@@ -179,25 +173,20 @@ impl Simplifier<'_> {
         placements: &[Placement],
     ) -> Option<Expression> {
         let ([alternative], [Placement::Joined]) = (alternatives, placements) else { return None };
-        let ([pattern], Guarded::Unconditional(body)) =
-            (&alternative.patterns[..], &alternative.body)
-        else {
-            return None;
-        };
+        let [pattern] = &alternative.patterns[..] else { return None };
+        let Guarded::Unconditional(body) = &alternative.body else { return None };
         let PatternKind::Constructor { arguments, .. } = &pattern.kind else { return None };
         let [Pattern { kind: PatternKind::Variable(field), .. }] = &arguments[..] else {
             return None;
         };
-        let only_constructions =
-            self.map_choices(choice.clone(), field.monotype, &mut |_, chosen| match chosen.kind {
-                ExpressionKind::Construct { mut arguments, .. } if arguments.len() == 1 => {
-                    arguments.remove(0)
-                }
-                _ => Expression::new(
-                    ExpressionKind::Fail("not a construction".into()),
-                    field.monotype,
-                ),
-            });
+        let monotype = field.monotype;
+        let mut only_construction = |_: &mut Simplifier<'_>, chosen: Expression| match chosen.kind {
+            ExpressionKind::Construct { mut arguments, .. } if arguments.len() == 1 => {
+                arguments.remove(0)
+            }
+            _ => Expression::new(ExpressionKind::Fail("not a construction".into()), monotype),
+        };
+        let only_constructions = self.map_choices(choice.clone(), monotype, &mut only_construction);
         let mut all_constructions = true;
         visit(&only_constructions, &mut |node| {
             if matches!(node.kind, ExpressionKind::Fail(_)) {
@@ -272,8 +261,8 @@ impl Simplifier<'_> {
         arguments: Vec<Expression>,
         monotype: MonotypeId,
     ) -> Option<Expression> {
-        let [just, nothing, elements, index]: [Expression; 4] =
-            arguments.try_into().expect("invariant violated: index has four arguments");
+        let [just, nothing, elements, index] = <[Expression; 4]>::try_from(arguments)
+            .expect("invariant violated: index has four arguments");
         let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return None };
         let Monotype::Array(element) = *self.monotypes.get(elements.monotype) else {
             unreachable!("invariant violated: index takes an array")
@@ -296,8 +285,8 @@ impl Simplifier<'_> {
         arguments: Vec<Expression>,
         monotype: MonotypeId,
     ) -> Option<Expression> {
-        let [just, nothing, index, value, elements]: [Expression; 5] =
-            arguments.try_into().expect("invariant violated: updateAt has five arguments");
+        let [just, nothing, index, value, elements] = <[Expression; 5]>::try_from(arguments)
+            .expect("invariant violated: updateAt has five arguments");
         let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return None };
         let placeholder = Expression::new(ExpressionKind::Unit, elements.monotype);
         let just = constructor(&self.apply(just, vec![placeholder], monotype))?;
@@ -464,7 +453,7 @@ impl Simplifier<'_> {
         constructor(&found)?;
         constructor(nothing)?;
         let result = matched.monotype;
-        let chosen = |simplifier: &mut Self, value: Expression| {
+        let chosen = |simplifier: &mut Simplifier<'_>, value: Expression| {
             let resolved = simplifier.resolve(value, alternatives, result);
             if !pure {
                 return resolved;
@@ -521,8 +510,8 @@ impl Simplifier<'_> {
         alternatives: &[Alternative],
         monotype: MonotypeId,
     ) -> Expression {
-        let case =
-            ExpressionKind::Case { scrutinees: vec![chosen], alternatives: alternatives.to_vec() };
+        let scrutinees = vec![chosen];
+        let case = ExpressionKind::Case { scrutinees, alternatives: alternatives.to_vec() };
         let mut case = Expression::new(case, monotype);
         self.rename(&mut case, &mut FxHashMap::default());
         self.expression(case)

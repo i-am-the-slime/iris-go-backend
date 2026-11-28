@@ -92,21 +92,21 @@ fn build_in_scratch_at(
     };
     for taken_branch in [then, otherwise] {
         if taken_branch.iter_mut().any(|statement| mentions(statement, &key)) {
-            let define =
-                GoStatement::Define { names: vec![key.clone()], values: vec![as_string(&scratch)] };
+            let values = vec![as_string(&scratch)];
+            let define = GoStatement::Define { names: vec![key.clone()], values };
             taken_branch.insert(0, define);
         }
     }
-    block[position] =
-        GoStatement::Assign { targets: vec![identifier_expression(&scratch)], values: vec![built] };
+    let targets = vec![identifier_expression(&scratch)];
+    block[position] = GoStatement::Assign { targets, values: vec![built] };
 }
 
 fn concatenation(statement: &GoStatement) -> Option<(String, Vec<GoExpression>)> {
     let GoStatement::Define { names, values } = statement else { return None };
     let ([key], [value]) = (names.as_slice(), values.as_slice()) else { return None };
     let GoExpression::Call { function, arguments } = value.unattributed() else { return None };
-    let concatenates =
-        matches!(function.unattributed().name_in(GoPackage::Prim), Some("Concat" | "Append"));
+    let name = function.unattributed().name_in(GoPackage::Prim);
+    let concatenates = matches!(name, Some("Concat" | "Append"));
     (concatenates && key != "_").then(|| (key.clone(), arguments.clone()))
 }
 
@@ -117,13 +117,10 @@ fn next_statement(block: &[GoStatement], position: usize) -> Option<usize> {
 /// The answer of `_, found := table[key]` or `value, found := table[key]`.
 fn lookup_of(statement: &mut GoStatement, key: &str) -> Option<String> {
     let GoStatement::Define { names, values } = statement else { return None };
-    let ([_, found], [GoExpression::Index { value: table, index }]) =
-        (names.as_slice(), values.as_mut_slice())
-    else {
-        return None;
-    };
-    let indexes_by_key =
-        matches!(index.unattributed(), GoExpression::Identifier(name) if name == key);
+    let [_, found] = names.as_slice() else { return None };
+    let [GoExpression::Index { value: table, index }] = values.as_mut_slice() else { return None };
+    let indexed = index.unattributed();
+    let indexes_by_key = matches!(indexed, GoExpression::Identifier(name) if name == key);
     let found = found.clone();
     let mut table = GoStatement::Expression((**table).clone());
     (indexes_by_key && found != "_" && !mentions(&mut table, key)).then_some(found)

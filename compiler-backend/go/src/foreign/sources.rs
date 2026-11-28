@@ -11,9 +11,8 @@ use crate::syntax::tokens::{Token, TokenKind, closing, split_top, tokens};
 
 /// The Go files next to a source file, in order of name. Go test files are left out.
 pub fn foreign_files(source: &Path) -> io::Result<Vec<PathBuf>> {
-    let (Some(directory), Some(stem)) =
-        (source.parent(), source.file_stem().and_then(|stem| stem.to_str()))
-    else {
+    let stem = source.file_stem().and_then(|stem| stem.to_str());
+    let (Some(directory), Some(stem)) = (source.parent(), stem) else {
         return Ok(vec![]);
     };
     let Ok(entries) = std::fs::read_dir(directory) else {
@@ -101,21 +100,17 @@ fn code_tokens(source: &str) -> Option<Vec<Token<'_>>> {
 /// `<stem>.go`, and `<stem>.<part>.go` unless `<stem>.<part>.purs`, a module of its own, owns it.
 /// Go test files belong to no source.
 fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
-    let mut owned: Vec<&str> = names
-        .iter()
-        .copied()
-        .filter(|name| {
-            let Some(part) = name.strip_prefix(stem).and_then(|rest| rest.strip_suffix(".go"))
-            else {
-                return false;
-            };
-            let is_test = name.ends_with("_test.go");
-            let is_own_part = part.len() > 1
-                && part.starts_with('.')
-                && !names.contains(&format!("{stem}{part}.purs").as_str());
-            (part.is_empty() || is_own_part) && !is_test
-        })
-        .collect();
+    let owned = names.iter().copied().filter(|name| {
+        let Some(part) = name.strip_prefix(stem).and_then(|rest| rest.strip_suffix(".go")) else {
+            return false;
+        };
+        let is_test = name.ends_with("_test.go");
+        let is_own_part = part.len() > 1
+            && part.starts_with('.')
+            && !names.contains(&format!("{stem}{part}.purs").as_str());
+        (part.is_empty() || is_own_part) && !is_test
+    });
+    let mut owned: Vec<&str> = owned.collect();
     owned.sort();
     owned
 }

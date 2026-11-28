@@ -49,8 +49,8 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     let project = iris_build::prepare_project(project).map_err(|error| error.to_string())?;
     let project = iris_build::initialize_project(project, BuildStage::Checked)
         .map_err(|error| error.to_string())?;
-    let session_config =
-        BuildSessionConfig { color: false, diagnostics: false, version: config.version };
+    let version = config.version;
+    let session_config = BuildSessionConfig { color: false, diagnostics: false, version };
     let session = BuildSession::new(project, session_config).map_err(|error| error.to_string())?;
     let snapshot = session.snapshot();
     let loaded = started.elapsed();
@@ -58,16 +58,16 @@ pub fn run(config: GoConfig) -> Result<(), String> {
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
     let module_path = go_module_path(&config.destination, config.package.as_deref(), config.quiet)?;
-    let (mut foreign_packages, vendored) =
-        vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
+    let packages = vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
+    let (mut foreign_packages, vendored) = packages;
     if let Some(coverage) = config.line_directives {
         let directives = line_directives(&snapshot, &config.destination, coverage)?;
         foreign_packages.line_directives = Some(directives);
     }
     let editable_files = snapshot.files.iter().filter(|(_, file)| file.editable);
     let editable_files: Vec<_> = editable_files.map(|(&file_id, _)| file_id).collect();
-    let has_errors =
-        session.report_diagnostics(&editable_files).map_err(|error| error.to_string())?;
+    let reported = session.report_diagnostics(&editable_files);
+    let has_errors = reported.map_err(|error| error.to_string())?;
     if has_errors {
         return Err("compilation failed".to_string());
     }

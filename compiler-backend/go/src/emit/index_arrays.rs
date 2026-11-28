@@ -62,11 +62,8 @@ fn count_at(block: &mut Vec<GoStatement>, position: usize) -> bool {
 
 fn indices_at(block: &[GoStatement], position: usize) -> Option<Indices> {
     let GoStatement::Define { names, values } = &block[position] else { return None };
-    let ([array], [GoExpression::Call { function, arguments }]) =
-        (names.as_slice(), values.as_slice())
-    else {
-        return None;
-    };
+    let [array] = names.as_slice() else { return None };
+    let [GoExpression::Call { function, arguments }] = values.as_slice() else { return None };
     let is_make = function.is_builtin(GoBuiltin::Make);
     let [GoExpression::Type(GoType::Slice(element)), length] = arguments.as_slice() else {
         return None;
@@ -89,11 +86,8 @@ fn indices_at(block: &[GoStatement], position: usize) -> Option<Indices> {
 /// `array[slot] = slot`.
 fn assigns_index(statement: &GoStatement, array: &str, slot: &str) -> bool {
     let GoStatement::Assign { targets, values } = statement else { return false };
-    let ([GoExpression::Index { value, index }], [GoExpression::Identifier(assigned)]) =
-        (targets.as_slice(), values.as_slice())
-    else {
-        return false;
-    };
+    let [GoExpression::Index { value, index }] = targets.as_slice() else { return false };
+    let [GoExpression::Identifier(assigned)] = values.as_slice() else { return false };
     matches!(value.as_ref(), GoExpression::Identifier(name) if name == array)
         && matches!(index.as_ref(), GoExpression::Identifier(name) if name == slot)
         && assigned == slot
@@ -102,8 +96,8 @@ fn assigns_index(statement: &GoStatement, array: &str, slot: &str) -> bool {
 /// The position of the one loop that walks the indices, when nothing else reads them.
 fn walk_after(block: &mut [GoStatement], indices: &Indices) -> Option<usize> {
     let after = indices.filling + 1;
-    let walking =
-        (after..block.len()).find(|&index| mentions(&mut block[index], &indices.array))?;
+    let mut positions = after..block.len();
+    let walking = positions.find(|&index| mentions(&mut block[index], &indices.array))?;
     let GoStatement::Range { index: None, element, iterable, body } = &mut block[walking] else {
         return None;
     };
@@ -122,10 +116,10 @@ fn walk_after(block: &mut [GoStatement], indices: &Indices) -> Option<usize> {
             || writes(statement, &indices.counted)
             || (element != "_" && writes(statement, &element))
     });
-    let unread_after =
-        !block[walking + 1..].iter_mut().any(|statement| mentions(statement, &indices.array));
-    let untouched_before =
-        !block[after..walking].iter_mut().any(|statement| writes(statement, &indices.counted));
+    let later = &mut block[walking + 1..];
+    let unread_after = !later.iter_mut().any(|statement| mentions(statement, &indices.array));
+    let between = &mut block[after..walking];
+    let untouched_before = !between.iter_mut().any(|statement| writes(statement, &indices.counted));
     (walks && body_keeps && unread_after && untouched_before).then_some(walking)
 }
 
@@ -146,6 +140,6 @@ fn length_of(array: &str) -> GoExpression {
     }
 }
 
-fn is_line(statement: &GoStatement) -> bool {
+pub(in crate::emit) fn is_line(statement: &GoStatement) -> bool {
     matches!(statement, GoStatement::Line(_))
 }

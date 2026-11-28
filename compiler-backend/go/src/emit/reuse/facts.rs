@@ -55,15 +55,12 @@ pub(super) struct Facts {
 
 impl Facts {
     pub(super) fn new(program: &Program, cells: &mut impl Cells, inspecting: Vec<bool>) -> Facts {
-        let eligible = program
-            .functions
-            .iter()
-            .map(|function| {
-                !cells.is_effect(function.result)
-                    && function.parameters.len() <= MASK_LIMIT
-                    && !has_escape_hatches(function, cells)
-            })
-            .collect();
+        let eligible = program.functions.iter().map(|function| {
+            !cells.is_effect(function.result)
+                && function.parameters.len() <= MASK_LIMIT
+                && !has_escape_hatches(function, cells)
+        });
+        let eligible = eligible.collect();
         let mut facts = Facts {
             eligible,
             inspecting,
@@ -106,8 +103,8 @@ impl Facts {
                 }
                 self.stale[planned] = false;
                 let function = program.function(variant.function);
-                let (plan, consulted) =
-                    Planner::new(program, cells, self, variant).plan_consulting(function);
+                let planner = Planner::new(program, cells, self, variant);
+                let (plan, consulted) = planner.plan_consulting(function);
                 for ownership in consulted {
                     self.consulted_by.entry(ownership).or_default().insert(planned);
                 }

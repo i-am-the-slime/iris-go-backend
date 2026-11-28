@@ -87,11 +87,8 @@ impl Function<'_> {
                 _ => None,
             },
             GoStatement::Assign { targets, values } => {
-                let ([GoExpression::Identifier(name)], [value]) =
-                    (targets.as_slice(), values.as_slice())
-                else {
-                    return None;
-                };
+                let [GoExpression::Identifier(name)] = targets.as_slice() else { return None };
+                let [value] = values.as_slice() else { return None };
                 let head = Head::of(value, &self.written_by_literals)?;
                 let [_, test] = head.statements(name);
                 Some(vec![test])
@@ -197,8 +194,8 @@ struct Head {
 
 impl Head {
     fn of(value: &GoExpression, written_by_literals: &FxHashSet<String>) -> Option<Head> {
-        let LiteralPosition { function, count, text } =
-            literal_position_call(value, written_by_literals)?;
+        let position = literal_position_call(value, written_by_literals)?;
+        let LiteralPosition { function, count, text } = position;
         let kind = HeadKind::of(function, count)?;
         Some(Head { kind, count, text, asked: value.clone() })
     }
@@ -247,8 +244,8 @@ struct Split {
 
 impl Split {
     fn of(value: &GoExpression, written_by_literals: &FxHashSet<String>) -> Option<Split> {
-        let LiteralPosition { function, count, text } =
-            literal_position_call(value, written_by_literals)?;
+        let position = literal_position_call(value, written_by_literals)?;
+        let LiteralPosition { function, count, text } = position;
         (function.is_qualified(GoPackage::Direct, "SplitAt") && (1..=2).contains(&count))
             .then(|| Split { count, text, asked: value.clone() })
     }

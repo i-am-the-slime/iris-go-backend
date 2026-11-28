@@ -154,8 +154,8 @@ fn vendored_foreign_file(
     })?;
     let mut files = vec![(package.join(name), go::foreign_source(module, text).into_bytes())];
     let directory = foreign_file.parent().unwrap_or(Path::new(""));
-    let embedded =
-        go::embedded_files(foreign_file, text).map_err(|error| invalid_data(error.to_string()))?;
+    let embedded = go::embedded_files(foreign_file, text);
+    let embedded = embedded.map_err(|error| invalid_data(error.to_string()))?;
     for relative in embedded {
         files.push((package.join(&relative), std::fs::read(directory.join(&relative))?));
     }
@@ -337,8 +337,8 @@ pub fn go_style(path: &Path) -> FixtureResult {
     let root = snapshot_path(folder);
     let go_stdout = root.join("Main.go.stdout");
     let differs_from_javascript = go_stdout.is_file();
-    let expected =
-        if differs_from_javascript { go_stdout.clone() } else { root.join("Main.stdout") };
+    let javascript_stdout = root.join("Main.stdout");
+    let expected = if differs_from_javascript { go_stdout.clone() } else { javascript_stdout };
     let expectation = StyleExpectation {
         stdout: std::fs::read_to_string(expected)?,
         crashes: root.join("crashes").is_file(),
@@ -441,8 +441,8 @@ fn compile_style_program_here(folder: &Path) -> Result<StyleProgram, String> {
     let loaded = crate::load_fixture(folder).map_err(|error| error.to_string())?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)
         .map_err(|error| error.to_string())?;
-    let (foreign_packages, vendored) =
-        go_foreign_packages(&loaded, folder).map_err(|error| error.to_string())?;
+    let packages = go_foreign_packages(&loaded, folder).map_err(|error| error.to_string())?;
+    let (foreign_packages, vendored) = packages;
     let entry = entry_module(&loaded, folder)?;
     let program = go::compile_program(&loaded.engine, &entry, "main", &foreign_packages, "fixture")
         .map_err(|error| format!("the Go backend rejects the program:\n{error}"))?;

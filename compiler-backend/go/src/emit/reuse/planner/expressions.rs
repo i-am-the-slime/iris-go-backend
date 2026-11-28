@@ -318,8 +318,8 @@ impl<C: Cells> Planner<'_, C> {
         held: &[Held],
     ) -> bool {
         let [base, held @ ..] = held else { return false };
-        let cells: Vec<DataType> =
-            self.cells.cell_fields(record).into_iter().flat_map(|(_, cells)| cells).collect();
+        let cells = self.cells.cell_fields(record).into_iter().flat_map(|(_, cells)| cells);
+        let cells: Vec<DataType> = cells.collect();
         if !base.is_owned() || cells.is_empty() {
             return false;
         }

@@ -180,11 +180,8 @@ impl<F: FnMut(Reference<'_>)> Walk for References<'_, F> {
             GoStatement::Define { names, .. } => {
                 names.iter_mut().for_each(|name| (self.0)(Reference::Binder(name)))
             }
-            GoStatement::Variable { name, type_, .. } => {
-                (self.0)(Reference::Binder(name));
-                type_references(type_, self.0);
-            }
-            GoStatement::IfAssert { name, type_, .. } => {
+            GoStatement::Variable { name, type_, .. }
+            | GoStatement::IfAssert { name, type_, .. } => {
                 (self.0)(Reference::Binder(name));
                 type_references(type_, self.0);
             }

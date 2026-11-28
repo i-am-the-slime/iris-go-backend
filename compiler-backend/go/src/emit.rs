@@ -582,8 +582,8 @@ fn guarded_local_uses(guarded: &Guarded, local: LocalId) -> usize {
         Guarded::Guards(branches) => branches
             .iter()
             .map(|branch| {
-                let guards: usize =
-                    branch.guards.iter().map(|guard| local_uses(guard.value(), local)).sum();
+                let guard_uses = branch.guards.iter().map(|guard| local_uses(guard.value(), local));
+                let guards: usize = guard_uses.sum();
                 guards + local_uses(&branch.body, local)
             })
             .sum(),
@@ -597,9 +597,8 @@ where
     /// `path:line:column: ` of the offset in the file, with lines and columns from 1.
     fn location(&mut self, file_id: FileId, offset: Option<u32>) -> GoResult<String> {
         let Some(offset) = offset else { return Ok(String::new()) };
-        let Some((_, path)) =
-            self.foreign_packages.source_paths.iter().find(|(id, _)| *id == file_id)
-        else {
+        let source_paths = &self.foreign_packages.source_paths;
+        let Some((_, path)) = source_paths.iter().find(|(id, _)| *id == file_id) else {
             return Ok(String::new());
         };
         let path = path.clone();
@@ -653,8 +652,8 @@ where
             PatternKind::Named { pattern, .. } => self.is_total(pattern),
             PatternKind::Record(fields) => fields.iter().all(|(_, field)| self.is_total(field)),
             PatternKind::Constructor { data, arguments, .. } => {
-                let product =
-                    self.data_layout(data).is_ok_and(|layout| layout.kind == DataKind::Product);
+                let data_layout = self.data_layout(data);
+                let product = data_layout.is_ok_and(|layout| layout.kind == DataKind::Product);
                 product && arguments.iter().all(|argument| self.is_total(argument))
             }
             PatternKind::Closure { captures, .. } => {
@@ -693,8 +692,8 @@ where
         let reassigned = |name: &String| {
             self.tail_loop.as_ref().is_some_and(|tail_loop| tail_loop.parameters.contains(name))
         };
-        let materialized =
-            self.current.is_some_and(|function| self.materialized.contains(&(function, local.id)));
+        let is_materialized = |function| self.materialized.contains(&(function, local.id));
+        let materialized = self.current.is_some_and(is_materialized);
         let aliased = match path_root(path) {
             Some(root) if !reassigned(root) => {
                 matches!(path, GoExpression::Identifier(_)) || (uses == 1 && !materialized)
@@ -772,8 +771,8 @@ where
                 if let Sink::Return = sink
                     && ends_in_jump(&then_statements)
                 {
-                    let branch =
-                        GoStatement::If { condition, then: then_statements, otherwise: vec![] };
+                    let then = then_statements;
+                    let branch = GoStatement::If { condition, then, otherwise: vec![] };
                     lines::push_at(line, branch, out);
                     out.extend(otherwise_statements);
                 } else {
@@ -888,8 +887,8 @@ where
         if mode == Mode::Value {
             return self.deliver_expression(expression, sink, out);
         }
-        let result =
-            self.monotypes.effect_result(expression.monotype).unwrap_or(expression.monotype);
+        let monotype = expression.monotype;
+        let result = self.monotypes.effect_result(monotype).unwrap_or(monotype);
         match &expression.kind {
             ExpressionKind::EffectPure(value) => self.deliver_expression(value, sink, out),
             ExpressionKind::EffectBind { action, local, body } => {
@@ -1029,8 +1028,8 @@ where
         let Monotype::Record(fields) = self.monotypes.get(monotype).clone() else {
             unreachable!("invariant violated: a record result has a record type")
         };
-        let names: Vec<String> =
-            fields.iter().map(|field| self.temporary(&identifier(&field.label))).collect();
+        let names = fields.iter().map(|field| self.temporary(&identifier(&field.label)));
+        let names: Vec<String> = names.collect();
         out.push(GoStatement::Define { names: names.clone(), values: vec![results] });
         let values = fields
             .iter()
@@ -1092,8 +1091,8 @@ where
         let parameter_type = self.go_type(argument)?;
         let mut body = vec![];
         let callable = self.value_callable(function, monotype);
-        let applied =
-            self.apply_arguments(callable, vec![identifier_expression(&parameter)], &mut body)?;
+        let arguments = vec![identifier_expression(&parameter)];
+        let applied = self.apply_arguments(callable, arguments, &mut body)?;
         let tail = if arrows == 1 {
             let Monotype::Effect(inner) = self.monotypes.get(result).clone() else {
                 unreachable!("invariant violated: a uniform callback ends in an effect")
@@ -1111,8 +1110,8 @@ where
             vec![GoStatement::Return(Some(action))]
         } else {
             let partial = self.temporary("partial");
-            let adapted =
-                self.uniform_function(identifier_expression(&partial), result, arrows - 1)?;
+            let partial_function = identifier_expression(&partial);
+            let adapted = self.uniform_function(partial_function, result, arrows - 1)?;
             vec![
                 GoStatement::Define { names: vec![partial], values: vec![applied] },
                 GoStatement::Return(Some(adapted)),
@@ -1690,27 +1689,10 @@ where
                 if let Some(key) = self.construction_key(&layout, constructor)? {
                     self.named_constructions.insert(key, (data.clone(), constructor));
                 }
-                let composite = self.composite(&layout, constructor, values);
+                let composite = composite(&layout, constructor, values);
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }
         })
-    }
-
-    pub(super) fn composite(
-        &self,
-        layout: &DataLayout,
-        constructor: usize,
-        values: Vec<GoExpression>,
-    ) -> GoExpression {
-        let constructor_layout = &layout.constructors[constructor];
-        let mut fields = vec![];
-        if layout.kind == DataKind::Tagged {
-            fields.push((Some("Tag".to_string()), identifier_expression(&constructor_layout.tag)));
-        }
-        for ((field_name, _), value) in constructor_layout.fields.iter().zip(values) {
-            fields.push((Some(field_name.clone()), value));
-        }
-        GoExpression::Composite { type_: GoType::Named(layout.name.clone()), fields }
     }
 
     /// The one cell of a nullary constructor of a boxed type. A `Sentinel` type's struct has no
@@ -1759,9 +1741,8 @@ where
             .monotypes
             .constructors(&mut self.context, &data)
             .map_err(|failure| failure.at(&self.current_definition()))?;
-        let index =
-            constructors.iter().position(|constructor| constructor.name == name).unwrap_or(0);
-        Ok((data, index))
+        let position = constructors.iter().position(|constructor| constructor.name == name);
+        Ok((data, position.unwrap_or(0)))
     }
 
     /// A record update that changes field types (`r { f = g r.f }` at a new
@@ -1873,8 +1854,8 @@ where
         expression: &Expression,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let result =
-            self.monotypes.effect_result(expression.monotype).unwrap_or(expression.monotype);
+        let monotype = expression.monotype;
+        let result = self.monotypes.effect_result(monotype).unwrap_or(monotype);
         let result_type = self.go_result(result)?;
         match &expression.kind {
             ExpressionKind::Let { bindings, body } => {
@@ -2019,6 +2000,18 @@ where
         self.support_functions.insert(base, name.clone());
         name
     }
+}
+
+fn composite(layout: &DataLayout, constructor: usize, values: Vec<GoExpression>) -> GoExpression {
+    let constructor_layout = &layout.constructors[constructor];
+    let mut fields = vec![];
+    if layout.kind == DataKind::Tagged {
+        fields.push((Some("Tag".to_string()), identifier_expression(&constructor_layout.tag)));
+    }
+    for ((field_name, _), value) in constructor_layout.fields.iter().zip(values) {
+        fields.push((Some(field_name.clone()), value));
+    }
+    GoExpression::Composite { type_: GoType::Named(layout.name.clone()), fields }
 }
 
 /// The Boolean that `expression` chooses `"true"` or `"false"` on, as `show` does.

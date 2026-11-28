@@ -37,7 +37,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::{SmolStr, format_smolstr};
 
 use super::packages::Spelling;
-use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout};
+use super::{ConstructorLayout, DataKind, DataLayout, Emitter, composite, identifier, layout};
 use crate::arity::Arities;
 use crate::context::Context;
 use crate::error::GoResult;
@@ -102,8 +102,8 @@ impl Eliminators {
                 .iter()
                 .filter(|parameter| !matches!(monotypes.get(parameter.monotype), Monotype::Unit))
                 .count();
-            let found =
-                Eliminator { name: function.name.clone(), origin: function.origin, position };
+            let name = function.name.clone();
+            let found = Eliminator { name, origin: function.origin, position };
             // Specializations of one eliminator at types that share a
             // representation differ in their names' suffixes; the shortest
             // is chosen, so that every run picks the same.
@@ -215,8 +215,8 @@ where
     if closed.is_empty() {
         return Ok(FxHashMap::default());
     }
-    let mut touched: Vec<FunctionId> =
-        closed.iter().flat_map(|monotype| uses.touching[monotype].iter().copied()).collect();
+    let touched = closed.iter().flat_map(|monotype| uses.touching[monotype].iter().copied());
+    let mut touched: Vec<FunctionId> = touched.collect();
     touched.sort();
     touched.dedup();
     types.rewrite(program, closed, &touched, eliminators, highest_local)
@@ -245,7 +245,7 @@ struct Uses {
 /// The closed, linked function types with few enough shapes, in the order of
 /// their monotypes, so that names come out the same on every run.
 fn closed_types(uses: &Uses) -> Vec<MonotypeId> {
-    let mut closed: Vec<MonotypeId> = uses
+    let closed = uses
         .creations
         .iter()
         .filter(|&(monotype, creations)| {
@@ -253,8 +253,8 @@ fn closed_types(uses: &Uses) -> Vec<MonotypeId> {
                 && uses.linked.contains(monotype)
                 && creations.len() <= MOST_TAGS
         })
-        .map(|(&monotype, _)| monotype)
-        .collect();
+        .map(|(&monotype, _)| monotype);
+    let mut closed: Vec<MonotypeId> = closed.collect();
     closed.sort();
     closed
 }
@@ -382,8 +382,8 @@ where
         let mut finished = FxHashMap::default();
         for monotype in closed {
             let building = sets.remove(&monotype).expect("invariant violated: lambda set lost");
-            let (function, set) =
-                self.cells_function(monotype, building, eliminators, &mut next_local)?;
+            let built = self.cells_function(monotype, building, eliminators, &mut next_local)?;
+            let (function, set) = built;
             program.functions.push(function);
             finished.insert(monotype, set);
         }
@@ -400,8 +400,8 @@ where
         eliminators: &Eliminators,
     ) -> Building {
         let (arguments, result) = self.leading_arrows(monotype);
-        let mut passed: Vec<MonotypeId> =
-            arguments.iter().copied().filter(|&argument| !self.is_unit(argument)).collect();
+        let passed = arguments.iter().copied().filter(|&argument| !self.is_unit(argument));
+        let mut passed: Vec<MonotypeId> = passed.collect();
         let eliminator = eliminators.of(monotype);
         let closure_position = eliminator.map_or(0, |found| found.position).min(passed.len());
         passed.insert(closure_position, monotype);
@@ -428,12 +428,12 @@ where
         next_local: &mut u32,
     ) {
         let index = id.0 as usize;
-        let placeholder =
-            Expression::new(ExpressionKind::Unit, program.functions[index].body.monotype);
+        let monotype = program.functions[index].body.monotype;
+        let placeholder = Expression::new(ExpressionKind::Unit, monotype);
         let mut body = std::mem::replace(&mut program.functions[index].body, placeholder);
         let function = &program.functions[index];
-        let mut binders: FxHashMap<LocalId, Local> =
-            function.parameters.iter().map(|parameter| (parameter.id, parameter.clone())).collect();
+        let binders = function.parameters.iter().map(|parameter| (parameter.id, parameter.clone()));
+        let mut binders: FxHashMap<LocalId, Local> = binders.collect();
         collect_binders(&body, &mut binders);
         let mut rewriter = Rewriter {
             types: self,
@@ -458,8 +458,7 @@ where
         eliminators: &Eliminators,
         next_local: &mut u32,
     ) -> GoResult<(Function, ClosureSet)> {
-        let mut fresh =
-            |name: SmolStr, monotype: MonotypeId| Local::fresh(next_local, name, monotype);
+        let mut fresh = |name: SmolStr, monotype| Local::fresh(next_local, name, monotype);
         let newtype = self.monotypes.function_newtype(monotype).cloned();
         let name = match &newtype {
             Some(newtype) => self.data_type_name(newtype)?,
@@ -497,14 +496,11 @@ where
         let mut alternatives = vec![];
         let mut tags = vec![];
         for (tag, shape) in building.tags.into_iter().enumerate() {
-            let captures = shape
-                .captures
-                .iter()
-                .map(|capture| Pattern {
-                    kind: PatternKind::Variable(capture.clone()),
-                    monotype: capture.monotype,
-                })
-                .collect();
+            let captures = shape.captures.iter().map(|capture| Pattern {
+                kind: PatternKind::Variable(capture.clone()),
+                monotype: capture.monotype,
+            });
+            let captures = captures.collect();
             let pattern = Pattern { kind: PatternKind::Closure { tag, captures }, monotype };
             let body = shape.body.run(&shape.captures, &passed, building.result, self.monotypes);
             let body = Guarded::Unconditional(body);
@@ -571,8 +567,8 @@ where
                         self.create(monotype, creation, parameters - arguments.len());
                     }
                     ExpressionKind::Function(_) if parameters > 0 => {
-                        let result =
-                            self.types.monotypes.result_after(function.monotype, parameters);
+                        let monotypes = &self.types.monotypes;
+                        let result = monotypes.result_after(function.monotype, parameters);
                         self.call(result, arguments.len() - parameters);
                     }
                     _ => {
@@ -885,23 +881,18 @@ impl Body {
         };
         match self {
             Body::Lambda { parameters, mut body } => {
-                let renamed: FxHashMap<LocalId, Expression> = parameters
-                    .iter()
-                    .enumerate()
-                    .map(|(position, parameter)| {
-                        (parameter.id, argument(position, parameter.monotype))
-                    })
-                    .collect();
+                let renamed = parameters.iter().enumerate().map(|(position, parameter)| {
+                    (parameter.id, argument(position, parameter.monotype))
+                });
+                let renamed: FxHashMap<LocalId, Expression> = renamed.collect();
                 rename(&mut body, &renamed);
                 body
             }
             Body::Known { function } => {
-                let mut arguments: Vec<Expression> = captures
-                    .iter()
-                    .map(|capture| {
-                        Expression::new(ExpressionKind::Local(capture.id), capture.monotype)
-                    })
-                    .collect();
+                let arguments = captures.iter().map(|capture| {
+                    Expression::new(ExpressionKind::Local(capture.id), capture.monotype)
+                });
+                let mut arguments: Vec<Expression> = arguments.collect();
                 let mut monotype = monotypes.result_after(function.monotype, captures.len());
                 for position in 0..passed.len() {
                     let (parameter, rest) = monotypes
@@ -1057,8 +1048,8 @@ where
             value = match self.sets.contains_key(&monotype) {
                 true => self.dispatch(monotype, value, taken, result),
                 false => {
-                    let apply =
-                        ExpressionKind::Apply { function: Box::new(value), arguments: taken };
+                    let function = Box::new(value);
+                    let apply = ExpressionKind::Apply { function, arguments: taken };
                     Expression::new(apply, result)
                 }
             };
@@ -1078,15 +1069,15 @@ where
         result: MonotypeId,
     ) -> Expression {
         let position = self.sets[&monotype].closure_position;
-        let passed_before =
-            taken.iter().filter(|argument| !self.types.is_unit(argument.monotype)).take(position);
+        let is_passed = |argument: &&Expression| !self.types.is_unit(argument.monotype);
+        let passed_before = taken.iter().filter(is_passed).take(position);
         let reordered = (!is_value(&value)
             && passed_before.clone().any(|argument| !is_value(argument)))
             || taken
                 .iter()
                 .any(|argument| self.types.is_unit(argument.monotype) && !is_value(argument));
         let mut computed = vec![];
-        let mut operand = |rewriter: &mut Self, operand: Expression| {
+        let mut operand = |rewriter: &mut Rewriter<'_, '_, '_, '_, Q>, operand: Expression| {
             if !reordered || is_value(&operand) {
                 return operand;
             }
@@ -1132,8 +1123,8 @@ where
     fn captures(&self, body: &Expression, parameters: &[Local]) -> Vec<Local> {
         let mut binders = FxHashMap::default();
         collect_binders(body, &mut binders);
-        let mut seen: FxHashSet<LocalId> =
-            parameters.iter().map(|parameter| parameter.id).collect();
+        let seen = parameters.iter().map(|parameter| parameter.id);
+        let mut seen: FxHashSet<LocalId> = seen.collect();
         seen.extend(binders.keys().copied());
         let mut captures: Vec<Local> = vec![];
         crate::monomorphic::traversal::visit(body, &mut |node| {
@@ -1176,8 +1167,8 @@ where
         }
         let set = &self.closure_sets[&monotype];
         let home = set.home;
-        let shapes: Vec<(SmolStr, Vec<Local>)> =
-            set.tags.iter().map(|tag| (tag.name.clone(), tag.captures.clone())).collect();
+        let shapes = set.tags.iter().map(|tag| (tag.name.clone(), tag.captures.clone()));
+        let shapes: Vec<(SmolStr, Vec<Local>)> = shapes.collect();
         let base = identifier(&set.name);
         let parts = self.closure_parts(monotype)?;
         let name = self.pending_global(base, super::names::PendingSpelling::Parts(parts));
@@ -1207,8 +1198,8 @@ where
             edges: None,
         };
         self.closure_layouts.insert(monotype, layout.clone());
-        let tags: Vec<String> =
-            constructors.iter().map(|constructor| constructor.tag.clone()).collect();
+        let tags = constructors.iter().map(|constructor| constructor.tag.clone());
+        let tags: Vec<String> = tags.collect();
         let plan = self.arrange_slots(shapes.len(), slots_of_shapes, fields)?;
         let mut struct_fields = vec![];
         for slot in plan.slots {
@@ -1251,7 +1242,7 @@ where
                 let tag = constructor.tag.clone();
                 self.shared_nullary(&layout.name, &tag, true, None)
             }
-            _ => GoExpression::Address(Box::new(self.composite(&layout, tag, values))),
+            _ => GoExpression::Address(Box::new(composite(&layout, tag, values))),
         })
     }
 }
@@ -1293,14 +1284,12 @@ fn closure_slots(
 }
 
 fn fields_of(slots: &[String], fields: &[(String, MonotypeId)]) -> Vec<MonotypeId> {
-    slots
-        .iter()
-        .map(|slot| {
-            fields
-                .iter()
-                .find(|(name, _)| name == slot)
-                .map(|(_, monotype)| *monotype)
-                .expect("invariant violated: a capture's slot is declared")
-        })
-        .collect()
+    let monotypes = slots.iter().map(|slot| {
+        fields
+            .iter()
+            .find(|(name, _)| name == slot)
+            .map(|(_, monotype)| *monotype)
+            .expect("invariant violated: a capture's slot is declared")
+    });
+    monotypes.collect()
 }

@@ -69,8 +69,8 @@ fn decided(condition: &mut GoExpression, facts: &[GoExpression]) -> Decision {
     if conjuncts.iter().any(|conjunct| facts.contains(&negated(conjunct))) {
         return Decision::Never;
     }
-    let open: Vec<GoExpression> =
-        conjuncts.iter().filter(|conjunct| !facts.contains(conjunct)).cloned().collect();
+    let open = conjuncts.iter().filter(|conjunct| !facts.contains(conjunct)).cloned();
+    let open: Vec<GoExpression> = open.collect();
     if open.is_empty() {
         return Decision::Always;
     }
@@ -209,8 +209,9 @@ fn mentions_any(fact: &GoExpression, names: &FxHashSet<String>) -> bool {
 
 fn reads_memory(fact: &GoExpression) -> bool {
     match fact {
-        GoExpression::Field { .. } | GoExpression::Index { .. } => true,
-        GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => true,
+        GoExpression::Field { .. }
+        | GoExpression::Index { .. }
+        | GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => true,
         GoExpression::Binary { left, right, .. } => reads_memory(left) || reads_memory(right),
         GoExpression::Unary { operand: value, .. }
         | GoExpression::Conversion { value, .. }

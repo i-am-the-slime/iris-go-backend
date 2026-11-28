@@ -113,8 +113,8 @@ impl<C: Cells> Planner<'_, C> {
             }
             _ => return None,
         };
-        let clean: Vec<Branch> =
-            branches.iter().filter(|(_, touched)| !touched).map(|(branch, _)| *branch).collect();
+        let clean = branches.iter().filter(|(_, touched)| !touched).map(|(branch, _)| *branch);
+        let clean: Vec<Branch> = clean.collect();
         let touched = clean.len() < branches.len();
         (touched && !clean.is_empty()).then_some(clean)
     }
@@ -127,17 +127,15 @@ impl<C: Cells> Planner<'_, C> {
                 _ => self.truth(true),
             },
             ExpressionKind::Case { scrutinees, alternatives } => {
-                let alternatives = alternatives
-                    .iter()
-                    .enumerate()
-                    .map(|(index, alternative)| Alternative {
-                        patterns: alternative.patterns.iter().map(shape).collect(),
-                        body: Guarded::Unconditional(
-                            self.truth(clean.contains(&Branch::Alternative(index, None))),
-                        ),
-                        position: alternative.position,
-                    })
-                    .collect();
+                let numbered = alternatives.iter().enumerate();
+                let alternatives = numbered.map(|(index, alternative)| Alternative {
+                    patterns: alternative.patterns.iter().map(shape).collect(),
+                    body: Guarded::Unconditional(
+                        self.truth(clean.contains(&Branch::Alternative(index, None))),
+                    ),
+                    position: alternative.position,
+                });
+                let alternatives = alternatives.collect();
                 let case = ExpressionKind::Case { scrutinees: scrutinees.clone(), alternatives };
                 Expression::new(case, self.boolean)
             }

@@ -365,9 +365,8 @@ where
                 }
                 Monotype::ForeignData(foreign) => {
                     for &type_argument in foreign.arguments.iter() {
-                        let type_argument =
-                            self.monotypes.monotype(&mut self.context, type_argument);
-                        pending.push((type_argument.map_err(Failure::in_code_generation)?, true));
+                        let monotype = self.monotypes.monotype(&mut self.context, type_argument);
+                        pending.push((monotype.map_err(Failure::in_code_generation)?, true));
                     }
                 }
                 Monotype::Int
@@ -495,8 +494,8 @@ where
     pub(super) fn data_type_global(&mut self, data: &DataType) -> GoResult<String> {
         if let Some(labels) = self.variant_labels(data)? {
             let full = format!("Variant{labels}");
-            let parts =
-                vec![names::NamePart::Stutter("Variant".into()), names::NamePart::Text(labels)];
+            let stutter = names::NamePart::Stutter("Variant".into());
+            let parts = vec![stutter, names::NamePart::Text(labels)];
             return Ok(self.pending_global(identifier(&full), names::PendingSpelling::Parts(parts)));
         }
         let mut full = self.context.type_name(data.file_id, data.item)?.to_string();
@@ -574,8 +573,8 @@ where
             edges,
         };
         self.data_layouts.insert(data.clone(), layout.clone());
-        let names: Vec<String> =
-            layouts.iter().map(|constructor| constructor.tag.clone()).collect();
+        let names = layouts.iter().map(|constructor| constructor.tag.clone());
+        let names: Vec<String> = names.collect();
         let line = self.data_line(data)?;
         let mut constructor_lines = vec![];
         for constructor in constructors.iter() {
@@ -683,9 +682,8 @@ where
         data: &DataType,
         constructors: &[DataConstructor],
     ) -> GoResult<bool> {
-        let with_fields =
-            constructors.iter().filter(|constructor| !constructor.fields.is_empty()).count();
-        Ok(with_fields == 1 && self.is_boxed(data)? && !self.erases_arguments(data)?)
+        let with_fields = constructors.iter().filter(|constructor| !constructor.fields.is_empty());
+        Ok(with_fields.count() == 1 && self.is_boxed(data)? && !self.erases_arguments(data)?)
     }
 
     pub(super) fn contains_itself(&mut self, data: &DataType) -> GoResult<bool> {
@@ -804,14 +802,11 @@ where
 
     fn is_map_key(&mut self, data: &DataType) -> GoResult<bool> {
         if self.map_keys.is_none() {
-            let mut pending: Vec<MonotypeId> = self
-                .monotypes
-                .ids()
-                .filter_map(|id| match self.monotypes.get(id) {
-                    Monotype::HashMap(key, _) | Monotype::OrderedMap(key, _) => Some(*key),
-                    _ => None,
-                })
-                .collect();
+            let pending = self.monotypes.ids().filter_map(|id| match self.monotypes.get(id) {
+                Monotype::HashMap(key, _) | Monotype::OrderedMap(key, _) => Some(*key),
+                _ => None,
+            });
+            let mut pending: Vec<MonotypeId> = pending.collect();
             let mut keys = FxHashSet::default();
             while let Some(monotype) = pending.pop() {
                 match self.monotypes.get(monotype).clone() {

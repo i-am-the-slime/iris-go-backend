@@ -129,20 +129,17 @@ pub(super) fn view_invariant_strings(
     if indexed.is_empty() {
         return vec![];
     }
-    let views: Vec<((String, View), String)> = indexed
-        .into_iter()
-        .map(|(string, view)| {
-            let local = fresh(format!("{string}{}", view.suffix()));
-            ((string, view), local)
-        })
-        .collect();
+    let views = indexed.into_iter().map(|(string, view)| {
+        let local = fresh(format!("{string}{}", view.suffix()));
+        ((string, view), local)
+    });
+    let views: Vec<((String, View), String)> = views.collect();
     for statement in looped.iter_mut() {
         each_expression_in_statement(statement, |value| {
             let Some((operation, string)) = operation_on(value) else { return };
             let Some(string) = viewed_string(string) else { return };
-            let Some((_, local)) =
-                views.iter().find(|(viewed, _)| *viewed == (string.clone(), operation.view))
-            else {
+            let wanted = (string.clone(), operation.view);
+            let Some((_, local)) = views.iter().find(|(viewed, _)| *viewed == wanted) else {
                 return;
             };
             ask_view(value, operation, local);
@@ -189,8 +186,8 @@ fn read_ascii_bytes(
     fresh: &mut dyn FnMut(String) -> String,
 ) -> Option<(String, GoExpression)> {
     let ascii = fresh(format!("{string}ASCII"));
-    let reads =
-        ByteReads { method: "CharAt", type_: GoType::Rune, text: ascii.clone(), test: None };
+    let text = ascii.clone();
+    let reads = ByteReads { method: "CharAt", type_: GoType::Rune, text, test: None };
     let mut read = reads.rewrite(looped, view);
     let mut cut_names: FxHashSet<String> = FxHashSet::default();
     each_block(looped, |block| {
@@ -384,8 +381,8 @@ impl Cut {
         let length = || builtin_call(GoBuiltin::Len, vec![*text()]);
         let (condition, sliced) = match self.kind {
             CutKind::Take(count) => {
-                let positive =
-                    binary(GoBinaryOperator::GreaterThan, count.clone(), GoExpression::Integer(0));
+                let zero = GoExpression::Integer(0);
+                let positive = binary(GoBinaryOperator::GreaterThan, count.clone(), zero);
                 let within = binary(GoBinaryOperator::LessThanOrEqual, count.clone(), length());
                 let high = Some(Box::new(count));
                 let sliced = GoExpression::Slice { value: text(), low: None, high };
@@ -393,8 +390,8 @@ impl Cut {
             }
             CutKind::Drop(count) => {
                 let condition = in_bounds(&count, *text());
-                let sliced =
-                    GoExpression::Slice { value: text(), low: Some(Box::new(count)), high: None };
+                let low = Some(Box::new(count));
+                let sliced = GoExpression::Slice { value: text(), low, high: None };
                 (condition, sliced)
             }
             CutKind::Slice(begin, end) => {
@@ -538,11 +535,8 @@ fn built_from_char(
         return None;
     };
     let [GoStatement::Assign { targets, values }] = then.as_slice() else { return None };
-    let ([GoExpression::Identifier(target)], [GoStatement::Assign { .. }]) =
-        (targets.as_slice(), otherwise.as_slice())
-    else {
-        return None;
-    };
+    let [GoExpression::Identifier(target)] = targets.as_slice() else { return None };
+    let [GoStatement::Assign { .. }] = otherwise.as_slice() else { return None };
     if tested != found || target != name {
         return None;
     }
@@ -573,11 +567,8 @@ fn char_at_definition(
     method: &str,
 ) -> Option<(String, String, GoExpression)> {
     let GoStatement::Define { names, values } = statement else { return None };
-    let ([char, found], [GoExpression::Call { function, arguments }]) =
-        (names.as_slice(), values.as_slice())
-    else {
-        return None;
-    };
+    let [char, found] = names.as_slice() else { return None };
+    let [GoExpression::Call { function, arguments }] = values.as_slice() else { return None };
     let GoExpression::Field { value, name } = &**function else { return None };
     let ([index], GoExpression::Identifier(viewed)) = (arguments.as_slice(), &**value) else {
         return None;
@@ -619,16 +610,16 @@ pub(super) fn carried_unchanged(
         for statement in block.iter() {
             match statement {
                 GoStatement::Define { names, values } => {
-                    if let ([copy], [GoExpression::Identifier(original)]) =
-                        (names.as_slice(), values.as_slice())
+                    if let [copy] = names.as_slice()
+                        && let [GoExpression::Identifier(original)] = values.as_slice()
                     {
                         copies.insert(copy.clone(), original.clone());
                     }
                 }
                 GoStatement::Assign { targets, values } if targets.len() == values.len() => {
                     for (target, value) in targets.iter().zip(values) {
-                        if let (GoExpression::Identifier(target), GoExpression::Identifier(value)) =
-                            (target, value)
+                        if let GoExpression::Identifier(target) = target
+                            && let GoExpression::Identifier(value) = value
                         {
                             *copied_back.entry((target.clone(), value.clone())).or_default() += 1;
                         }
@@ -677,11 +668,8 @@ fn aliases(
     each_block(looped, |block| {
         for statement in block.iter() {
             let GoStatement::Define { names, values } = statement else { continue };
-            let ([alias], [GoExpression::Identifier(original)]) =
-                (names.as_slice(), values.as_slice())
-            else {
-                continue;
-            };
+            let [alias] = names.as_slice() else { continue };
+            let [GoExpression::Identifier(original)] = values.as_slice() else { continue };
             if bindings.get(alias) == Some(&1) && !written.contains(alias) && unchanged(original) {
                 aliases.insert(alias.clone(), original.clone());
             }

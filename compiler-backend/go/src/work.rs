@@ -42,8 +42,8 @@ impl fmt::Display for Work {
 fn instructions_retired() -> Option<u64> {
     let mut usage = std::mem::MaybeUninit::<libc::rusage_info_v4>::uninit();
     let process = std::process::id() as libc::c_int;
-    let status =
-        unsafe { libc::proc_pid_rusage(process, libc::RUSAGE_INFO_V4, usage.as_mut_ptr().cast()) };
+    let usage_pointer = usage.as_mut_ptr().cast();
+    let status = unsafe { libc::proc_pid_rusage(process, libc::RUSAGE_INFO_V4, usage_pointer) };
     if status != 0 {
         return None;
     }

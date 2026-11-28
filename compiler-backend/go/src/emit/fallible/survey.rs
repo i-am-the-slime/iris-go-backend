@@ -344,8 +344,8 @@ impl<'s> Survey<'s> {
                     };
                     let shape = self.candidates[&local].shape.clone();
                     let constructs = self.shapes[&shape].construction(value).is_some();
-                    let candidate =
-                        self.candidates.get_mut(&local).expect("invariant violated: a candidate");
+                    let found = self.candidates.get_mut(&local);
+                    let candidate = found.expect("invariant violated: a candidate");
                     candidate.reassigned = true;
                     candidate.escapes |= !constructs;
                     self.source(&local, value);
@@ -367,17 +367,15 @@ impl<'s> Survey<'s> {
                 if let Some(local) = self.tagged(scrutinee) =>
             {
                 let shape = &self.shapes[&self.candidates[&local].shape];
-                let sides: Vec<Option<bool>> = cases
-                    .iter()
-                    .map(|case| {
-                        let sides: Vec<Option<bool>> =
-                            case.values.iter().map(|value| shape.is_left_tag(value)).collect();
-                        match sides.as_slice() {
-                            [side] => *side,
-                            _ => None,
-                        }
-                    })
-                    .collect();
+                let sides = cases.iter().map(|case| {
+                    let sides = case.values.iter().map(|value| shape.is_left_tag(value));
+                    let sides: Vec<Option<bool>> = sides.collect();
+                    match sides.as_slice() {
+                        [side] => *side,
+                        _ => None,
+                    }
+                });
+                let sides: Vec<Option<bool>> = sides.collect();
                 let undecided = sides.iter().any(Option::is_none)
                     || cases.len() + usize::from(default.is_some()) != 2
                     || (default.is_none() && sides.iter().all(|side| *side == sides[0]));

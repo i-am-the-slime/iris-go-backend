@@ -38,8 +38,8 @@ where
             }),
             monotype,
         });
-        let kind =
-            PatternKind::Constructor { data: zipped, constructor: 0, arguments: fields.into() };
+        let arguments = fields.into();
+        let kind = PatternKind::Constructor { data: zipped, constructor: 0, arguments };
         let mut bindings = vec![];
         self.pattern_tests(
             &Pattern { kind, monotype: pair },

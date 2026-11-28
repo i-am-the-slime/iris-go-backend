@@ -185,9 +185,7 @@ where
             }
         }
         let function = self.same_representation(function)?;
-        let captures_parameter =
-            parameters.iter().any(|parameter| mentions_local(function, parameter.id));
-        if captures_parameter
+        if parameters.iter().any(|parameter| mentions_local(function, parameter.id))
             || !self.is_evaluated(function)
             || !self.same_go_type(function.monotype, monotype)?
         {

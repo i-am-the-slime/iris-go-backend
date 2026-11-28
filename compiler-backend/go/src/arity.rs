@@ -29,8 +29,8 @@ impl Arities {
 
 pub fn choose(program: &Program, monotypes: &mut Monotypes) -> Arities {
     let known = Known::new(program);
-    let collapsed: FxHashMap<MonotypeId, MonotypeId> =
-        monotypes.ids().map(|monotype| (monotype, monotypes.without_causes(monotype))).collect();
+    let collapsed = monotypes.ids().map(|monotype| (monotype, monotypes.without_causes(monotype)));
+    let collapsed: FxHashMap<MonotypeId, MonotypeId> = collapsed.collect();
     let mut uses = Uses { collapsed: collapsed.clone(), ..Uses::default() };
     for function in &program.functions {
         uses.collect(&function.body, &known, monotypes);
@@ -106,14 +106,12 @@ fn widened(
     caps: &FxHashMap<MonotypeId, usize>,
     monotypes: &Monotypes,
 ) -> FxHashMap<MonotypeId, usize> {
-    demand
-        .iter()
-        .filter_map(|(&monotype, &arguments)| {
-            let cap = caps.get(&monotype).copied().unwrap_or(usize::MAX);
-            let arity = arguments.min(cap).min(arrows(monotypes, monotype));
-            (arity > 1).then_some((monotype, arity))
-        })
-        .collect()
+    let widened = demand.iter().filter_map(|(&monotype, &arguments)| {
+        let cap = caps.get(&monotype).copied().unwrap_or(usize::MAX);
+        let arity = arguments.min(cap).min(arrows(monotypes, monotype));
+        (arity > 1).then_some((monotype, arity))
+    });
+    widened.collect()
 }
 
 struct Known<'p> {

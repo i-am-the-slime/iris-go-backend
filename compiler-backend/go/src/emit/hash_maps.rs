@@ -1298,25 +1298,21 @@ impl<'p> Webs<'p> {
     /// and every escape of one, becomes a tree there; a tree that seeds a fold that is a Go map
     /// becomes one there.
     fn settle(&mut self, hope: Hope) -> Settled {
-        let mut tree: Vec<bool> = (0..self.parents.len())
-            .map(|node| {
-                let root = self.root(node);
-                self.tree[root]
-            })
-            .collect();
+        let tree = (0..self.parents.len()).map(|node| {
+            let root = self.root(node);
+            self.tree[root]
+        });
+        let mut tree: Vec<bool> = tree.collect();
         let handed: Vec<Vec<(Node, Node)>> = match hope {
-            Hope::Results => self
-                .sites
-                .iter()
-                .map(|site| {
-                    let handed = site.handed.iter();
-                    handed
-                        .map(|&(from, to)| {
-                            (root_of(&mut self.parents, from), root_of(&mut self.parents, to))
-                        })
-                        .collect()
-                })
-                .collect(),
+            Hope::Results => {
+                let handed = self.sites.iter().map(|site| {
+                    let handed = site.handed.iter().map(|&(from, to)| {
+                        (root_of(&mut self.parents, from), root_of(&mut self.parents, to))
+                    });
+                    handed.collect()
+                });
+                handed.collect()
+            }
             Hope::None | Hope::Calls => vec![],
         };
         // Whether a call hands a Go map to a parameter of its callee that could take one, so
@@ -1365,19 +1361,17 @@ impl<'p> Webs<'p> {
             }
         }
         let mut representations = |slots: &[Node]| -> Representations {
-            slots
-                .iter()
-                .map(|&node| {
-                    let root = root_of(&mut self.parents, node);
-                    if tree[root] {
-                        Representation::Tree
-                    } else if ordered[root] {
-                        Representation::Ordered
-                    } else {
-                        Representation::GoMap
-                    }
-                })
-                .collect()
+            let representations = slots.iter().map(|&node| {
+                let root = root_of(&mut self.parents, node);
+                if tree[root] {
+                    Representation::Tree
+                } else if ordered[root] {
+                    Representation::Ordered
+                } else {
+                    Representation::GoMap
+                }
+            });
+            representations.collect()
         };
         // An expression may both take its value from elsewhere (a call's result, a field) and
         // hand it on (an argument, a field): it converts from the first to the second. A map
@@ -1418,8 +1412,8 @@ impl<'p> Webs<'p> {
                 let mut changes = conversion.from.iter().zip(&conversion.to);
                 changes.any(|(&from, &to)| from.is_native() && from != to)
             })
-            .map(|(&at, _)| at)
-            .collect();
+            .map(|(&at, _)| at);
+        let to_tree = to_tree.collect();
         Settled { tree, ordered, to_tree, conversions }
     }
 
@@ -1442,12 +1436,11 @@ impl<'p> Webs<'p> {
             let root = root_of(&mut self.parents, node);
             read.insert(root_of(&mut groups, root));
         }
-        (0..self.parents.len())
-            .map(|node| {
-                let root = root_of(&mut self.parents, node);
-                !tree[root] && read.contains(&root_of(&mut groups, root))
-            })
-            .collect()
+        let reads_order = (0..self.parents.len()).map(|node| {
+            let root = root_of(&mut self.parents, node);
+            !tree[root] && read.contains(&root_of(&mut groups, root))
+        });
+        reads_order.collect()
     }
 
     /// The native webs kept in order: those chosen to be ([`Webs::decide`]), and every native
@@ -1647,8 +1640,8 @@ fn readers(
                 if !shapes.contains_key(&parameter.monotype) || readers.contains(&parameter.id) {
                     continue;
                 }
-                let mut reads =
-                    Reads { program, operations, readers: &readers, holds: None, copies: None };
+                let readers = &readers;
+                let mut reads = Reads { program, operations, readers, holds: None, copies: None };
                 let scope = Scope::Expression(&function.body);
                 if uniqueness::is_only_read(&mut reads, parameter.id, scope) {
                     found.push(parameter.id);

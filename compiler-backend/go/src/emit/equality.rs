@@ -12,15 +12,13 @@ use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoType};
 pub(super) fn compare_structs_whole(declarations: &mut [GoDeclaration], structs: &Structs) {
     for declaration in declarations {
         let GoDeclaration::Function { parameters, .. } = declaration else { continue };
-        let types: FxHashMap<String, String> = parameters
-            .iter()
-            .filter_map(|(name, type_)| match type_ {
-                GoType::Named(type_name) if structs.contains_key(type_name) => {
-                    Some((name.clone(), type_name.clone()))
-                }
-                _ => None,
-            })
-            .collect();
+        let types = parameters.iter().filter_map(|(name, type_)| match type_ {
+            GoType::Named(type_name) if structs.contains_key(type_name) => {
+                Some((name.clone(), type_name.clone()))
+            }
+            _ => None,
+        });
+        let types: FxHashMap<String, String> = types.collect();
         if types.len() < 2 {
             continue;
         }

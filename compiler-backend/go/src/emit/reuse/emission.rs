@@ -83,12 +83,10 @@ impl<'p> Emission<'p> {
             self.facts.demanded.len(),
             "invariant violated: emission planned a variant that ownership never settled"
         );
-        let mut functions: Vec<Function> = functions
-            .into_iter()
-            .map(|function| {
-                function.expect("invariant violated: a planned variant was not emitted")
-            })
-            .collect();
+        let functions = functions.into_iter().map(|function| {
+            function.expect("invariant violated: a planned variant was not emitted")
+        });
+        let mut functions: Vec<Function> = functions.collect();
         let mut candidates = FxHashSet::default();
         for function in &functions {
             visit(&function.body, &mut |expression| {
@@ -253,8 +251,8 @@ impl<'p> Emission<'p> {
                 unreachable!("invariant violated: a planned variant call is not an application")
             };
             let callee = self.program.function(target.function);
-            let mut parameters: Vec<MonotypeId> =
-                callee.parameters.iter().map(|parameter| parameter.monotype).collect();
+            let parameters = callee.parameters.iter().map(|parameter| parameter.monotype);
+            let mut parameters: Vec<MonotypeId> = parameters.collect();
             for companion in companions {
                 parameters.push(companion.monotype);
                 arguments.push(companion.clone());
@@ -279,8 +277,8 @@ impl<'p> Emission<'p> {
             }
             if !bindings.is_empty() {
                 let monotype = expression.monotype;
-                let case =
-                    std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
+                let unit = Expression::new(ExpressionKind::Unit, monotype);
+                let case = std::mem::replace(expression, unit);
                 let body = Box::new(case);
                 *expression = Expression::new(ExpressionKind::Let { bindings, body }, monotype);
             }
@@ -300,8 +298,8 @@ fn tracked(
     let monotype = value.monotype;
     let position = value.position;
     let edges = edges.clone();
-    let mut marked =
-        Expression::new(ExpressionKind::UniqueEdges { value: Box::new(value), edges }, monotype);
+    let kind = ExpressionKind::UniqueEdges { value: Box::new(value), edges };
+    let mut marked = Expression::new(kind, monotype);
     marked.position = position;
     marked
 }
@@ -315,8 +313,8 @@ fn untrack(expression: &mut Expression, candidates: &FxHashSet<DataType>) {
     };
     if !candidates.contains(data) {
         let monotype = value.monotype;
-        let value =
-            std::mem::replace(&mut **value, Expression::new(ExpressionKind::Unit, monotype));
+        let unit = Expression::new(ExpressionKind::Unit, monotype);
+        let value = std::mem::replace(&mut **value, unit);
         let position = expression.position;
         *expression = value;
         expression.position = position;

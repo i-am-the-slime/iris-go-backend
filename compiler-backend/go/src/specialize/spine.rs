@@ -122,12 +122,9 @@ where
         let result = crate::monotype::expand_synonyms(&mut self.context, result)?;
         self.align(body, result, &names, &mut bindings);
         if !matched || !names.iter().all(|name| bindings.contains_key(name)) {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct {
-                    construct: "evidence applied to a coercion whose argument it does not determine",
-                },
-            ));
+            return Err(scope.unsupported(UnsupportedState::Construct {
+                construct: "evidence applied to a coercion whose argument it does not determine",
+            }));
         }
         Ok(bindings)
     }

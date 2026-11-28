@@ -27,8 +27,8 @@ impl Simplifier<'_> {
         };
         let mut record = Expression::new(ExpressionKind::Record(fields), monotype);
         for bindings in bindings.into_iter().rev() {
-            record =
-                Expression::new(ExpressionKind::Let { bindings, body: Box::new(record) }, monotype);
+            let kind = ExpressionKind::Let { bindings, body: Box::new(record) };
+            record = Expression::new(kind, monotype);
         }
         self.expression(record)
     }
@@ -106,9 +106,8 @@ impl Simplifier<'_> {
                 if !keeps_types {
                     return None;
                 }
-                let record = self.widened_record(record, wide)?;
-                let kind =
-                    ExpressionKind::Update { record: Box::new(record), updates: updates.clone() };
+                let record = Box::new(self.widened_record(record, wide)?);
+                let kind = ExpressionKind::Update { record, updates: updates.clone() };
                 Some(Expression::new(kind, wide).replacing(value.position))
             }
             ExpressionKind::Let { bindings, body } => {
@@ -239,16 +238,16 @@ impl Simplifier<'_> {
             self.settle_records(body);
             // A settled operation may no longer read a binding (`shrinkImpl`'s
             // keys), which then goes as any unused binding does.
-            let unused = |binding: &Binding, bindings: &[Binding], body: &Expression| {
-                crate::purity::occurrences(body, binding.local.id).total == 0
-                    && bindings.iter().all(|other| {
-                        crate::purity::occurrences(&other.value, binding.local.id).total == 0
-                    })
-                    && !crate::purity::runs_effect(self, &binding.value)
+            let unused_position = |bindings: &[Binding], body: &Expression| {
+                bindings.iter().position(|binding| {
+                    crate::purity::occurrences(body, binding.local.id).total == 0
+                        && bindings.iter().all(|other| {
+                            crate::purity::occurrences(&other.value, binding.local.id).total == 0
+                        })
+                        && !crate::purity::runs_effect(self, &binding.value)
+                })
             };
-            while let Some(position) =
-                bindings.iter().position(|binding| unused(binding, bindings, body))
-            {
+            while let Some(position) = unused_position(bindings, body) {
                 bindings.remove(position);
             }
             if bindings.is_empty() {
@@ -431,8 +430,8 @@ impl Simplifier<'_> {
             let kind = ExpressionKind::Foreign { foreign: &Foreign::RecordHas, arguments };
             return Expression::new(kind, monotype);
         };
-        let [label, _record]: [Expression; 2] =
-            arguments.try_into().expect("invariant violated: unsafeHas has two arguments");
+        let [label, _record] = <[Expression; 2]>::try_from(arguments)
+            .expect("invariant violated: unsafeHas has two arguments");
         let mut bindings = vec![];
         let label = self.shared_operand(label, "label", &mut bindings);
         let mut has = Expression::new(ExpressionKind::Literal(Literal::Boolean(false)), monotype);
@@ -447,7 +446,7 @@ impl Simplifier<'_> {
             };
             has = Expression::new(kind, monotype);
         }
-        self.expression(self.bound(bindings, has))
+        self.expression(let_bound(bindings, has))
     }
 
     /// The fields of a record read through `unsafeGet` or `unsafeHas` when the
@@ -477,44 +476,41 @@ impl Simplifier<'_> {
         let arguments = vec![label.clone(), expected];
         Expression::new(ExpressionKind::Foreign { foreign, arguments }, boolean)
     }
-
-    fn bound(&self, bindings: Vec<Binding>, body: Expression) -> Expression {
-        if bindings.is_empty() {
-            return body;
-        }
-        let monotype = body.monotype;
-        Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
-    }
 }
 
-impl Simplifier<'_> {
-    pub(super) fn updated_record(
-        &mut self,
-        record: Expression,
-        updates: Vec<crate::monomorphic::RecordUpdate>,
-        monotype: MonotypeId,
-    ) -> Expression {
-        let ExpressionKind::Record(fields) = &record.kind else {
-            let kind = ExpressionKind::Update { record: Box::new(record), updates };
-            return Expression::new(kind, monotype);
-        };
-        let replaces_only_values = updates.iter().all(|update| match update {
-            crate::monomorphic::RecordUpdate::Leaf { label, .. } => fields
-                .iter()
-                .any(|(field, value)| field == label && crate::purity::is_discardable(value)),
-            crate::monomorphic::RecordUpdate::Branch { .. } => false,
-        });
-        if !replaces_only_values {
-            let kind = ExpressionKind::Update { record: Box::new(record), updates };
-            return Expression::new(kind, monotype);
-        }
-        let ExpressionKind::Record(mut fields) = record.kind else { unreachable!() };
-        for update in updates {
-            let crate::monomorphic::RecordUpdate::Leaf { label, value } = update else {
-                unreachable!("invariant violated: only leaf updates replace values")
-            };
-            assign(&mut fields, label, value);
-        }
-        Expression::new(ExpressionKind::Record(fields), monotype).replacing(record.position)
+fn let_bound(bindings: Vec<Binding>, body: Expression) -> Expression {
+    if bindings.is_empty() {
+        return body;
     }
+    let monotype = body.monotype;
+    Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
+}
+
+pub(super) fn updated_record(
+    record: Expression,
+    updates: Vec<crate::monomorphic::RecordUpdate>,
+    monotype: MonotypeId,
+) -> Expression {
+    let ExpressionKind::Record(fields) = &record.kind else {
+        let kind = ExpressionKind::Update { record: Box::new(record), updates };
+        return Expression::new(kind, monotype);
+    };
+    let replaces_only_values = updates.iter().all(|update| match update {
+        crate::monomorphic::RecordUpdate::Leaf { label, .. } => fields
+            .iter()
+            .any(|(field, value)| field == label && crate::purity::is_discardable(value)),
+        crate::monomorphic::RecordUpdate::Branch { .. } => false,
+    });
+    if !replaces_only_values {
+        let kind = ExpressionKind::Update { record: Box::new(record), updates };
+        return Expression::new(kind, monotype);
+    }
+    let ExpressionKind::Record(mut fields) = record.kind else { unreachable!() };
+    for update in updates {
+        let crate::monomorphic::RecordUpdate::Leaf { label, value } = update else {
+            unreachable!("invariant violated: only leaf updates replace values")
+        };
+        assign(&mut fields, label, value);
+    }
+    Expression::new(ExpressionKind::Record(fields), monotype).replacing(record.position)
 }

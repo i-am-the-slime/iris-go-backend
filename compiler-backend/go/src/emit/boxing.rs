@@ -109,13 +109,11 @@ where
         };
         let canonical = loop {
             let canonical = self.canonical_crossings();
-            let changed: Vec<usize> = (0..canonical.len())
-                .filter(|&index| canonical[index])
-                .filter(|&index| {
-                    let crossing = &self.array_boxes.crossings[index];
-                    (0..2).any(|direction| unwritten(crossing, direction).is_some())
-                })
-                .collect();
+            let changed = (0..canonical.len()).filter(|&index| canonical[index]).filter(|&index| {
+                let crossing = &self.array_boxes.crossings[index];
+                (0..2).any(|direction| unwritten(crossing, direction).is_some())
+            });
+            let changed: Vec<usize> = changed.collect();
             if changed.is_empty() {
                 break canonical;
             }
@@ -139,15 +137,14 @@ where
     }
 
     fn canonical_bodies(&mut self, index: usize) -> GoResult<()> {
-        let Crossing { monotype: array, functions, written, .. } =
-            self.array_boxes.crossings[index];
+        let crossings = &self.array_boxes.crossings;
+        let Crossing { monotype: array, functions, written, .. } = crossings[index];
         self.array_boxes.crossings[index].written = functions.map(|function| function.is_some());
-        let [boxing, unboxing] =
-            [0, 1].map(|direction| functions[direction].filter(|_| !written[direction]));
+        let pending = |direction: usize| functions[direction].filter(|_| !written[direction]);
+        let [boxing, unboxing] = [0, 1].map(pending);
         let canonical = self.canonical(array)?;
-        let (&Monotype::Array(element), &Monotype::Array(erased)) =
-            (self.monotypes.get(array), self.monotypes.get(canonical))
-        else {
+        let arrays = (self.monotypes.get(array), self.monotypes.get(canonical));
+        let (&Monotype::Array(element), &Monotype::Array(erased)) = arrays else {
             unreachable!("invariant violated: a crossing array's canonical form is an array")
         };
         let value = identifier_expression("value");
@@ -160,8 +157,8 @@ where
         if let Some(position) = unboxing {
             let type_ = self.go_type(canonical)?;
             let asserted = GoExpression::TypeAssertion { value: Box::new(value), type_ };
-            let mut body =
-                vec![GoStatement::Define { names: vec!["array".into()], values: vec![asserted] }];
+            let values = vec![asserted];
+            let mut body = vec![GoStatement::Define { names: vec!["array".into()], values }];
             let result = self.go_type(array)?;
             let elements = identifier_expression("array");
             self.convert_elements(elements, erased, element, &result, &mut body)?;
@@ -181,8 +178,8 @@ where
     /// type or meets foreign values.
     fn canonical_crossings(&self) -> Vec<bool> {
         let boxes = &self.array_boxes;
-        let mut types: Vec<GoType> =
-            boxes.crossings.iter().map(|crossing| crossing.go_type.clone()).collect();
+        let types = boxes.crossings.iter().map(|crossing| crossing.go_type.clone());
+        let mut types: Vec<GoType> = types.collect();
         types.iter_mut().for_each(|type_| self.resolve_aliases(type_));
         let root = |family: &[usize], mut index: usize| {
             while family[index] != index {

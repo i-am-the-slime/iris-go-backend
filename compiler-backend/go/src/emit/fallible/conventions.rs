@@ -59,14 +59,14 @@ impl Conventions {
                 {
                     conventions.functions.insert(name.clone(), result.clone());
                 }
-                let slots: FxHashMap<usize, String> = parameters
+                let slots = parameters
                     .iter()
                     .enumerate()
                     .filter(|(_, (parameter, _))| counts.get(parameter) == Some(&1))
                     .filter_map(|(index, (_, type_))| {
                         Some((index, fallible_result(type_, shapes)?))
-                    })
-                    .collect();
+                    });
+                let slots: FxHashMap<usize, String> = slots.collect();
                 if !slots.is_empty() {
                     conventions.parameters.insert(name.clone(), slots);
                 }
@@ -154,8 +154,8 @@ impl Conventions {
                 break;
             }
         }
-        conventions.split_parameters =
-            conventions.choose_split_parameters(declarations, shapes, fixed_signatures);
+        let split = conventions.choose_split_parameters(declarations, shapes, fixed_signatures);
+        conventions.split_parameters = split;
         conventions
     }
 
@@ -171,16 +171,12 @@ impl Conventions {
             if fixed_signatures.contains(name) {
                 continue;
             }
-            let slots: FxHashMap<usize, String> = parameters
-                .iter()
-                .enumerate()
-                .filter_map(|(index, (_, type_))| match type_ {
-                    GoType::Named(shape) if shapes.contains_key(shape) => {
-                        Some((index, shape.clone()))
-                    }
-                    _ => None,
-                })
-                .collect();
+            let indexed = parameters.iter().enumerate();
+            let slots = indexed.filter_map(|(index, (_, type_))| match type_ {
+                GoType::Named(shape) if shapes.contains_key(shape) => Some((index, shape.clone())),
+                _ => None,
+            });
+            let slots: FxHashMap<usize, String> = slots.collect();
             if !slots.is_empty() {
                 chosen.insert(name.clone(), slots);
             }

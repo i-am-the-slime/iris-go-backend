@@ -66,13 +66,12 @@ fn pokes(statement: &GoStatement, name: &str) -> bool {
     let GoStatement::Expression(GoExpression::Call { function, arguments }) = statement else {
         return false;
     };
-    let poke =
-        |function: &GoExpression| function.unattributed().is_qualified(GoPackage::Object, "Poke");
     let function = match function.unattributed() {
         GoExpression::Instantiation { function, .. } => function.as_ref(),
         function => function,
     };
-    poke(function)
+    let is_poke = function.unattributed().is_qualified(GoPackage::Object, "Poke");
+    is_poke
         && matches!(arguments.last().map(GoExpression::unattributed),
             Some(GoExpression::Identifier(object)) if object == name)
 }

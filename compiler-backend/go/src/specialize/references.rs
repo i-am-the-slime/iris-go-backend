@@ -31,25 +31,22 @@ where
         let Reference { file_id, term, expression } = reference;
         let module = self.context.module(file_id)?;
         let name = module.indexed.items[term].name.clone().unwrap_or_default();
-        let is_constructor =
-            matches!(module.indexed.items[term].kind, IndexedTermItemKind::Constructor { .. });
-        let is_member =
-            matches!(module.indexed.items[term].kind, IndexedTermItemKind::ClassMember { .. });
-        let is_foreign =
-            matches!(module.indexed.items[term].kind, IndexedTermItemKind::Foreign { .. });
+        let kind = &module.indexed.items[term].kind;
+        let is_constructor = matches!(kind, IndexedTermItemKind::Constructor { .. });
+        let is_member = matches!(kind, IndexedTermItemKind::ClassMember { .. });
+        let is_foreign = matches!(kind, IndexedTermItemKind::Foreign { .. });
         match () {
             () if is_foreign
                 && dictionaries.iter().any(|dictionary| *dictionary != Dictionary::Trivial) =>
             {
-                Err(self.unsupported(
-                    scope,
-                    UnsupportedState::Construct { construct: "foreign imports with constraints" },
-                ))
+                Err(scope.unsupported(UnsupportedState::Construct {
+                    construct: "foreign imports with constraints",
+                }))
             }
             () if is_foreign => {
                 if crate::primitives::int64_foreign(&module.name, &name).is_some() {
                     let Some(signedness) = scope.signedness else {
-                        return Err(self.unsupported(scope, UnsupportedState::UnknownSignedness));
+                        return Err(scope.unsupported(UnsupportedState::UnknownSignedness));
                     };
                     let foreign = foreign::int64_import(&module.name, &name, signedness)
                         .expect("invariant violated: int64_foreign lists the foreign");
@@ -88,7 +85,7 @@ where
                             files: source.files.join(", "),
                             function,
                         };
-                        return Err(self.unsupported(scope, state));
+                        return Err(scope.unsupported(state));
                     }
                 }
                 if self.foreign_packages.provides(&module.name) {
@@ -98,13 +95,13 @@ where
                     return Ok(self.foreign(foreign, monotype));
                 }
                 let name = format!("{}.{name}", module.name);
-                Err(self.unsupported(scope, UnsupportedState::UnknownForeign { name }))
+                Err(scope.unsupported(UnsupportedState::UnknownForeign { name }))
             }
             () if is_constructor => self.constructor(scope, file_id, term, monotype),
             () if is_member => {
                 let mut dictionaries = dictionaries.into_iter();
                 let Some(dictionary) = dictionaries.next() else {
-                    return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+                    return Err(scope.unsupported(UnsupportedState::UnboundEvidence));
                 };
                 let rest: Vec<Dictionary> = dictionaries.collect();
                 self.member_reference(
@@ -123,13 +120,12 @@ where
                     let foreign = self.with_callback_arities(file_id, term, foreign)?;
                     return Ok(self.foreign(foreign, monotype));
                 }
-                let declaration =
-                    module.checked.tree.lookup_term(term).ok_or_else(|| {
-                        self.unsupported(scope, UnsupportedState::MissingDeclaration)
-                    })?;
+                let Some(declaration) = module.checked.tree.lookup_term(term) else {
+                    return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
+                };
                 let TermDeclarationKind::Value(value) = &module.checked.tree[declaration].kind
                 else {
-                    return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+                    return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
                 };
                 let types = self.abstraction_types(scope, &value.abstractions, instantiations)?;
                 if let Some(primitive) = crate::primitives::known(&module.name, &name)
@@ -198,16 +194,15 @@ where
                         return Ok(self.constant_function(constructed, monotype));
                     }
                     Reflected::Reified => {
-                        return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+                        return Err(scope.unsupported(UnsupportedState::UnboundEvidence));
                     }
                 };
                 return Ok(self.constant_function(ExpressionKind::Literal(literal), monotype));
             }
             Dictionary::Trivial => {
-                return Err(self.unsupported(
-                    scope,
-                    UnsupportedState::MissingInstanceMember { member: member_name.to_string() },
-                ));
+                return Err(scope.unsupported(UnsupportedState::MissingInstanceMember {
+                    member: member_name.to_string(),
+                }));
             }
             Dictionary::Runtime(runtime) => {
                 return self.runtime_member(
@@ -238,18 +233,17 @@ where
         }
         let (module, declaration) = self.instance_declaration(instance.origin)?;
         let TermDeclarationKind::Instance(declared) = &module.checked.tree[declaration].kind else {
-            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
         let tree::InstanceImplementation::Members(members) = &declared.implementation else {
-            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
         let Some(implementation) =
             members.iter().find(|implementation| implementation.resolution == member)
         else {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::MissingInstanceMember { member: member_name.to_string() },
-            ));
+            return Err(scope.unsupported(UnsupportedState::MissingInstanceMember {
+                member: member_name.to_string(),
+            }));
         };
         let instantiations = self.member_signature_instantiations(
             member,
@@ -258,8 +252,8 @@ where
         )?;
         let types = self.abstraction_types(scope, &implementation.abstractions, &instantiations)?;
         let head = module.checked.tree[declaration].type_id;
-        let (signedness, inherited) =
-            self.key_signedness(scope, &types, &instance.types, Some(head))?;
+        let key_signedness = self.key_signedness(scope, &types, &instance.types, Some(head))?;
+        let (signedness, inherited) = key_signedness;
         let head_types = self.instance_head_types(head, instance.types.is_empty());
         let name = self.specialized_name(member_name, &head_types, &instance.types)?;
         let name = int64::inherited_name(name, signedness.filter(|_| inherited));
@@ -279,15 +273,13 @@ where
         instantiations: &Substitution,
     ) -> GoResult<Substitution> {
         let mut aligned = instantiations.clone();
-        let binders: Vec<_> = abstractions
-            .iter()
-            .filter_map(|abstraction| match abstraction {
-                tree::DeclarationAbstraction::Type { binder, .. } => {
-                    Some(self.context.queries.lookup_forall_binder(*binder).name)
-                }
-                _ => None,
-            })
-            .collect();
+        let binders = abstractions.iter().filter_map(|abstraction| match abstraction {
+            tree::DeclarationAbstraction::Type { binder, .. } => {
+                Some(self.context.queries.lookup_forall_binder(*binder).name)
+            }
+            _ => None,
+        });
+        let binders: Vec<_> = binders.collect();
         if binders.iter().all(|binder| instantiations.contains_key(binder)) {
             return Ok(aligned);
         }
@@ -318,13 +310,13 @@ where
         let result = self.monotypes.result_after(monotype, 1);
         let Monotype::Data(data) = self.monotypes.get(result).clone() else {
             let rendered = format!("reflected {name}");
-            return Err(self.unsupported(scope, UnsupportedState::OpenType { rendered, hint: "" }));
+            return Err(scope.unsupported(UnsupportedState::OpenType { rendered, hint: "" }));
         };
         let constructors = self.monotypes.constructors(&mut self.context, &data);
         let constructors = constructors.map_err(|failure| failure.at(&scope.definition))?;
         let Some(index) = constructors.iter().position(|constructor| constructor.name == name)
         else {
-            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
         Ok(ExpressionKind::Construct { data, constructor: index, arguments: vec![] })
     }
@@ -351,8 +343,8 @@ where
         monotype: MonotypeId,
     ) -> GoResult<Expression> {
         if self.is_newtype_constructor((file_id, term))? {
-            let (argument, _) =
-                self.monotypes.function_parts(monotype).unwrap_or((monotype, monotype));
+            let function_parts = self.monotypes.function_parts(monotype);
+            let (argument, _) = function_parts.unwrap_or((monotype, monotype));
             let result = self.monotypes.result_after(monotype, 1);
             let parameter = self.fresh_local(self.monotypes.value_name(argument), argument);
             let body = Expression::new(ExpressionKind::Local(parameter.id), result);
@@ -363,19 +355,18 @@ where
             result = inner;
         }
         let Monotype::Data(data) = self.monotypes.get(result).clone() else {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::OpenType { rendered: "constructor".into(), hint: "" },
-            ));
+            return Err(scope.unsupported(UnsupportedState::OpenType {
+                rendered: "constructor".into(),
+                hint: "",
+            }));
         };
         let constructors = self
             .monotypes
             .constructors(&mut self.context, &data)
             .map_err(|failure| failure.at(&scope.definition))?;
-        let Some(index) =
-            constructors.iter().position(|constructor| constructor.term == Some(term))
-        else {
-            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+        let position = constructors.iter().position(|constructor| constructor.term == Some(term));
+        let Some(index) = position else {
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
         let fields = constructors[index].fields.clone();
         let parameters: Vec<Local> = fields
@@ -403,13 +394,13 @@ where
         if closed {
             return arguments;
         }
-        arguments
+        let constructors = arguments
             .into_iter()
             .map(|argument| self.context.types.spine(argument).0)
             .filter(|&constructor| {
                 matches!(self.context.types.lookup(constructor), Type::Constructor(..))
-            })
-            .collect()
+            });
+        constructors.collect()
     }
 
     /// A definition's name followed by the types it is specialized at, which
@@ -425,8 +416,8 @@ where
             self.context.type_suffix(type_id, &mut spelled)?;
         }
         let spelled = SmolStr::from(spelled);
-        let spelling =
-            FunctionSpelling::Specialized { name, head: Arc::from(head), types: Arc::from(types) };
+        let head = Arc::from(head);
+        let spelling = FunctionSpelling::Specialized { name, head, types: Arc::from(types) };
         self.monotypes.function_spellings.entry(spelled.clone()).or_insert(spelling);
         Ok(spelled)
     }

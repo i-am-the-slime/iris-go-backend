@@ -168,8 +168,8 @@ where
             Monotype::Effect(_) => foreign::effect_fold(),
             _ => foreign::array_fold(),
         };
-        let fold =
-            ExpressionKind::Foreign { foreign: fold, arguments: vec![step, initial, remaining] };
+        let fold_arguments = vec![step, initial, remaining];
+        let fold = ExpressionKind::Foreign { foreign: fold, arguments: fold_arguments };
         let fold = Expression::new(fold, accumulated);
         let Some(append) = append else {
             let traverse = self.lambda(vec![function, array], fold);
@@ -226,10 +226,11 @@ where
             .unwrap_or_else(|_| unreachable!("invariant violated: three leaf traversals"));
 
         let elements_type = traversal.elements;
-        let concatenated =
-            self.context.queries.intern_type(Type::Function(elements_type, elements_type));
-        let map_concat =
-            self.instantiate_rank_two(traversal.map_scheme, &[elements_type, concatenated]);
+        let map_scheme = traversal.map_scheme;
+        let apply_scheme = traversal.apply_scheme;
+        let elements_to_elements = Type::Function(elements_type, elements_type);
+        let concatenated = self.context.queries.intern_type(elements_to_elements);
+        let map_concat = self.instantiate_rank_two(map_scheme, &[elements_type, concatenated]);
         let map_concat = self.rank_two_argument(scope, arguments[1], map_concat)?;
         let left = self.fresh_local(SmolStr::new_static("init"), elements);
         let right = self.fresh_local(SmolStr::new_static("rest"), elements);
@@ -243,13 +244,12 @@ where
         let mapped_half = apply_to(map_concat, vec![concat, half.expression()], mapped);
         let map_half = self.lambda(vec![half], mapped_half);
 
-        let apply_concat =
-            self.instantiate_rank_two(traversal.apply_scheme, &[elements_type, elements_type]);
+        let apply_concat = self.instantiate_rank_two(apply_scheme, &[elements_type, elements_type]);
         let apply_concat = self.rank_two_argument(scope, arguments[0], apply_concat)?;
         let first = self.fresh_local(SmolStr::new_static("first"), mapped);
         let second = self.fresh_local(SmolStr::new_static("second"), accumulated);
-        let joined =
-            apply_to(apply_concat, vec![first.expression(), second.expression()], accumulated);
+        let halves = vec![first.expression(), second.expression()];
+        let joined = apply_to(apply_concat, halves, accumulated);
         let join_halves = self.lambda(vec![first, second], joined);
 
         let balanced = ExpressionKind::Foreign {
@@ -291,10 +291,11 @@ where
         let initial = apply_to(map_singleton, vec![singleton, last], accumulated);
 
         let elements_type = traversal.elements;
-        let prepends =
-            self.context.queries.intern_type(Type::Function(elements_type, elements_type));
-        let map_cons =
-            self.instantiate_rank_two(traversal.map_scheme, &[traversal.element, prepends]);
+        let map_scheme = traversal.map_scheme;
+        let apply_scheme = traversal.apply_scheme;
+        let elements_to_elements = Type::Function(elements_type, elements_type);
+        let prepends = self.context.queries.intern_type(elements_to_elements);
+        let map_cons = self.instantiate_rank_two(map_scheme, &[traversal.element, prepends]);
         let map_cons = self.rank_two_argument(scope, arguments[1], map_cons)?;
         let head = self.fresh_local(SmolStr::new_static("head"), element);
         let tail = self.fresh_local(SmolStr::new_static("tail"), elements);
@@ -305,8 +306,7 @@ where
         };
         let cons = self.lambda(vec![head, tail], Expression::new(prepended, elements));
 
-        let apply_cons =
-            self.instantiate_rank_two(traversal.apply_scheme, &[elements_type, elements_type]);
+        let apply_cons = self.instantiate_rank_two(apply_scheme, &[elements_type, elements_type]);
         let apply_cons = self.rank_two_argument(scope, arguments[0], apply_cons)?;
         let current = self.fresh_local(SmolStr::new_static("element"), input_element);
         let rest = self.fresh_local(SmolStr::new_static("rest"), accumulated);
@@ -359,14 +359,14 @@ where
         let mut results = results.into_iter();
         let first = results.next().expect("invariant violated: a leaf traverses an element");
 
-        let map =
-            self.instantiate_rank_two(traversal.map_scheme, &[traversal.element, remaining[0]]);
+        let map_scheme = traversal.map_scheme;
+        let apply_scheme = traversal.apply_scheme;
+        let map = self.instantiate_rank_two(map_scheme, &[traversal.element, remaining[0]]);
         let map = self.rank_two_argument(scope, arguments[1], map)?;
         let mapped = self.monotypes.result_after(map.monotype, 2);
         let mut combined = apply_to(map, vec![collect, first], mapped);
         for (result, &after) in results.zip(&remaining[1..]) {
-            let apply =
-                self.instantiate_rank_two(traversal.apply_scheme, &[traversal.element, after]);
+            let apply = self.instantiate_rank_two(apply_scheme, &[traversal.element, after]);
             let apply = self.rank_two_argument(scope, arguments[0], apply)?;
             let applied = self.monotypes.result_after(apply.monotype, 2);
             combined = apply_to(apply, vec![combined, result], applied);

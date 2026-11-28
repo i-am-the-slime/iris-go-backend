@@ -121,11 +121,8 @@ where
         Some(KnownType::Signed) => mentions.signed = true,
         Some(KnownType::Unsigned) => mentions.unsigned = true,
         _ => {
-            let IndexedTypeItemKind::Newtype { constructors, .. } =
-                &module.indexed.items[item].kind
-            else {
-                return Ok(());
-            };
+            let kind = &module.indexed.items[item].kind;
+            let IndexedTypeItemKind::Newtype { constructors, .. } = kind else { return Ok(()) };
             let Some(&constructor) = constructors.first() else { return Ok(()) };
             if visited.contains(&(file_id, item)) {
                 return Ok(());

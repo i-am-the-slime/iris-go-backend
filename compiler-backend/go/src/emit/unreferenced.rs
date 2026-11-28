@@ -229,8 +229,8 @@ impl Walk for EmptyFunctions {
     fn statement(&mut self, statement: &mut GoStatement) {
         match statement {
             GoStatement::Define { names, values } => {
-                if let ([name], [GoExpression::Function { result: None, body, .. }]) =
-                    (names.as_slice(), values.as_slice())
+                let definition = (names.as_slice(), values.as_slice());
+                if let ([name], [GoExpression::Function { result: None, body, .. }]) = definition
                     && body.is_empty()
                 {
                     self.names.insert(name.clone());

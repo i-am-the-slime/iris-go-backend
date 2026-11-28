@@ -337,8 +337,8 @@ impl ConstrainedScheme {
     where
         Q: checking::ExternalQueries,
     {
-        let substitution: Substitution =
-            self.names.iter().copied().zip(types.iter().copied()).collect();
+        let substitution = self.names.iter().copied().zip(types.iter().copied());
+        let substitution: Substitution = substitution.collect();
         context.types.substitute(self.body, &substitution)
     }
 
@@ -352,15 +352,15 @@ impl ConstrainedScheme {
     where
         Q: checking::ExternalQueries,
     {
-        let substitution: Substitution =
-            self.names.iter().copied().zip(instantiation.types.iter().copied()).collect();
+        let types = instantiation.types.iter().copied();
+        let substitution: Substitution = self.names.iter().copied().zip(types).collect();
         let reified = self.constraints.iter().zip(instantiation.dictionaries.iter());
-        reified
+        let reified_constraints = reified
             .filter(|(_, dictionary)| {
                 matches!(dictionary, Dictionary::Reflectable(Reflected::Reified))
             })
-            .map(|(&constraint, _)| context.types.substitute(constraint, &substitution))
-            .collect()
+            .map(|(&constraint, _)| context.types.substitute(constraint, &substitution));
+        reified_constraints.collect()
     }
 }
 

@@ -57,13 +57,11 @@ impl FunctionTable {
     ) -> FunctionTable {
         let mut signatures = FxHashMap::default();
         let mut mentioned_in_text = FxHashSet::default();
-        let names: Vec<String> = declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                GoDeclaration::Function { name, .. } => Some(name.clone()),
-                _ => None,
-            })
-            .collect();
+        let names = declarations.iter().filter_map(|declaration| match declaration {
+            GoDeclaration::Function { name, .. } => Some(name.clone()),
+            _ => None,
+        });
+        let names: Vec<String> = names.collect();
         for declaration in declarations.iter() {
             match declaration {
                 GoDeclaration::Function { name, parameters, result, .. } => {
@@ -99,8 +97,8 @@ impl FunctionTable {
                     && !values.contains(name.as_str())
                     && !mentioned_in_text.contains(name.as_str())
             })
-            .cloned()
-            .collect();
+            .cloned();
+        let internal = internal.collect();
         FunctionTable { signatures, internal, fields }
     }
 
@@ -135,10 +133,10 @@ impl FunctionTable {
                         GoExpression::Identifier(callee)
                             if self.program.internal.contains(callee) =>
                         {
-                            let bounded =
-                                self.program.signatures[callee].parameters.iter().any(|type_| {
-                                    kind_of_type(type_).is_some() || shape_of_type(type_).is_some()
-                                });
+                            let parameters = &self.program.signatures[callee].parameters;
+                            let bounded = parameters.iter().any(|type_| {
+                                kind_of_type(type_).is_some() || shape_of_type(type_).is_some()
+                            });
                             self.calls_bounded |= bounded;
                             self.callees.push(callee.clone());
                         }
@@ -148,8 +146,8 @@ impl FunctionTable {
                 go_traversal::expression(self, value);
             }
         }
-        let mut scan =
-            Scan { program: self, rewrites: false, calls_bounded: false, callees: vec![] };
+        let callees = vec![];
+        let mut scan = Scan { program: self, rewrites: false, calls_bounded: false, callees };
         go_traversal::declaration(&mut scan, declaration);
         if !self.fields.is_empty() {
             let mut writes = false;
@@ -169,14 +167,12 @@ impl FunctionTable {
         plans: &[Plan],
         keeping: &Keeping<'_>,
     ) -> (FxHashMap<String, Entry>, Rewritten) {
-        let positions: FxHashMap<String, usize> = declarations
-            .iter()
-            .enumerate()
-            .filter_map(|(position, declaration)| match declaration {
-                GoDeclaration::Function { name, .. } => Some((name.clone(), position)),
-                _ => None,
-            })
-            .collect();
+        let numbered = declarations.iter().enumerate();
+        let positions = numbered.filter_map(|(position, declaration)| match declaration {
+            GoDeclaration::Function { name, .. } => Some((name.clone(), position)),
+            _ => None,
+        });
+        let positions: FxHashMap<String, usize> = positions.collect();
         let mut entries: FxHashMap<String, Entry> = FxHashMap::default();
         // A call from code not interpreted gives nothing: the entry knows nothing either.
         for plan in plans {
@@ -188,8 +184,8 @@ impl FunctionTable {
         }
         let mut updates: FxHashMap<String, usize> = FxHashMap::default();
         // Callers first, so that most functions are interpreted once, under their final entry.
-        let mut pending: std::collections::VecDeque<usize> =
-            (0..declarations.len()).filter(|position| plans[*position].interpret).collect();
+        let pending = (0..declarations.len()).filter(|position| plans[*position].interpret);
+        let mut pending: std::collections::VecDeque<usize> = pending.collect();
         pending.make_contiguous().sort_by_key(|position| {
             matches!(&declarations[*position], GoDeclaration::Function { name, .. }
                 if self.internal.contains(name.as_str()))
