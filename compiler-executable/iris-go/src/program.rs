@@ -110,6 +110,7 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         destination: PathBuf::clone(&module),
         version: config.version,
         quiet: true,
+        verbose: false,
         line_directives: Some(crate::LineCoverage::Sparse),
     })?;
 

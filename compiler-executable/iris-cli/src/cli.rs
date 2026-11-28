@@ -89,6 +89,11 @@ pub struct GoOptions {
     #[usage(flatten)]
     optimisation: ProfileGuidedOptions,
 
+    /// With DIR, also print how many functions were compiled and what loading and compiling
+    /// took.
+    #[usage(short, long)]
+    verbose: bool,
+
     /// Arguments for the --profile run. Defaults to run.execArgs.
     #[usage(double_dash = "required", requires("--profile"))]
     arguments: Vec<String>,
@@ -151,6 +156,7 @@ impl GoOptions {
                 destination,
                 version,
                 quiet: false,
+                verbose: self.verbose,
                 line_directives: match (self.no_line_directives, self.line_directives) {
                     (true, _) => None,
                     (false, Some(LineDirectiveChoice::Every)) => Some(iris_go::LineCoverage::Every),

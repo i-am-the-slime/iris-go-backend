@@ -24,6 +24,8 @@ pub struct GoConfig {
     pub version: String,
     /// Leaves out the summary of what was written.
     pub quiet: bool,
+    /// Adds to the summary how many functions were compiled and what loading and compiling took.
+    pub verbose: bool,
     /// Writes `//line` directives, which make Go's stack traces, debuggers and profiles name
     /// the PureScript the code comes from, on the lines the coverage says; none leaves them out.
     pub line_directives: Option<go::LineCoverage>,
@@ -102,6 +104,11 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         fs::write(&path, source).map_err(|error| error.to_string())?;
     }
     if config.quiet {
+        return Ok(());
+    }
+    if !config.verbose {
+        let noun = if files == 1 { "file" } else { "files" };
+        eprintln!("go: wrote {files} Go {noun} to {}", config.destination.display());
         return Ok(());
     }
     eprintln!(

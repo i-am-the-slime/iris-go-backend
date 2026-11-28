@@ -25,5 +25,7 @@ Flags:
                                  one --profile recorded.
       --profile                  Run the program once while recording a CPU profile, keep it in .spago/go/<package>/
                                  default.pgo and build again optimised for it. Later builds use it until --pgo off.
+  -v, --verbose                  With DIR, also print how many functions were compiled and what loading and compiling
+                                 took.
   -h, --help                     Print help
 --- stderr
