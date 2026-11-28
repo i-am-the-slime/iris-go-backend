@@ -4,19 +4,7 @@ use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoUnaryOperator};
 pub(super) fn is_test(value: &GoExpression) -> bool {
     match value {
         GoExpression::Boolean(_) => true,
-        GoExpression::Binary { operator, .. } => {
-            matches!(
-                *operator,
-                GoBinaryOperator::LogicalAnd
-                    | GoBinaryOperator::LogicalOr
-                    | GoBinaryOperator::LessThan
-                    | GoBinaryOperator::LessThanOrEqual
-                    | GoBinaryOperator::GreaterThan
-                    | GoBinaryOperator::GreaterThanOrEqual
-                    | GoBinaryOperator::Equal
-                    | GoBinaryOperator::NotEqual
-            )
-        }
+        GoExpression::Binary { operator, .. } => operator.is_logical() || operator.is_comparison(),
         GoExpression::Unary { operator: GoUnaryOperator::Not, operand } => is_test(operand),
         _ => false,
     }

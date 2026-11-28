@@ -131,24 +131,7 @@ impl Analysis<'_, '_, '_> {
                 operand,
             } => self.is_inert(operand, state),
             GoExpression::Binary { operator, left, right } => {
-                matches!(
-                    *operator,
-                    GoBinaryOperator::LogicalAnd
-                        | GoBinaryOperator::LogicalOr
-                        | GoBinaryOperator::LessThan
-                        | GoBinaryOperator::LessThanOrEqual
-                        | GoBinaryOperator::GreaterThan
-                        | GoBinaryOperator::GreaterThanOrEqual
-                        | GoBinaryOperator::Equal
-                        | GoBinaryOperator::NotEqual
-                        | GoBinaryOperator::Add
-                        | GoBinaryOperator::Subtract
-                        | GoBinaryOperator::Multiply
-                        | GoBinaryOperator::BitwiseAnd
-                        | GoBinaryOperator::BitwiseOr
-                        | GoBinaryOperator::BitwiseXor
-                ) && self.is_inert(left, state)
-                    && self.is_inert(right, state)
+                !operator.may_panic() && self.is_inert(left, state) && self.is_inert(right, state)
             }
             GoExpression::Conversion { type_, value } => {
                 kind_of_type(type_).is_some() && self.is_inert(value, state)

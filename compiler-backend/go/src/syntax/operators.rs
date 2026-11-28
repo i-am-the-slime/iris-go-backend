@@ -83,6 +83,16 @@ impl GoBinaryOperator {
         matches!(self, GoBinaryOperator::Divide | GoBinaryOperator::Remainder)
     }
 
+    pub fn may_panic(self) -> bool {
+        matches!(
+            self,
+            GoBinaryOperator::Divide
+                | GoBinaryOperator::Remainder
+                | GoBinaryOperator::ShiftLeft
+                | GoBinaryOperator::ShiftRight
+        )
+    }
+
     /// The operators Go has an assignment form of, `x += y` for `x = x + y`.
     pub fn has_assignment_form(self) -> bool {
         matches!(
@@ -112,6 +122,7 @@ impl GoBinaryOperator {
         })
     }
 
+    /// The comparison with its operands swapped.
     pub fn swapped_comparison(self) -> Option<GoBinaryOperator> {
         Some(match self {
             GoBinaryOperator::LessThan => GoBinaryOperator::GreaterThan,

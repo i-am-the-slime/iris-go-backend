@@ -41,14 +41,7 @@ pub(super) fn field(value: GoExpression, name: &str) -> GoExpression {
 fn costs_nothing(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Binary { operator, left, right } => {
-            !matches!(
-                *operator,
-                GoBinaryOperator::Divide
-                    | GoBinaryOperator::Remainder
-                    | GoBinaryOperator::ShiftLeft
-                    | GoBinaryOperator::ShiftRight
-            ) && costs_nothing(left)
-                && costs_nothing(right)
+            !operator.may_panic() && costs_nothing(left) && costs_nothing(right)
         }
         GoExpression::Unary { operator, operand } => {
             *operator != GoUnaryOperator::Dereference && costs_nothing(operand)

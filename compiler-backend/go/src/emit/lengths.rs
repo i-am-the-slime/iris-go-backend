@@ -19,8 +19,8 @@ use rustc_hash::FxHashSet;
 
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoPackage,
-    GoStatement, Name, statements_names,
+    DeclarationNames, GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, Name,
+    statements_names,
 };
 
 use super::views::{carried_unchanged, view_invariant_strings};
@@ -107,15 +107,7 @@ fn literal_length(value: &mut GoExpression) {
 /// under a conversion.
 fn compared_length(value: &mut GoExpression) {
     let GoExpression::Binary { operator, left, right } = value else { return };
-    if !matches!(
-        *operator,
-        GoBinaryOperator::Equal
-            | GoBinaryOperator::NotEqual
-            | GoBinaryOperator::LessThan
-            | GoBinaryOperator::LessThanOrEqual
-            | GoBinaryOperator::GreaterThan
-            | GoBinaryOperator::GreaterThanOrEqual
-    ) {
+    if !operator.is_comparison() {
         return;
     }
     let (length, literal) = match (&**left, &**right) {
