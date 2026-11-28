@@ -1,0 +1,285 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type TupleString struct {
+	First  string
+	Second int
+}
+
+type TupleTupleStringInt struct {
+	First  TupleString
+	Second int
+}
+
+type Tuple struct {
+	First  any
+	Second any
+}
+
+func AppendShowArrayTupleStringInt(buffer []byte, array []TupleString) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowTupleStringInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowTupleStringInt(buffer []byte, tuple TupleString) []byte {
+	buffer = append(buffer, "(Tuple "...)
+	buffer = prim.AppendShowString(buffer, tuple.First)
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.Second), 10)
+	buffer = append(buffer, ')')
+	return buffer
+}
+
+func ArrayTupleStringInt(array []TupleString) string {
+	return string(AppendShowArrayTupleStringInt(nil, array))
+}
+
+// Foreign/Object/object.go
+package foreignobject
+
+import (
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/iris-go/object"
+)
+
+func FromFoldable(l []tuple.TupleString) *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int
+} {
+	object2 := &struct {
+		Index map[string]int
+		Ints  int
+		Keys  []string
+		Vals  []int
+	}{Index: make(map[string]int, len(l)), Keys: make([]string, 0, len(l)), Vals: make([]int, 0, len(l))}
+	for tupleIndex := range l {
+		object.Poke(l[tupleIndex].First, l[tupleIndex].Second, object2)
+	}
+	return object2
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	"fixture/Foreign/Object"
+	mainffi "fixture/Main_ffi"
+	"fixture/shared/Data.Tuple+Data.Maybe"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strconv"
+)
+
+func main() {
+	mainffi.Log("-- array-index keys come first, the others in the order they were first set")
+	numbered := foreignobject.FromFoldable([]tuple.TupleString{{First: "b", Second: 0}, {First: "a", Second: 1}, {First: "2", Second: 2}, {First: "1", Second: 3}, {First: "b", Second: 4}, {First: "10", Second: 5}, {First: "c", Second: 6}})
+	mainffi.Log(show.ArrayString(object.Keys(numbered)))
+	mainffi.Log(show.ArrayInt(object.ToArrayWithKey(func(_ string, v int) int {
+		return v
+	}, numbered)))
+	mainffi.Log("-- counted words")
+	object2 := object.New[int]()
+	value, found := object.LookupST("b", object2)
+	var lookupST int
+	if found {
+		lookupST = 1 + value
+	} else {
+		lookupST = 1
+	}
+	object.Poke("b", lookupST, object2)
+	value2, found2 := object.LookupST("a", object2)
+	var lookupST2 int
+	if found2 {
+		lookupST2 = 1 + value2
+	} else {
+		lookupST2 = 1
+	}
+	object.Poke("a", lookupST2, object2)
+	value3, found3 := object.LookupST("2", object2)
+	var lookupST3 int
+	if found3 {
+		lookupST3 = 1 + value3
+	} else {
+		lookupST3 = 1
+	}
+	object.Poke("2", lookupST3, object2)
+	value4, found4 := object.LookupST("1", object2)
+	var lookupST4 int
+	if found4 {
+		lookupST4 = 1 + value4
+	} else {
+		lookupST4 = 1
+	}
+	object.Poke("1", lookupST4, object2)
+	value5, found5 := object.LookupST("b", object2)
+	var lookupST5 int
+	if found5 {
+		lookupST5 = 1 + value5
+	} else {
+		lookupST5 = 1
+	}
+	object.Poke("b", lookupST5, object2)
+	value6, found6 := object.LookupST("10", object2)
+	var lookupST6 int
+	if found6 {
+		lookupST6 = 1 + value6
+	} else {
+		lookupST6 = 1
+	}
+	object.Poke("10", lookupST6, object2)
+	value7, found7 := object.LookupST("c", object2)
+	var lookupST7 int
+	if found7 {
+		lookupST7 = 1 + value7
+	} else {
+		lookupST7 = 1
+	}
+	object.Poke("c", lookupST7, object2)
+	xs := object.ToArrayWithKey(func(s string, i int) tuple.TupleString {
+		return tuple.TupleString{First: s, Second: i}
+	}, object2)
+	len_ := len(xs)
+	mainffi.Log(tuple.ArrayTupleStringInt(array.Unfoldr(func(value tuple_maybe.MaybeTupleTupleStringIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value tuple_maybe.MaybeTupleTupleStringIntInt) tuple.TupleTupleStringInt {
+		return value.Just
+	}, func(value tuple.TupleTupleStringInt) tuple.TupleString {
+		return value.First
+	}, func(value tuple.TupleTupleStringInt) int {
+		return value.Second
+	}, func(i int) tuple_maybe.MaybeTupleTupleStringIntInt {
+		if i < len_ {
+			return tuple_maybe.JustTupleTupleStringIntInt(tuple.TupleTupleStringInt{First: xs[i], Second: i + 1})
+		}
+		return tuple_maybe.NoTupleTupleStringIntInt
+	}, 0)))
+	mainffi.Log("-- an object filled in ST, then grown and shrunk")
+	object3 := object.New[int]()
+	for i := 1; i < 13; i++ {
+		object.Poke(strconv.Itoa(i%7), i, object3)
+	}
+	xs2 := object.ToArrayWithKey(func(s string, i int) tuple.TupleString {
+		return tuple.TupleString{First: s, Second: i}
+	}, object.Remove("3", object.Insert("x", 0, object3)))
+	len_2 := len(xs2)
+	mainffi.Log(tuple.ArrayTupleStringInt(array.Unfoldr(func(value tuple_maybe.MaybeTupleTupleStringIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value tuple_maybe.MaybeTupleTupleStringIntInt) tuple.TupleTupleStringInt {
+		return value.Just
+	}, func(value tuple.TupleTupleStringInt) tuple.TupleString {
+		return value.First
+	}, func(value tuple.TupleTupleStringInt) int {
+		return value.Second
+	}, func(i int) tuple_maybe.MaybeTupleTupleStringIntInt {
+		if i < len_2 {
+			return tuple_maybe.JustTupleTupleStringIntInt(tuple.TupleTupleStringInt{First: xs2[i], Second: i + 1})
+		}
+		return tuple_maybe.NoTupleTupleStringIntInt
+	}, 0)))
+	x, found8 := object.Lookup("5", object3)
+	var result string
+	if found8 {
+		result = "(Just " + strconv.Itoa(x) + ")"
+	} else {
+		result = "Nothing"
+	}
+	mainffi.Log(strconv.Itoa(object.Size(object3)) + " " + result)
+	mainffi.Log("-- nothing to fill")
+	mainffi.Log(show.ArrayString(object.Keys(foreignobject.FromFoldable([]tuple.TupleString{}))))
+}
+
+// shared/Data.Tuple+Data.Maybe/tuple_maybe.go
+package tuple_maybe
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+)
+
+type MaybeTupleTupleStringIntInt struct {
+	Just tuple.TupleTupleStringInt
+	Tag  uint8
+}
+
+func JustTupleTupleStringIntInt(just tuple.TupleTupleStringInt) MaybeTupleTupleStringIntInt {
+	return MaybeTupleTupleStringIntInt{Tag: maybe.TagJust, Just: just}
+}
+
+var NoTupleTupleStringIntInt = MaybeTupleTupleStringIntInt{Tag: maybe.TagNothing}

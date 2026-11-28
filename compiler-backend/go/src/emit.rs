@@ -76,6 +76,7 @@ mod overwrite;
 mod ownership;
 mod packages;
 mod prepends;
+mod presized_objects;
 mod printing;
 mod probes;
 mod project;
@@ -239,6 +240,7 @@ where
     timed("known", || known::drop_known_tests(&mut declarations));
     timed("merging", || merging::merge_identical_branches(&mut declarations));
     timed("fresh", || fresh::drop_clips_of_fresh_slices(&mut declarations));
+    timed("presized objects", || presized_objects::presize_filled_objects(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));

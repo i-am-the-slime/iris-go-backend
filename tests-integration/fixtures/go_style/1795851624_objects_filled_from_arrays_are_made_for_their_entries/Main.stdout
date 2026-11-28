@@ -1,0 +1,10 @@
+-- array-index keys come first, the others in the order they were first set
+["1","2","10","b","a","c"]
+[3,2,5,4,1,6]
+-- counted words
+[(Tuple "1" 1),(Tuple "2" 1),(Tuple "10" 1),(Tuple "b" 2),(Tuple "a" 1),(Tuple "c" 1)]
+-- an object filled in ST, then grown and shrunk
+[(Tuple "0" 7),(Tuple "1" 8),(Tuple "2" 9),(Tuple "4" 11),(Tuple "5" 12),(Tuple "6" 6),(Tuple "x" 0)]
+7 (Just 12)
+-- nothing to fill
+[]
