@@ -211,6 +211,7 @@ where
             recycled_maps: FxHashMap::default(),
             vector_kernels: vector::Kernels::default(),
             byte_buffers: FxHashMap::default(),
+            entry_loops: vec![],
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
             writers: FxHashMap::default(),
@@ -407,6 +408,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The string parameters of the tail loop being emitted that it builds in a `[]byte`, with
     /// the buffer's name; the parameter itself reads `string(buffer)`.
     byte_buffers: FxHashMap<LocalId, String>,
+    entry_loops: Vec<fusion::EntryLoop>,
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     writers: FxHashMap<FunctionId, String>,

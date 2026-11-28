@@ -639,6 +639,12 @@ where
         {
             return Ok(iterated);
         }
+        if foreign.calls(crate::foreign::OBJECT_INDEX)
+            && let [object, key] = arguments
+            && let Some(value) = self.entry_value(object, key)
+        {
+            return Ok(value);
+        }
         if foreign.calls(crate::foreign::ARRAY_FROM_LIST)
             && let Some(listed) = self.array_from_list(&arguments[0], monotype, out)?
         {

@@ -37,10 +37,9 @@ func main() {
 	journal.Log("8")
 	journal.Log("{ alice: 40, bob: 80, carol: 120 }")
 	journal.Log("3")
-	array := object.Keys(scores)
 	accumulator := 0
-	for _, key := range array {
-		accumulator += object.UnsafeIndex(scores, key)
+	for _, value := range object.Entries(scores) {
+		accumulator += value
 	}
 	journal.Log(strconv.Itoa(accumulator))
 	journal.Log(show.ArrayString(object.Keys(scores)))

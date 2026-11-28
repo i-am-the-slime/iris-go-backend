@@ -36,14 +36,17 @@
 
 use std::collections::VecDeque;
 
+use super::aliases::mentions;
 use super::conditions::negated;
 use super::iteration::{Callback, Found};
 use super::{
-    Emitter, Mode, Sink, binary, builtin_call, identifier_expression, is_simple, length, lines,
+    Emitter, Mode, Sink, binary, builtin_call, call, field, identifier_expression, is_simple,
+    length, lines,
 };
 use crate::error::GoResult;
 use crate::foreign::{
     ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, Iteration,
+    OBJECT_KEYS,
 };
 use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
@@ -85,6 +88,13 @@ enum Source<'e> {
         condition: GoExpression,
         value: GoExpression,
     },
+    Entries(GoExpression),
+}
+
+pub(super) struct EntryLoop {
+    object: GoExpression,
+    key: String,
+    value: String,
 }
 
 struct Zip<'e> {
@@ -201,6 +211,7 @@ enum Header {
     Backward { index: Option<String>, element: String, array: GoExpression },
     Stepping { index: Option<String>, element: String, steps: Steps, order: Order },
     Positions { index: Option<String>, count: GoExpression },
+    Entries { key: String, value: String, object: GoExpression },
     If(GoExpression, Option<SourceLine>),
 }
 
@@ -258,6 +269,7 @@ impl<'e> Pipeline<'e> {
             Source::Replicate { count, .. } => count.clone(),
             Source::Zip(zip) => zip.count.clone(),
             Source::Guard { .. } => return None,
+            Source::Entries(object) => length(field(object.clone(), "Keys")),
         })
     }
 
@@ -456,9 +468,14 @@ where
             }
         }
         stages.reverse();
+        let entries = stages.is_empty() && !positional && demand.order == Order::Forward;
         let source = match (literal_range(current), range_bounds(current)) {
             (Some((first, last)), _) if !positional => Source::Range { first, last },
             (_, Some(bounds)) => Source::Stepping(self.steps(bounds, read, out)?),
+            (_, None) if entries && let Some(object) = keys_of(current) => {
+                let object = self.value(object, out)?;
+                Source::Entries(self.hoist(object, "object", out))
+            }
             (_, None) => {
                 let demand = Demand { positions: positional, ..demand };
                 self.source(current, demand, read, out)?
@@ -810,6 +827,21 @@ where
                 }
                 return Ok((Header::If(condition, None), prefix));
             }
+            (Source::Entries(object), Order::Forward) if index.is_none() => {
+                let value = self.temporary(VALUE);
+                let key = element;
+                self.entry_loops.push(EntryLoop {
+                    object: object.clone(),
+                    key: key.clone(),
+                    value: value.clone(),
+                });
+                Header::Entries { key, value, object }
+            }
+            (Source::Entries(_), _) => {
+                unreachable!(
+                    "invariant violated: an object's entries are read forwards, without positions"
+                )
+            }
             (Source::Replicate { .. } | Source::Zip(_) | Source::Guard { .. }, Order::Backward) => {
                 unreachable!("invariant violated: generated arrays are read forwards")
             }
@@ -853,8 +885,8 @@ where
             }
             Source::Stepping(steps) => stepped_value(&steps, index),
             Source::Replicate { value, .. } => value,
-            Source::Guard { .. } => {
-                unreachable!("invariant violated: a guard is not read by position")
+            Source::Guard { .. } | Source::Entries(_) => {
+                unreachable!("invariant violated: a guard or an object is not read by position")
             }
             Source::Zip(zip) => {
                 let element = self.temporary("element");
@@ -980,6 +1012,16 @@ where
                 Header::Positions { index, count } => {
                     GoStatement::Range { index, element: "_".into(), iterable: count, body }
                 }
+                Header::Entries { key, value, object } => {
+                    self.entry_loops.retain(|entry| entry.key != key || entry.value != value);
+                    let key_read = key != "_" && mentioned_in(&mut body, &key);
+                    let value_read = mentioned_in(&mut body, &value);
+                    let index = key_read.then_some(key);
+                    let element = if value_read { value } else { "_".into() };
+                    let entries = self.qualified(GoPackage::Object, "Entries");
+                    let iterable = call(entries, vec![object]);
+                    GoStatement::Range { index, element, iterable, body }
+                }
                 Header::If(condition, _) => {
                     GoStatement::If { condition, then: body, otherwise: vec![] }
                 }
@@ -1085,6 +1127,25 @@ impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
 {
+    pub(super) fn entry_value(
+        &self,
+        object: &Expression,
+        key: &Expression,
+    ) -> Option<GoExpression> {
+        let (ExpressionKind::Local(object), ExpressionKind::Local(key)) = (&object.kind, &key.kind)
+        else {
+            return None;
+        };
+        let object = self.locals.get(object)?;
+        let Some(GoExpression::Identifier(key)) = self.locals.get(key) else { return None };
+        let entry = self
+            .entry_loops
+            .iter()
+            .rev()
+            .find(|entry| entry.object == *object && entry.key == *key)?;
+        Some(identifier_expression(&entry.value))
+    }
+
     /// A callback whose leading arguments are evaluated now, once.
     pub(super) fn capture<'e>(
         &mut self,
@@ -1348,6 +1409,18 @@ fn element_position(kind: StageKind) -> usize {
 enum Generated<'e> {
     Replicate { count: &'e Expression, value: &'e Expression },
     Zip { callback: Found<'e>, operands: Vec<&'e Expression> },
+}
+
+fn mentioned_in(body: &mut [GoStatement], name: &str) -> bool {
+    body.iter_mut().any(|statement| mentions(statement, name))
+}
+
+fn keys_of(array: &Expression) -> Option<&Expression> {
+    let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return None };
+    match arguments.as_slice() {
+        [object] if foreign.calls(OBJECT_KEYS) => Some(object),
+        _ => None,
+    }
 }
 
 fn indexed(array: &str, slot: GoExpression) -> GoExpression {
