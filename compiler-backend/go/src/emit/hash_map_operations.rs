@@ -49,6 +49,16 @@ where
                 out.push(store(table.clone(), key, value));
                 table
             }
+            HashMapOperation::Add => {
+                let key = self.value(&arguments[0], out)?;
+                let key = self.hoist(key, "key", out);
+                let value = self.value(&arguments[1], out)?;
+                let table = self.value(&arguments[2], out)?;
+                let table = self.named(table, out);
+                let sum = binary("+", entry(table.clone(), key.clone()), value);
+                out.push(store(table.clone(), key, sum));
+                table
+            }
             HashMapOperation::Delete => {
                 let key = self.value(&arguments[0], out)?;
                 let table = self.value(&arguments[1], out)?;
@@ -99,6 +109,13 @@ where
                 let table_type = arguments[0].monotype;
                 let table = self.value(&arguments[0], out)?;
                 self.sorted_entries(table, table_type, monotype, out)?
+            }
+            HashMapOperation::Copy => {
+                let table = self.value(&arguments[0], out)?;
+                self.imports.insert("maps".into());
+                let clone =
+                    GoExpression::Qualified { package: "maps".into(), name: "Clone".into() };
+                call(clone, vec![table])
             }
             HashMapOperation::BalancedHeight => {
                 let count = self.value(&arguments[0], out)?;

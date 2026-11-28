@@ -1,0 +1,729 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Map/Internal/internal.go
+package internal
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"math/bits"
+)
+
+type Map struct {
+	Node4 *Map
+	Node5 *Map
+	Node0 int
+	Node1 int
+	Node2 int
+	Node3 int
+}
+
+var SharedMapLeaf = &Map{}
+
+type MapIter struct {
+	IterEmit2 *MapIter
+	IterNode0 *Map
+	IterNode1 *MapIter
+	IterEmit0 int
+	IterEmit1 int
+	Tag       uint8
+}
+
+const (
+	MapIterIterLeaf = iota
+	MapIterIterEmit
+	MapIterIterNode
+)
+
+type Tuple struct {
+	Second *MapIter
+	First  tuple.TupleInt
+}
+
+type MaybeTupleTupleIntIntMapIterIntInt struct {
+	Just Tuple
+	Tag  uint8
+}
+
+var SharedMapIterIterLeaf = &MapIter{Tag: MapIterIterLeaf}
+
+var NoTupleTupleIntIntMapIterIntInt = MaybeTupleTupleIntIntMapIterIntInt{Tag: maybe.TagNothing}
+
+func JustTupleTupleIntIntMapIterIntInt(just Tuple) MaybeTupleTupleIntIntMapIterIntInt {
+	return MaybeTupleTupleIntIntMapIterIntInt{Tag: maybe.TagJust, Just: just}
+}
+
+type Entries struct {
+	Keys   []int
+	Values []int
+}
+
+func SortedIntegerEntries[K ~int | ~int32, V any](table map[K]V) ([]K, []V) {
+	count := len(table)
+	keys := make([]K, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	if count <= 32 {
+		for index := 1; index < count; index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && keys[at-1] > key; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+		return keys, values
+	}
+	lowest, highest := keys[0], keys[0]
+	for _, key := range keys {
+		lowest = min(lowest, key)
+		highest = max(highest, key)
+	}
+	base := uint64(int64(lowest))
+	span := uint64(int64(highest)) - base
+	spareKeys := make([]K, count)
+	spareValues := make([]V, count)
+	for shift := 0; shift < 64 && span>>shift != 0; shift += 8 {
+		var starts [256]int
+		for _, key := range keys {
+			starts[byte((uint64(int64(key))-base)>>shift)]++
+		}
+		total := 0
+		for digit := range starts {
+			starts[digit], total = total, total+starts[digit]
+		}
+		for index, key := range keys {
+			digit := byte((uint64(int64(key)) - base) >> shift)
+			at := starts[digit]
+			spareKeys[at], spareValues[at] = key, values[index]
+			starts[digit] = at + 1
+		}
+		keys, spareKeys = spareKeys, keys
+		values, spareValues = spareValues, values
+	}
+	return keys, values
+}
+
+func IterNode(iterNode0 *Map, iterNode1 *MapIter) *MapIter {
+	return &MapIter{Tag: MapIterIterNode, IterNode0: iterNode0, IterNode1: iterNode1}
+}
+
+func Node(node0 int, node1 int, node2 int, node3 int, node4 *Map, node5 *Map) *Map {
+	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+func Size(value *Map) int {
+	if value == SharedMapLeaf {
+		return 0
+	}
+	return value.Node1
+}
+
+var Empty *Map = SharedMapLeaf
+
+func UnsafeBalancedNodeInt(k int, v int, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+		}
+		if r.Node0 > 1 {
+			return UnsafeBalancedNodeRotateLeftInt(k, v, l, r.Node2, r.Node3, r.Node4, r.Node5)
+		}
+		return UnsafeNodeInt(k, v, l, r)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapLeaf {
+		rh := r.Node0
+		if rh > lh+1 {
+			return UnsafeBalancedNodeRotateLeftInt(k, v, l, r.Node2, r.Node3, r.Node4, r.Node5)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeRotateRightInt(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	if r == SharedMapLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeRotateRightInt(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	return UnsafeNodeInt(k, v, l, r)
+}
+
+func UnsafeNodeInt(k int, v int, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return Node(1, 1, k, v, l, r)
+		}
+		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapLeaf {
+		return Node(1+h1, 1+s1, k, v, l, r)
+	}
+	h2 := r.Node0
+	result := max(h1, h2)
+	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
+}
+
+var IterMapL func(*MapIter, *Map) *MapIter = IterMapLGo
+
+func LookupGo(k int, value *Map) maybe.Int {
+	for {
+		if value == SharedMapLeaf {
+			return maybe.NoInt
+		}
+		mk := value.Node2
+		mv := value.Node3
+		ml := value.Node4
+		mr := value.Node5
+		if k < mk {
+			value = ml
+			continue
+		}
+		if k == mk {
+			return maybe.JustInt(mv)
+		}
+		value = mr
+	}
+}
+
+func InsertGoInt(k int, v int, value *Map) *Map {
+	if value == SharedMapLeaf {
+		return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+	}
+	mk := value.Node2
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if k < mk {
+		return UnsafeBalancedNodeInt(mk, mv, InsertGoInt(k, v, ml), mr)
+	}
+	if k == mk {
+		return Node(value.Node0, value.Node1, k, v, ml, mr)
+	}
+	return UnsafeBalancedNodeInt(mk, mv, ml, InsertGoInt(k, v, mr))
+}
+
+func UnsafeBalancedNodeRotateLeftInt(k int, v int, l *Map, rk int, rv int, rl *Map, rr *Map) *Map {
+	if rl != SharedMapLeaf {
+		var result int
+		if rr == SharedMapLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if rl.Node0 > result {
+			return UnsafeNodeInt(rl.Node2, rl.Node3, UnsafeNodeInt(k, v, l, rl.Node4), UnsafeNodeInt(rk, rv, rl.Node5, rr))
+		}
+	}
+	return UnsafeNodeInt(rk, rv, UnsafeNodeInt(k, v, l, rl), rr)
+}
+
+func UnsafeBalancedNodeRotateRightInt(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map) *Map {
+	if lr != SharedMapLeaf {
+		var result int
+		if ll == SharedMapLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= lr.Node0 {
+			return UnsafeNodeInt(lr.Node2, lr.Node3, UnsafeNodeInt(lk, lv, ll, lr.Node4), UnsafeNodeInt(k, v, lr.Node5, r))
+		}
+	}
+	return UnsafeNodeInt(lk, lv, ll, UnsafeNodeInt(k, v, lr, r))
+}
+
+func StepUnfoldrGo(value *MapIter) MaybeTupleTupleIntIntMapIterIntInt {
+	for {
+		switch value.Tag {
+		case MapIterIterLeaf:
+			return NoTupleTupleIntIntMapIterIntInt
+		case MapIterIterEmit:
+			k := value.IterEmit0
+			v := value.IterEmit1
+			iter := value.IterEmit2
+			return JustTupleTupleIntIntMapIterIntInt(Tuple{First: tuple.TupleInt{First: k, Second: v}, Second: iter})
+		default: // MapIterIterNode
+			m := value.IterNode0
+			iter := value.IterNode1
+			value = IterMapL(iter, m)
+			continue
+		}
+	}
+}
+
+func IterMapLGo(iter *MapIter, value *Map) *MapIter {
+	var mapIterIntIntCells alloc.Cells[MapIter]
+	for {
+		if value == SharedMapLeaf {
+			return iter
+		}
+		k := value.Node2
+		v := value.Node3
+		l := value.Node4
+		r := value.Node5
+		if r == SharedMapLeaf {
+			iter, value = mapIterIntIntCells.New(MapIter{Tag: MapIterIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: iter}), l
+			continue
+		}
+		iter, value = mapIterIntIntCells.New(MapIter{Tag: MapIterIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: mapIterIntIntCells.New(MapIter{Tag: MapIterIterNode, IterNode0: r, IterNode1: iter})}), l
+	}
+}
+
+func TreeFromKeys(keys []int, values []int, low int, high int) *Map {
+	var cells alloc.Cells[Map]
+	return TreeFromKeysChunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeysChunked(keys []int, values []int, low int, high int, cells *alloc.Cells[Map]) *Map {
+	if low == high {
+		return SharedMapLeaf
+	}
+	var middle int
+	var key int
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(Map{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeysChunked(keys, values, low, middle, cells), Node5: TreeFromKeysChunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable(table map[int]int) *Map {
+	var entries Entries
+	var keys []int
+	var values []int
+	keys2, values2 := SortedIntegerEntries(table)
+	entries = Entries{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys(keys, values, 0, len(keys))
+}
+
+func InsertGoIntReusing(k int, v int, value *Map) *Map {
+	if value == SharedMapLeaf {
+		return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+	}
+	mk := value.Node2
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if k < mk {
+		return UnsafeBalancedNodeIntReusing(mk, mv, InsertGoIntReusing(k, v, ml), mr, value)
+	}
+	if k == mk {
+		value.Node2 = k
+		value.Node3 = v
+		return value
+	}
+	return UnsafeBalancedNodeIntReusing(mk, mv, ml, InsertGoIntReusing(k, v, mr), value)
+}
+
+func UnsafeBalancedNodeIntReusing(k int, v int, l *Map, r *Map, donor *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			donor.Node0 = 1
+			donor.Node1 = 1
+			donor.Node2 = k
+			donor.Node3 = v
+			donor.Node4 = SharedMapLeaf
+			donor.Node5 = SharedMapLeaf
+			return donor
+		}
+		if r != SharedMapLeaf {
+			rh := r.Node0
+			rk := r.Node2
+			rv := r.Node3
+			rl := r.Node4
+			rr := r.Node5
+			if rh > 1 {
+				return UnsafeBalancedNodeRotateLeftIntReusing(k, v, l, rk, rv, rl, rr, donor)
+			}
+		}
+		return UnsafeNodeIntReusing(k, v, l, r, donor)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapLeaf {
+		rh := r.Node0
+		rk := r.Node2
+		rv := r.Node3
+		rl := r.Node4
+		rr := r.Node5
+		if rh > lh+1 {
+			return UnsafeBalancedNodeRotateLeftIntReusing(k, v, l, rk, rv, rl, rr, donor)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeRotateRightIntReusing(k, v, lk, lv, ll, lr, r, donor)
+		}
+	}
+	if r == SharedMapLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeRotateRightIntReusing(k, v, lk, lv, ll, lr, r, donor)
+		}
+	}
+	return UnsafeNodeIntReusing(k, v, l, r, donor)
+}
+
+func UnsafeNodeIntReusing(k int, v int, l *Map, r *Map, donor *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			donor.Node0 = 1
+			donor.Node1 = 1
+			donor.Node2 = k
+			donor.Node3 = v
+			donor.Node4 = l
+			donor.Node5 = r
+			return donor
+		}
+		h2 := r.Node0
+		s2 := r.Node1
+		donor.Node0 = 1 + h2
+		donor.Node1 = 1 + s2
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapLeaf {
+		donor.Node0 = 1 + h1
+		donor.Node1 = 1 + s1
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h22 := r.Node0
+	s22 := r.Node1
+	result := max(h1, h22)
+	donor.Node0 = 1 + result
+	donor.Node1 = 1 + s1 + s22
+	donor.Node2 = k
+	donor.Node3 = v
+	donor.Node4 = l
+	donor.Node5 = r
+	return donor
+}
+
+func UnsafeBalancedNodeRotateLeftIntReusing(k int, v int, l *Map, rk int, rv int, rl *Map, rr *Map, donor *Map) *Map {
+	if rl != SharedMapLeaf {
+		lh := rl.Node0
+		lk := rl.Node2
+		lv := rl.Node3
+		ll := rl.Node4
+		lr := rl.Node5
+		var result int
+		if rr == SharedMapLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if lh > result {
+			return UnsafeNodeIntReusing(lk, lv, UnsafeNodeInt(k, v, l, ll), UnsafeNodeInt(rk, rv, lr, rr), donor)
+		}
+	}
+	return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(k, v, l, rl), rr, donor)
+}
+
+func UnsafeBalancedNodeRotateRightIntReusing(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map, donor *Map) *Map {
+	if lr != SharedMapLeaf {
+		rh := lr.Node0
+		rk := lr.Node2
+		rv := lr.Node3
+		rl := lr.Node4
+		rr := lr.Node5
+		var result int
+		if ll == SharedMapLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= rh {
+			return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(lk, lv, ll, rl), UnsafeNodeInt(k, v, rr, r), donor)
+		}
+	}
+	return UnsafeNodeIntReusing(lk, lv, ll, UnsafeNodeInt(k, v, lr, r), donor)
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+import "strconv"
+
+type TupleInt struct {
+	First  int
+	Second int
+}
+
+type Tuple struct {
+	First  any
+	Second any
+}
+
+func AppendShowArrayTupleIntInt(buffer []byte, array []TupleInt) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowTupleIntInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowTupleIntInt(buffer []byte, tuple TupleInt) []byte {
+	buffer = append(buffer, "(Tuple "...)
+	buffer = strconv.AppendInt(buffer, int64(tuple.First), 10)
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.Second), 10)
+	buffer = append(buffer, ')')
+	return buffer
+}
+
+func ArrayTupleIntInt(array []TupleInt) string {
+	return string(AppendShowArrayTupleIntInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+	mainffi "fixture/Main_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"maps"
+	"strconv"
+)
+
+func main() {
+	mainffi.Log("-- a map handed through a foreign is looked up by a callback the foreign runs twice")
+	accumulator := make(map[int]int)
+	for key := 1; key < 21; key++ {
+		table := accumulator
+		table[key] = key * key
+		accumulator = table
+	}
+	table2 := mainffi.HandedOver(accumulator)
+	found := mainffi.Twice(func(_ struct{}) int {
+		accumulator2 := 0
+		for key := 0; key < 26; key++ {
+			value, found2 := table2[key]
+			var entry maybe.Int
+			if found2 {
+				entry = maybe.JustInt(value)
+			} else {
+				entry = maybe.NoInt
+			}
+			var result int
+			switch entry.Tag {
+			case maybe.TagNothing:
+				result = 0
+			default: // maybe.TagJust
+				result = entry.Just
+			}
+			accumulator2 += result
+		}
+		return accumulator2
+	})
+	mainffi.Log(strconv.Itoa(found))
+	mainffi.Log("-- a callback that counts into a map it closes over starts from a copy each time")
+	bumped := mainffi.Twice(func(_ struct{}) map[int]int {
+		accumulator2 := maps.Clone(table2)
+		for n := 0; n < 3; n++ {
+			key := n/2 + 1
+			counts := accumulator2
+			counts[key] += 1
+			accumulator2 = counts
+		}
+		return accumulator2
+	})
+	value2, found3 := bumped[1]
+	var entry2 maybe.Int
+	if found3 {
+		entry2 = maybe.JustInt(value2)
+	} else {
+		entry2 = maybe.NoInt
+	}
+	var result2 string
+	switch entry2.Tag {
+	case maybe.TagJust:
+		result2 = "(Just " + strconv.Itoa(entry2.Just) + ")"
+	default: // maybe.TagNothing
+		result2 = "Nothing"
+	}
+	value3, found4 := bumped[2]
+	var entry3 maybe.Int
+	if found4 {
+		entry3 = maybe.JustInt(value3)
+	} else {
+		entry3 = maybe.NoInt
+	}
+	var result3 string
+	switch entry3.Tag {
+	case maybe.TagJust:
+		result3 = "(Just " + strconv.Itoa(entry3.Just) + ")"
+	default: // maybe.TagNothing
+		result3 = "Nothing"
+	}
+	value4, found5 := table2[1]
+	var entry4 maybe.Int
+	if found5 {
+		entry4 = maybe.JustInt(value4)
+	} else {
+		entry4 = maybe.NoInt
+	}
+	var result4 string
+	switch entry4.Tag {
+	case maybe.TagJust:
+		result4 = "(Just " + strconv.Itoa(entry4.Just) + ")"
+	default: // maybe.TagNothing
+		result4 = "Nothing"
+	}
+	mainffi.Log(result2 + " " + result3 + " " + result4)
+	trimmed := mainffi.Twice(func(_ struct{}) *internal.Map {
+		accumulator2 := maps.Clone(table2)
+		for key := 1; key < 7; key++ {
+			if key < 4 || key == 5 {
+				kept := accumulator2
+				delete(kept, key)
+				accumulator2 = kept
+			}
+		}
+		return internal.TreeFromTable(accumulator2)
+	})
+	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleIntIntMapIterIntInt) internal.Tuple {
+		return value.Just
+	}, func(value internal.Tuple) tuple.TupleInt {
+		return value.First
+	}, func(value internal.Tuple) *internal.MapIter {
+		return value.Second
+	}, internal.StepUnfoldrGo, internal.IterNode(trimmed, internal.SharedMapIterIterLeaf))))
+	mainffi.Log(strconv.Itoa(len(table2)))
+	mainffi.Log("-- a map a callback builds comes back in order")
+	built := mainffi.Twice(func(_ struct{}) *internal.Map {
+		accumulator2 := make(map[int]int)
+		for key := 1; key < 24; key++ {
+			counts := accumulator2
+			key2 := key % 5
+			counts[key2] += 1
+			accumulator2 = counts
+		}
+		return internal.TreeFromTable(accumulator2)
+	})
+	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleIntIntMapIterIntInt) internal.Tuple {
+		return value.Just
+	}, func(value internal.Tuple) tuple.TupleInt {
+		return value.First
+	}, func(value internal.Tuple) *internal.MapIter {
+		return value.Second
+	}, internal.StepUnfoldrGo, internal.IterNode(built, internal.SharedMapIterIterLeaf))))
+	mainffi.Log("-- a function that reads a map an insert changes afterwards reads the map it closed over")
+	before := internal.InsertGoIntReusing(2, 20, internal.InsertGoIntReusing(1, 10, internal.Empty))
+	scrutinee := internal.LookupGo(3, before)
+	var result5 string
+	switch scrutinee.Tag {
+	case maybe.TagJust:
+		result5 = "(Just " + strconv.Itoa(scrutinee.Just) + ")"
+	default: // maybe.TagNothing
+		result5 = "Nothing"
+	}
+	argument := result5 + " "
+	scrutinee2 := internal.LookupGo(3, internal.InsertGoInt(3, 30, before))
+	var result6 string
+	switch scrutinee2.Tag {
+	case maybe.TagJust:
+		result6 = "(Just " + strconv.Itoa(scrutinee2.Just) + ")"
+	default: // maybe.TagNothing
+		result6 = "Nothing"
+	}
+	mainffi.Log(prim.Concat(argument, result6, " ", strconv.Itoa(internal.Size(before))))
+	mainffi.Log("-- sums count from zero, other combinations from the first value")
+	accumulator3 := make(map[int]int)
+	for key := 1; key < 8; key++ {
+		sums := accumulator3
+		key2 := key % 3
+		sums[key2] += key
+		accumulator3 = sums
+	}
+	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleIntIntMapIterIntInt) internal.Tuple {
+		return value.Just
+	}, func(value internal.Tuple) tuple.TupleInt {
+		return value.First
+	}, func(value internal.Tuple) *internal.MapIter {
+		return value.Second
+	}, internal.StepUnfoldrGo, internal.IterNode(internal.TreeFromTable(accumulator3), internal.SharedMapIterIterLeaf))))
+	accumulator4 := make(map[int]int)
+	for key := 1; key < 8; key++ {
+		sums := accumulator4
+		key2 := key % 3
+		old2, found2 := sums[key2]
+		var result int
+		if found2 {
+			old := old2
+			result = old + key + 100
+		} else {
+			result = key
+		}
+		sums[key2] = result
+		accumulator4 = sums
+	}
+	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleIntIntMapIterIntInt) internal.Tuple {
+		return value.Just
+	}, func(value internal.Tuple) tuple.TupleInt {
+		return value.First
+	}, func(value internal.Tuple) *internal.MapIter {
+		return value.Second
+	}, internal.StepUnfoldrGo, internal.IterNode(internal.TreeFromTable(accumulator4), internal.SharedMapIterIterLeaf))))
+}

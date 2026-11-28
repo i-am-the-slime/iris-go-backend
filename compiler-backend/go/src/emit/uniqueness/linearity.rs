@@ -1,5 +1,7 @@
 //! Whether a local is the only reference to its cells wherever a body uses it.
 
+use std::cell::Cell;
+
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
@@ -41,6 +43,25 @@ pub(in crate::emit) trait Shapes {
     /// nothing of that field.
     fn closures_keep_what_they_read(&self) -> bool {
         false
+    }
+    /// Whether a closure that only reads a local ([`Shapes::only_reads`]) peeks at it, so that
+    /// the local is linear where nothing consumes it.
+    fn closures_only_read(&self) -> bool {
+        false
+    }
+    /// Whether such a closure's reads count: a peek that forbids consuming the local anywhere,
+    /// as the closure may run after it. Otherwise they are no use of the local at all.
+    fn closure_reads_count(&self) -> bool {
+        true
+    }
+    /// Whether `call` only reads `argument` and keeps nothing of it, so that a closure that
+    /// uses a local only in such calls reads it whenever it runs, and changes nothing.
+    fn only_reads(&mut self, _call: &Expression, _argument: &Expression) -> bool {
+        false
+    }
+    /// Whether a value of the type may hold cells of the followed local.
+    fn holds_cells(&mut self, _monotype: MonotypeId) -> bool {
+        true
     }
 }
 
@@ -84,12 +105,12 @@ pub(in crate::emit) fn is_unique(
     forced: &Forced,
 ) -> bool {
     let relatives = relatives(shapes, target, ancestors, scope);
-    let counter = Counter { target, field: None, relatives: &relatives, forced };
+    let counter = Counter::new(target, None, &relatives, forced);
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
     };
-    paths.all_linear()
+    counter.is_linear(paths)
 }
 
 /// Whether `target` is only ever read in `scope`: no order consumes it.
@@ -100,7 +121,7 @@ pub(in crate::emit) fn is_only_read(
 ) -> bool {
     let relatives = FxHashSet::default();
     let forced = Forced::default();
-    let counter = Counter { target, field: None, relatives: &relatives, forced: &forced };
+    let counter = Counter::new(target, None, &relatives, &forced);
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
@@ -130,13 +151,12 @@ pub(in crate::emit) fn is_unique_path(
 ) -> bool {
     let relatives = FxHashSet::default();
     let forced = Forced::default();
-    let counter =
-        Counter { target: record, field: Some(path), relatives: &relatives, forced: &forced };
+    let counter = Counter::new(record, Some(path), &relatives, &forced);
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
     };
-    paths.all_linear()
+    counter.is_linear(paths)
 }
 
 /// The locals that share cells with `target` in `scope`: its ancestors, and the locals that
@@ -209,9 +229,26 @@ struct Counter<'f> {
     field: Option<&'f [SmolStr]>,
     relatives: &'f FxHashSet<LocalId>,
     forced: &'f Forced,
+    /// Whether a closure reads the target whenever it runs, which may be after anything.
+    read_by_closure: Cell<bool>,
 }
 
-impl Counter<'_> {
+impl<'f> Counter<'f> {
+    fn new(
+        target: LocalId,
+        field: Option<&'f [SmolStr]>,
+        relatives: &'f FxHashSet<LocalId>,
+        forced: &'f Forced,
+    ) -> Counter<'f> {
+        Counter { target, field, relatives, forced, read_by_closure: Cell::new(false) }
+    }
+
+    /// Whether the target is linear on all paths: a closure that reads it may read it after
+    /// any of them, so then nothing may consume it.
+    fn is_linear(&self, paths: Paths) -> bool {
+        let closures_see_it_unchanged = !self.read_by_closure.get() || paths.never_consumed();
+        paths.all_linear() && closures_see_it_unchanged
+    }
     fn count(&self, shapes: &mut impl Shapes, expression: &Expression) -> Paths {
         if let Some(field) = self.field
             && let Some(paths) = self.count_field(shapes, field, expression)
@@ -247,7 +284,16 @@ impl Counter<'_> {
                     }
                     _ => uses_local(expression, self.target),
                 };
-                if uses {
+                let only_reads = uses
+                    && shapes.closures_only_read()
+                    && matches!(&expression.kind, ExpressionKind::Lambda { body, .. }
+                        if only_read(shapes, self.target, self.field, body));
+                if only_reads && !shapes.closure_reads_count() {
+                    Paths::empty()
+                } else if only_reads {
+                    self.read_by_closure.set(true);
+                    Paths::event(Event::Peek)
+                } else if uses {
                     Paths::event(Event::Shared)
                 } else if self.relatives.iter().any(|&conflict| uses_local(expression, conflict)) {
                     Paths::event(Event::Conflict)
@@ -530,6 +576,116 @@ impl Counter<'_> {
                 guards.then(bodies)
             }
         }
+    }
+}
+
+/// Where an expression stands to the followed value of `target`: the depth of an access chain
+/// along the followed field's path that it is (`Ok`), or a read of a field off that path
+/// (`Err`); `None` for an expression that is neither.
+fn followed_depth(
+    target: LocalId,
+    field: Option<&[SmolStr]>,
+    expression: &Expression,
+) -> Option<Result<usize, ()>> {
+    match &expression.kind {
+        ExpressionKind::Local(id) if *id == target => Some(Ok(0)),
+        ExpressionKind::Access { record, label } => match followed_depth(target, field, record)? {
+            Ok(depth) => match field {
+                Some(path) if depth < path.len() && path[depth] != *label => Some(Err(())),
+                _ => Some(Ok(depth + 1)),
+            },
+            Err(()) => Some(Err(())),
+        },
+        _ => None,
+    }
+}
+
+/// Whether `expression` uses the followed value of `target` only to read it: as an argument
+/// that its call only reads ([`Shapes::only_reads`]), as a scrutinee whose patterns bind locals
+/// that, where they may hold its cells, are only read in turn, or by reading another field.
+fn only_read(
+    shapes: &mut impl Shapes,
+    target: LocalId,
+    field: Option<&[SmolStr]>,
+    expression: &Expression,
+) -> bool {
+    match followed_depth(target, field, expression) {
+        Some(Ok(_)) => return false,
+        Some(Err(())) => return true,
+        None => {}
+    }
+    match &expression.kind {
+        ExpressionKind::Apply { arguments, .. } | ExpressionKind::Foreign { arguments, .. } => {
+            if let ExpressionKind::Apply { function, .. } = &expression.kind
+                && !only_read(shapes, target, field, function)
+            {
+                return false;
+            }
+            arguments.iter().all(|argument| match followed_depth(target, field, argument) {
+                Some(Ok(_)) => shapes.only_reads(expression, argument),
+                Some(Err(())) => true,
+                None => only_read(shapes, target, field, argument),
+            })
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            for (position, scrutinee) in scrutinees.iter().enumerate() {
+                match followed_depth(target, field, scrutinee) {
+                    Some(Ok(_)) => {
+                        for alternative in alternatives {
+                            let mut bound = vec![];
+                            pattern_locals(&alternative.patterns[position], &mut bound);
+                            for local in bound {
+                                if !shapes.holds_cells(local.monotype) {
+                                    continue;
+                                }
+                                let body = guarded_expressions(&alternative.body);
+                                let reads = |shapes: &mut _, body: &&Expression| {
+                                    only_read(shapes, local.id, None, body)
+                                };
+                                if !body.iter().all(|body| reads(shapes, body)) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    Some(Err(())) => {}
+                    None => {
+                        if !only_read(shapes, target, field, scrutinee) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            alternatives.iter().all(|alternative| {
+                let body = guarded_expressions(&alternative.body);
+                body.iter().all(|body| only_read(shapes, target, field, body))
+            })
+        }
+        _ => {
+            let mut children = vec![];
+            for_each_child(expression, &mut |child| children.push(child));
+            children.into_iter().all(|child| only_read(shapes, target, field, child))
+        }
+    }
+}
+
+/// The locals a pattern binds, at any depth.
+fn pattern_locals<'p>(pattern: &'p Pattern, locals: &mut Vec<&'p crate::monomorphic::Local>) {
+    match &pattern.kind {
+        PatternKind::Variable(local) => locals.push(local),
+        PatternKind::Named { local, pattern } => {
+            locals.push(local);
+            pattern_locals(pattern, locals);
+        }
+        PatternKind::Constructor { arguments: patterns, .. }
+        | PatternKind::Array(patterns)
+        | PatternKind::Closure { captures: patterns, .. } => {
+            patterns.iter().for_each(|pattern| pattern_locals(pattern, locals));
+        }
+        PatternKind::Record(fields) => {
+            fields.iter().for_each(|(_, pattern)| pattern_locals(pattern, locals));
+        }
+        PatternKind::Wildcard | PatternKind::Literal(_) => {}
     }
 }
 

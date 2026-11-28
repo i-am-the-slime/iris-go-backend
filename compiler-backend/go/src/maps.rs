@@ -491,6 +491,11 @@ pub enum HashMapOperation {
     AtLeast,
     /// The entry of the least key above the key.
     Above,
+    /// `maps.Clone(m)`: the same entries in a map of their own, which writes to either leave
+    /// the other as it is.
+    Copy,
+    /// `m[k] += v`, of the key, the Int and the map, which it answers.
+    Add,
 }
 
 impl HashMapOperation {
@@ -502,7 +507,8 @@ impl HashMapOperation {
             | HashMapOperation::SortedEntries
             | HashMapOperation::BalancedHeight
             | HashMapOperation::Min
-            | HashMapOperation::Max => 1,
+            | HashMapOperation::Max
+            | HashMapOperation::Copy => 1,
             HashMapOperation::Singleton
             | HashMapOperation::Delete
             | HashMapOperation::Lookup
@@ -513,7 +519,7 @@ impl HashMapOperation {
             | HashMapOperation::Below
             | HashMapOperation::AtLeast
             | HashMapOperation::Above => 2,
-            HashMapOperation::Insert => 3,
+            HashMapOperation::Insert | HashMapOperation::Add => 3,
         }
     }
 }

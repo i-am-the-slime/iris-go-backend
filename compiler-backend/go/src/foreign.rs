@@ -41,6 +41,17 @@ use rustc_hash::FxHashMap;
 
 use crate::monotype::MonotypeId;
 
+/// The argument a foreign answers by its declared type alone, which leaves it nothing else of
+/// that type to answer: `forall a. a -> Effect a` answers its argument, and
+/// `forall a. (Unit -> a) -> Effect a` what its callback answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HandsBack {
+    /// The argument at this position.
+    Argument(usize),
+    /// The result of calling the function at this position.
+    Called(usize),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Foreign {
     Operator(Operator),
@@ -58,6 +69,8 @@ pub enum Foreign {
         arity: usize,
         effectful: bool,
         type_arguments: &'static [MonotypeId],
+        /// The argument that its declared type makes it answer, when it answers one.
+        hands_back: Option<HandsBack>,
     },
     Call {
         function: GoFunction,

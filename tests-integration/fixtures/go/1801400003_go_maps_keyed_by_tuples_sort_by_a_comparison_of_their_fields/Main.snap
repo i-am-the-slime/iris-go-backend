@@ -196,13 +196,6 @@ func TreeFromTable2(table map[shared.Key]int) *MapKey {
 	return TreeFromKeys2(keys, values, 0, len(keys))
 }
 
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int, i2 int) int {
-	return i + i2
-}
-
 // Data/Tuple/tuple.go
 package tuple
 
@@ -216,7 +209,6 @@ package main
 
 import (
 	"fixture/Data/Map/Internal"
-	"fixture/Data/Semiring"
 	"fixture/Data/Tuple"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -237,14 +229,7 @@ func initializeMain_() int {
 	for k := 1; k < 41; k++ {
 		m := accumulator2
 		key := shared.Key{Row: k % 4, Column: k % 5}
-		old, found := m[key]
-		var result int
-		if found {
-			result = semiring.Add(old, k)
-		} else {
-			result = k
-		}
-		m[key] = result
+		m[key] += k
 		accumulator2 = m
 	}
 	return mainGo(0, internal.TreeFromTable(accumulator)) + mainGo2(0, internal.TreeFromTable2(accumulator2))

@@ -221,9 +221,35 @@ impl<'r> Rewrite<'r> {
         } else {
             self.read(expression);
         }
-        if let Some(Conversion { from, to }) = conversion {
-            *expression = self.convert(take(expression), tree, &from, &to);
+        match conversion {
+            Some(Conversion { from, to }) => {
+                *expression = self.convert(take(expression), tree, &from, &to);
+            }
+            None if self.decided.copies.contains(&at) => {
+                *expression = self.copied(take(expression), tree, &natives);
+            }
+            None => {}
         }
+    }
+
+    /// A copy of a value whose maps a fold starts from, which the fold may then change in
+    /// place: a Go map's `maps.Clone`, and every other value through the tree.
+    fn copied(
+        &mut self,
+        value: Expression,
+        tree: MonotypeId,
+        representations: &[Representation],
+    ) -> Expression {
+        if !representations.iter().any(|slot| slot.is_native()) {
+            return value;
+        }
+        if self.shapes.contains_key(&tree) && representations[0] == Representation::GoMap {
+            let monotype = value.monotype;
+            return hash_map(HashMapOperation::Copy, vec![value], monotype);
+        }
+        let trees = vec![Representation::Tree; representations.len()];
+        let converted = self.convert(value, tree, representations, &trees);
+        self.convert(converted, tree, &trees, representations)
     }
 
     /// A value of type `tree` whose slots are in the representations `from`, as one whose slots
@@ -432,6 +458,17 @@ impl<'r> Rewrite<'r> {
                         self.local_type(binding.local.id, binding.local.monotype);
                 }
             }
+            ExpressionKind::EffectBind { action, local, .. } => {
+                let original = local.monotype;
+                local.monotype = self.local_type(local.id, original);
+                if local.monotype != original {
+                    // The foreign that hands the maps back answers them as they are.
+                    action.monotype = match self.monotypes.effect_result(action.monotype) {
+                        Some(_) => self.monotypes.intern(Monotype::Effect(local.monotype)),
+                        None => local.monotype,
+                    };
+                }
+            }
             ExpressionKind::Lambda { parameters, body } => {
                 let original = self.results_after(expression.monotype, parameters.len());
                 let mut changed = body.monotype != original;
@@ -612,6 +649,10 @@ impl<'r> Rewrite<'r> {
         table: Expression,
         hash: MonotypeId,
     ) -> Expression {
+        if self.adds_integers(&combine) {
+            // An Int absent counts from zero, `0 + v` being `v`: `m[k] += v`.
+            return hash_map(HashMapOperation::Add, vec![key, value, table], hash);
+        }
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let mut bindings = vec![];
         let key = self.named("key", key, &mut bindings);
@@ -629,6 +670,33 @@ impl<'r> Rewrite<'r> {
         let stored = Expression::new(choice, monotype);
         let inserted = hash_map(HashMapOperation::Insert, vec![key, stored, table], hash);
         let_in(bindings, inserted)
+    }
+
+    /// Whether a function of two Ints adds them: `(+)` of Int, or a lambda that does.
+    fn adds_integers(&self, function: &Expression) -> bool {
+        let (parameters, body) = match &function.kind {
+            ExpressionKind::Lambda { parameters, body } => (parameters, body.as_ref()),
+            ExpressionKind::Function(id) => {
+                let function = self.program.function(*id);
+                (&function.parameters, &function.body)
+            }
+            _ => return false,
+        };
+        let [left, right] = &parameters[..] else { return false };
+        let int = |local: &Local| matches!(self.monotypes.get(local.monotype), Monotype::Int);
+        let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::IntAdd), arguments } =
+            &body.kind
+        else {
+            return false;
+        };
+        let is = |expression: &Expression, local: &Local| matches!(expression.kind, ExpressionKind::Local(id) if id == local.id);
+        let adds = match &arguments[..] {
+            [first, second] => {
+                (is(first, left) && is(second, right)) || (is(first, right) && is(second, left))
+            }
+            _ => false,
+        };
+        adds && int(left) && int(right)
     }
 
     /// The expression itself when it is a local or a literal, otherwise a local bound to it.

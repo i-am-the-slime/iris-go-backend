@@ -1,0 +1,13 @@
+-- a map handed through a foreign is looked up by a callback the foreign runs twice
+2870
+-- a callback that counts into a map it closes over starts from a copy each time
+(Just 3) (Just 5) (Just 1)
+[(Tuple 4 16),(Tuple 6 36),(Tuple 7 49),(Tuple 8 64),(Tuple 9 81),(Tuple 10 100),(Tuple 11 121),(Tuple 12 144),(Tuple 13 169),(Tuple 14 196),(Tuple 15 225),(Tuple 16 256),(Tuple 17 289),(Tuple 18 324),(Tuple 19 361),(Tuple 20 400)]
+20
+-- a map a callback builds comes back in order
+[(Tuple 0 4),(Tuple 1 5),(Tuple 2 5),(Tuple 3 5),(Tuple 4 4)]
+-- a function that reads a map an insert changes afterwards reads the map it closed over
+Nothing (Just 30) 2
+-- sums count from zero, other combinations from the first value
+[(Tuple 0 9),(Tuple 1 12),(Tuple 2 7)]
+[(Tuple 0 109),(Tuple 1 212),(Tuple 2 107)]

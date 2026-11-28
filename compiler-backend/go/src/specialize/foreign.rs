@@ -9,7 +9,9 @@ use smol_str::SmolStr;
 
 use super::{Scope, Specializer};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{Accumulator, Boundary, Foreign, ForeignPackages, Signature, Spelled};
+use crate::foreign::{
+    Accumulator, Boundary, Foreign, ForeignPackages, HandsBack, Signature, Spelled,
+};
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId, supported};
 use crate::scheme::rank_n_scheme;
@@ -296,7 +298,76 @@ where
             }
         }
         let type_arguments = Box::leak(type_arguments.into_boxed_slice());
-        Ok(Foreign::Project { file_id, term, arity, effectful, type_arguments })
+        let hands_back = match declared {
+            Some(declared) => self.handed_back(declared, arity)?,
+            None => None,
+        };
+        Ok(Foreign::Project { file_id, term, arity, effectful, type_arguments, hands_back })
+    }
+
+    /// The argument that a foreign's declared type makes it answer: one whose result, after an
+    /// `Effect`, is a quantified variable that only one parameter mentions, as itself or as the
+    /// result of a function of something else. Having no other value of that type, the foreign
+    /// answers its argument, or what calling that function answered.
+    fn handed_back(&mut self, declared: TypeId, arity: usize) -> GoResult<Option<HandsBack>> {
+        let (quantifiers, mut current) = self.context.types.peel_quantifiers(declared);
+        let mut parameters = vec![];
+        while let Some((parameter, result)) = self.context.types.function_parts(current) {
+            parameters.push(parameter);
+            current = result;
+        }
+        if quantifiers.is_empty() || parameters.len() != arity {
+            return Ok(None);
+        }
+        let current = self.context.types.strip_annotations(current);
+        let (head, arguments) = self.context.types.spine(current);
+        let result = match *self.context.types.lookup(head) {
+            Type::Constructor(file_id, item)
+                if self.context.is_type(file_id, item, "Effect", "Effect")? =>
+            {
+                let [result] = arguments[..] else { return Ok(None) };
+                self.context.types.strip_annotations(result)
+            }
+            _ => current,
+        };
+        let Type::Rigid(variable, _, _) = *self.context.types.lookup(result) else {
+            return Ok(None);
+        };
+        if !quantifiers.contains(&variable) {
+            return Ok(None);
+        }
+        let mut handed = None;
+        for (position, &parameter) in parameters.iter().enumerate() {
+            let mut mentioned = vec![];
+            self.collect_rigid_names(parameter, &mut mentioned);
+            if !mentioned.contains(&variable) {
+                continue;
+            }
+            if handed.is_some() {
+                return Ok(None);
+            }
+            let parameter = self.context.types.strip_annotations(parameter);
+            handed = match self.context.types.lookup(parameter).clone() {
+                Type::Rigid(name, _, _) if name == variable => Some(HandsBack::Argument(position)),
+                _ => match self.context.types.function_parts(parameter) {
+                    Some((argument, called)) => {
+                        let called = self.context.types.strip_annotations(called);
+                        let mut before = vec![];
+                        self.collect_rigid_names(argument, &mut before);
+                        let answers = matches!(
+                            *self.context.types.lookup(called),
+                            Type::Rigid(name, _, _) if name == variable
+                        );
+                        match answers && !before.contains(&variable) {
+                            true => Some(HandsBack::Called(position)),
+                            false => return Ok(None),
+                        }
+                    }
+                    None => return Ok(None),
+                },
+            };
+        }
+        Ok(handed)
     }
 
     fn result_alone_mentions_a_quantifier(&mut self, declared: TypeId) -> GoResult<bool> {

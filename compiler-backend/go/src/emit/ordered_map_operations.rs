@@ -53,7 +53,7 @@ where
         let map = match operation {
             HashMapOperation::New | HashMapOperation::Singleton => monotype,
             HashMapOperation::BalancedHeight => return false,
-            HashMapOperation::Insert => arguments[2].monotype,
+            HashMapOperation::Insert | HashMapOperation::Add => arguments[2].monotype,
             HashMapOperation::Delete
             | HashMapOperation::Lookup
             | HashMapOperation::Member
@@ -67,7 +67,8 @@ where
             | HashMapOperation::SortedEntries
             | HashMapOperation::Difference
             | HashMapOperation::Min
-            | HashMapOperation::Max => arguments[0].monotype,
+            | HashMapOperation::Max
+            | HashMapOperation::Copy => arguments[0].monotype,
         };
         matches!(self.monotypes.get(map), Monotype::OrderedMap(..))
     }
@@ -178,6 +179,12 @@ where
             }
             HashMapOperation::BalancedHeight => {
                 unreachable!("invariant violated: the height of a tree as an ordered map's")
+            }
+            HashMapOperation::Copy => {
+                unreachable!("invariant violated: a map kept in order copied as a Go map")
+            }
+            HashMapOperation::Add => {
+                unreachable!("invariant violated: a map kept in order added to as a Go map")
             }
         })
     }

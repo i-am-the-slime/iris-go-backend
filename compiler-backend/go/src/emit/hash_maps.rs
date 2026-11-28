@@ -41,7 +41,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use super::uniqueness::{self, Forced, Scope, Shapes};
-use crate::foreign::{Foreign, Iteration};
+use crate::foreign::{Foreign, HandsBack, Iteration};
 use crate::maps::MapOperation;
 use crate::monomorphic::traversal::for_each_child;
 use crate::monomorphic::{
@@ -402,6 +402,8 @@ struct Webs<'p> {
     site_of: FxHashMap<*const Expression, usize>,
     /// Whether each web is a tree under [`Hope::Calls`], once that is settled.
     could_take: Vec<bool>,
+    /// The seeds of folds that closures read off maps they close over ([`Decided::copies`]).
+    copies: FxHashSet<*const Expression>,
 }
 
 /// Which calls are taken to hand on no trees, as if each called the variant of its function
@@ -474,6 +476,8 @@ struct Decided {
     parents: Vec<Node>,
     calls: Vec<(FunctionId, Node)>,
     sites: Vec<CallSite>,
+    /// The seeds of folds that a closure reads off a map it closes over, which the fold copies.
+    copies: FxHashSet<*const Expression>,
 }
 
 impl Decided {
@@ -538,6 +542,7 @@ impl<'p> Webs<'p> {
             sites: vec![],
             site_of: FxHashMap::default(),
             could_take: vec![],
+            copies: FxHashSet::default(),
         }
     }
 
@@ -676,15 +681,26 @@ impl<'p> Webs<'p> {
     /// The local must use the maps it holds linearly: a map as a whole, a record each map it
     /// holds by the fields that lead to it.
     fn require_linear(&mut self, slots: &[Node], local: &Local, scope: Scope<'p>) {
-        let mut reads =
-            Reads { program: self.program, operations: self.operations, readers: self.readers };
         let at = ScopeAt::of(scope);
         let layout = self.layout(local.monotype);
+        let (layouts, monotypes, shapes) = (&mut self.layouts, self.monotypes, self.shapes);
+        let mut holds = |monotype| layouts.layout(monotypes, shapes, monotype).width > 0;
+        let mut reads = Reads {
+            program: self.program,
+            operations: self.operations,
+            readers: self.readers,
+            holds: Some(&mut holds),
+            copies: Some(&mut self.copies),
+        };
+        let mut nonlinear = vec![];
         for (&node, path) in slots.iter().zip(&layout.paths) {
             self.linear.push(Linear { node, local: local.id, path: path.clone(), scope: at });
             if !is_linear(&mut reads, local.id, path, scope) {
-                self.force_tree(node);
+                nonlinear.push(node);
             }
+        }
+        for node in nonlinear {
+            self.force_tree(node);
         }
     }
 
@@ -771,6 +787,13 @@ impl<'p> Webs<'p> {
             }
             ExpressionKind::Foreign { foreign, arguments } if is_fold_left(foreign, arguments) => {
                 self.fold(expression, arguments)
+            }
+            ExpressionKind::Foreign { foreign, arguments }
+                if handed_back(foreign, arguments, expression.monotype).is_some() =>
+            {
+                let answer = self.fresh_slots(expression.monotype, false);
+                self.hand_back(foreign, arguments, expression.monotype, answer.clone());
+                answer
             }
             ExpressionKind::Record(fields) => {
                 let fields = fields.iter().map(|(label, value)| (label.as_str(), value));
@@ -1121,12 +1144,76 @@ impl<'p> Webs<'p> {
                 self.bound_trees(parameters);
                 self.expression_children(expression);
             }
-            ExpressionKind::EffectBind { local, .. }
-            | ExpressionKind::EffectEach { element: local, .. } => {
+            ExpressionKind::EffectBind { action, local, body } => {
+                self.effect_bind(action, local, body);
+                self.expression(body);
+            }
+            ExpressionKind::EffectEach { element: local, .. } => {
                 self.bound_trees(std::slice::from_ref(local));
                 self.expression_children(expression);
             }
             _ => self.expression_children(expression),
+        }
+    }
+
+    /// `local <- action`: a local bound to the maps of what a foreign hands back is that
+    /// value, the others are trees.
+    fn effect_bind(&mut self, action: &'p Expression, local: &'p Local, body: &'p Expression) {
+        let result = self.monotypes.effect_result(action.monotype).unwrap_or(action.monotype);
+        let handed = match &action.kind {
+            ExpressionKind::Foreign { foreign, arguments } if self.holds_maps(local.monotype) => {
+                handed_back(foreign, arguments, result).map(|_| (*foreign, arguments))
+            }
+            _ => None,
+        };
+        let Some((foreign, arguments)) = handed else {
+            self.bound_trees(std::slice::from_ref(local));
+            self.expression(action);
+            return;
+        };
+        let bound = self.local(local.id, local.monotype);
+        self.hand_back(foreign, arguments, result, bound.clone());
+        self.require_linear(&bound, local, Scope::Expression(body));
+    }
+
+    /// The maps a foreign hands back ([`HandsBack`]) flow from its argument, or from what its
+    /// callback answers, to `to`, converted there where `to` is a tree.
+    fn hand_back(
+        &mut self,
+        foreign: &Foreign,
+        arguments: &'p [Expression],
+        result: MonotypeId,
+        to: Slots,
+    ) {
+        let (handed, at) = self.handed_back(foreign, arguments, result);
+        self.soft(handed, to, Flow::Argument, at);
+    }
+
+    /// The maps of the value a foreign hands back ([`HandsBack`]): those of its argument, or
+    /// those its callback answers. The callback may run any number of times, so what it reads of
+    /// the maps it closes over must stay as it is ([`uniqueness`]'s closures that only read).
+    fn handed_back(
+        &mut self,
+        foreign: &Foreign,
+        arguments: &'p [Expression],
+        result: MonotypeId,
+    ) -> (Slots, &'p Expression) {
+        let Some(handed) = handed_back(foreign, arguments, result) else {
+            unreachable!("invariant violated: a foreign hands nothing back")
+        };
+        let (HandsBack::Argument(position) | HandsBack::Called(position)) = handed;
+        for (index, argument) in arguments.iter().enumerate() {
+            if index != position {
+                self.expression(argument);
+            }
+        }
+        let argument = &arguments[position];
+        match (&argument.kind, handed) {
+            (ExpressionKind::Lambda { parameters, body }, HandsBack::Called(_)) => {
+                self.bound_trees(parameters);
+                (self.value(body), body)
+            }
+            _ => (self.value(argument), argument),
         }
     }
 
@@ -1178,11 +1265,14 @@ impl<'p> Webs<'p> {
                 if settled.tree[root_of(&mut self.parents, linear.node)] {
                     continue;
                 }
+                let (layouts, monotypes, shapes) = (&mut self.layouts, self.monotypes, self.shapes);
+                let mut holds = |monotype| layouts.layout(monotypes, shapes, monotype).width > 0;
                 let mut shapes = Ordering {
                     program: self.program,
                     operations: self.operations,
                     readers: self.readers,
                     to_tree: &settled.to_tree,
+                    holds: &mut holds,
                 };
                 if !is_linear(&mut shapes, linear.local, &linear.path, linear.scope.scope()) {
                     forced.push(linear.node);
@@ -1411,6 +1501,7 @@ impl<'p> Webs<'p> {
             parents: self.parents,
             calls: self.calls,
             sites: self.sites,
+            copies: self.copies,
         }
     }
 }
@@ -1498,6 +1589,17 @@ fn is_fold_left(foreign: &Foreign, arguments: &[Expression]) -> bool {
     )
 }
 
+/// Whether the argument is the seed of a fold, which a closure that runs the fold reads when the
+/// fold starts from a copy of it ([`Decided::copies`]).
+fn seeds(call: &Expression, argument: &Expression) -> bool {
+    match &call.kind {
+        ExpressionKind::Foreign { foreign, arguments } => {
+            is_fold_left(foreign, arguments) && std::ptr::eq(&arguments[1], argument)
+        }
+        _ => false,
+    }
+}
+
 fn alternative_bodies(alternatives: &[Alternative]) -> Vec<&Expression> {
     let mut bodies = vec![];
     for alternative in alternatives {
@@ -1545,7 +1647,8 @@ fn readers(
                 if !shapes.contains_key(&parameter.monotype) || readers.contains(&parameter.id) {
                     continue;
                 }
-                let mut reads = Reads { program, operations, readers: &readers };
+                let mut reads =
+                    Reads { program, operations, readers: &readers, holds: None, copies: None };
                 let scope = Scope::Expression(&function.body);
                 if uniqueness::is_only_read(&mut reads, parameter.id, scope) {
                     found.push(parameter.id);
@@ -1582,6 +1685,32 @@ fn read_by(
     parameters.len() == arguments.len() && readers.contains(&parameters[position].id)
 }
 
+/// What a call of a foreign hands back of its arguments, as a value of type `result`: its
+/// argument of that type, or what a callback written in place answers. A foreign that Go
+/// instantiates with types of its own keeps them, and is no such call.
+fn handed_back(
+    foreign: &Foreign,
+    arguments: &[Expression],
+    result: MonotypeId,
+) -> Option<HandsBack> {
+    let Foreign::Project { arity, type_arguments: [], hands_back: Some(handed), .. } = *foreign
+    else {
+        return None;
+    };
+    if arguments.len() != arity {
+        return None;
+    }
+    let fits = match handed {
+        HandsBack::Argument(position) => arguments[position].monotype == result,
+        HandsBack::Called(position) => matches!(
+            &arguments[position].kind,
+            ExpressionKind::Lambda { parameters, body }
+                if parameters.len() == 1 && body.monotype == result
+        ),
+    };
+    fits.then_some(handed)
+}
+
 /// Whether the call is an array iteration that runs a callback on the spot.
 fn runs_callback_now(call: &Expression, callback: &Expression) -> bool {
     let ExpressionKind::Foreign { foreign: Foreign::Call { boundary, .. }, .. } = &call.kind else {
@@ -1595,6 +1724,12 @@ struct Reads<'o> {
     program: &'o Program,
     operations: &'o FxHashMap<FunctionId, MapOperation>,
     readers: &'o FxHashSet<LocalId>,
+    /// Which types hold maps, where a closure that only reads a local peeks at it. A parameter
+    /// that such a closure reads is no reader: the closure may outlive the call and read the map
+    /// after its caller changed it.
+    holds: Option<&'o mut dyn FnMut(MonotypeId) -> bool>,
+    /// The seeds of folds such a closure reads, which the folds copy.
+    copies: Option<&'o mut FxHashSet<*const Expression>>,
 }
 
 impl Shapes for Reads<'_> {
@@ -1621,6 +1756,24 @@ impl Shapes for Reads<'_> {
     fn closures_keep_what_they_read(&self) -> bool {
         true
     }
+
+    fn closures_only_read(&self) -> bool {
+        self.holds.is_some()
+    }
+
+    fn only_reads(&mut self, call: &Expression, argument: &Expression) -> bool {
+        if seeds(call, argument) {
+            if let Some(copies) = self.copies.as_mut() {
+                copies.insert(std::ptr::from_ref(argument));
+            }
+            return true;
+        }
+        read_by(self.program, self.operations, self.readers, call, argument)
+    }
+
+    fn holds_cells(&mut self, monotype: MonotypeId) -> bool {
+        self.holds.as_mut().is_none_or(|holds| holds(monotype))
+    }
 }
 
 /// The order of a Go map's uses, once it is known where it becomes a tree: a conversion is the
@@ -1631,6 +1784,7 @@ struct Ordering<'o> {
     operations: &'o FxHashMap<FunctionId, MapOperation>,
     readers: &'o FxHashSet<LocalId>,
     to_tree: &'o FxHashSet<*const Expression>,
+    holds: &'o mut dyn FnMut(MonotypeId) -> bool,
 }
 
 impl Shapes for Ordering<'_> {
@@ -1664,5 +1818,25 @@ impl Shapes for Ordering<'_> {
 
     fn closures_keep_what_they_read(&self) -> bool {
         true
+    }
+
+    fn closures_only_read(&self) -> bool {
+        true
+    }
+
+    /// A closure that reads a map, which nothing writes or hands on then, reads it as it is
+    /// whenever it runs, but converts it each time it runs: that is no read.
+    fn only_reads(&mut self, call: &Expression, argument: &Expression) -> bool {
+        !self.to_tree.contains(&std::ptr::from_ref(argument))
+            && (seeds(call, argument)
+                || read_by(self.program, self.operations, self.readers, call, argument))
+    }
+
+    fn closure_reads_count(&self) -> bool {
+        false
+    }
+
+    fn holds_cells(&mut self, monotype: MonotypeId) -> bool {
+        (self.holds)(monotype)
     }
 }
