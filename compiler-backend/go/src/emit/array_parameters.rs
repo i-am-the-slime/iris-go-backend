@@ -3,7 +3,9 @@ use rustc_hash::FxHashSet;
 use super::aliases::is_named;
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator,
+};
 
 const BUILTINS: &[GoBuiltin] = &[
     GoBuiltin::Len,
@@ -14,7 +16,8 @@ const BUILTINS: &[GoBuiltin] = &[
     GoBuiltin::Copy,
     GoBuiltin::Make,
 ];
-const RUNTIME_PACKAGES: &[&str] = &["prim", "array", "math", "slices"];
+const RUNTIME_PACKAGES: &[GoPackage] =
+    &[GoPackage::Prim, GoPackage::Array, GoPackage::Math, GoPackage::Slices];
 
 pub(super) fn promote_array_parameters(
     declarations: &mut [GoDeclaration],
@@ -270,7 +273,9 @@ impl Headers<'_> {
             GoExpression::Identifier(name) => {
                 function.is_one_of(BUILTINS) || self.helpers.contains(name)
             }
-            GoExpression::Qualified { package, .. } => RUNTIME_PACKAGES.contains(&package.as_str()),
+            GoExpression::Qualified { package, .. } => {
+                RUNTIME_PACKAGES.iter().any(|runtime| package.is(*runtime))
+            }
             GoExpression::Instantiation { function, .. } => self.is_safe_callee(function),
             _ => false,
         }
@@ -329,20 +334,18 @@ fn loops_without_defers(body: &mut Vec<GoStatement>) -> bool {
 
 fn is_runtime_call(function: &GoExpression) -> bool {
     match function {
-        GoExpression::Qualified { package, name } => !is_arithmetic(package, name),
+        GoExpression::Qualified { .. } => !is_arithmetic(function),
         GoExpression::Instantiation { function, .. } => is_runtime_call(function),
         _ => false,
     }
 }
 
-fn is_arithmetic(package: &str, name: &str) -> bool {
-    match package {
-        "math" => true,
-        "prim" => {
-            (name.starts_with("Int") || name.starts_with("Number"))
-                && !name.starts_with("NumberTo")
-                && !name.starts_with("IntToString")
-        }
-        _ => false,
-    }
+fn is_arithmetic(function: &GoExpression) -> bool {
+    let is_prim_arithmetic = |name: &str| {
+        (name.starts_with("Int") || name.starts_with("Number"))
+            && !name.starts_with("NumberTo")
+            && !name.starts_with("IntToString")
+    };
+    function.name_in(GoPackage::Math).is_some()
+        || function.name_in(GoPackage::Prim).is_some_and(is_prim_arithmetic)
 }

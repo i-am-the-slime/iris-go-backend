@@ -43,7 +43,7 @@ use super::{
 };
 use crate::error::GoResult;
 use crate::foreign::{
-    ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, GoPackage, Iteration,
+    ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, Iteration,
 };
 use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
@@ -52,7 +52,7 @@ use crate::monomorphic::{
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoUnaryOperator, SourceLine,
+    GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoStatement, GoUnaryOperator, SourceLine,
 };
 
 /// The most elements of a literal prefix stored in one assignment.

@@ -1,4 +1,5 @@
-use super::{Boundary, Foreign, GoFunction, GoPackage, MaybeConstructors, PLAIN};
+use super::{Boundary, Foreign, GoFunction, MaybeConstructors, PLAIN};
+use crate::syntax::GoPackage;
 
 const fn hash_map(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
     let function = GoFunction { package: GoPackage::HashMap, name };

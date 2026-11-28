@@ -6,9 +6,9 @@
 //! is worked out here, with wrapping, and written as one constant.
 
 use super::{Emitter, binary, negated};
-use crate::foreign::{Comparison, GoFunction, GoPackage};
+use crate::foreign::{Comparison, GoFunction};
 use crate::primitives::{Int64Operation, Int64Value, Signedness};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoType, GoUnaryOperator};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoPackage, GoType, GoUnaryOperator};
 
 impl<'p, Q> Emitter<'p, '_, '_, Q>
 where

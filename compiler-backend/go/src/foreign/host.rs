@@ -4,7 +4,8 @@
 //! video, terminal graphics and shared frames are reported there as
 //! unsupported at run time.
 
-use super::{Boundary, Foreign, GoFunction, GoPackage, PLAIN, RECORD};
+use super::{Boundary, Foreign, GoFunction, PLAIN, RECORD};
+use crate::syntax::GoPackage;
 
 const fn perform(name: &'static str, arity: usize) -> Foreign {
     host(name, arity, PLAIN)

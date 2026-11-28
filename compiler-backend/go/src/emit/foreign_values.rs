@@ -5,11 +5,12 @@ use super::{
     mutable, unit_value,
 };
 use crate::error::{GoError, GoResult};
-use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, GoPackage, Operator};
+use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, Operator};
 use crate::monomorphic::{Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoCase, GoExpression, GoPackage, GoStatement, GoType,
+    GoUnaryOperator,
 };
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -179,8 +180,7 @@ where
         value: GoExpression,
         out: &mut Vec<GoStatement>,
     ) -> GoExpression {
-        self.imports.insert("slices".into());
-        let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
+        let clone = self.qualified(GoPackage::Slices, "Clone");
         let name = self.temporary("updated");
         let updated = identifier_expression(&name);
         out.push(GoStatement::Define {
@@ -311,8 +311,7 @@ where
     }
 
     fn copy_once(&mut self, target: &GoExpression, copied: &str) -> GoStatement {
-        self.imports.insert("slices".into());
-        let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
+        let clone = self.qualified(GoPackage::Slices, "Clone");
         let flag = identifier_expression(copied);
         GoStatement::If {
             condition: GoExpression::Unary {
@@ -404,9 +403,8 @@ where
             GoExpression::Conversion { type_: GoType::Int, value: Box::new(number.clone()) };
         let found = self.construct(&data, just, vec![integer])?;
         let missing = self.construct(&data, nothing, vec![])?;
-        self.imports.insert("math".into());
-        let math =
-            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        self.import(GoPackage::Math);
+        let math = |name: &str| GoExpression::qualified(GoPackage::Math, name);
         let whole = binary(
             GoBinaryOperator::Equal,
             call(math("Trunc"), vec![number.clone()]),
@@ -560,9 +558,7 @@ where
                 self.locals.insert(parameter.id, unit_value());
                 let value = self.value(body, out)?;
                 let value = self.typed_constant(value, body.monotype)?;
-                self.imports.insert(GoPackage::Lazy.path().into());
-                let mut evaluated =
-                    GoExpression::Qualified { package: "lazy".into(), name: "Evaluated".into() };
+                let mut evaluated = self.qualified(GoPackage::Lazy, "Evaluated");
                 let type_ = self.go_type(body.monotype)?;
                 if matches!(type_, GoType::Any | GoType::Erased(_)) {
                     // Go would infer the dynamic type of the value instead.
@@ -711,13 +707,7 @@ where
             Foreign::Int64 { operation, signedness } => {
                 self.int64_operation(operation, signedness, values)
             }
-            Foreign::Constant(function) => {
-                self.imports.insert(function.package.path().into());
-                GoExpression::Qualified {
-                    package: function.package.name().into(),
-                    name: function.name.into(),
-                }
-            }
+            Foreign::Constant(function) => self.go_function(function),
             Foreign::Unit => unit_value(),
             Foreign::UnsafeCoerce => {
                 let position = arguments[0].position;

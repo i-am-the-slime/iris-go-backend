@@ -19,8 +19,8 @@ use rustc_hash::FxHashSet;
 
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, Name,
-    statements_names,
+    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoPackage,
+    GoStatement, Name, statements_names,
 };
 
 use super::views::{carried_unchanged, view_invariant_strings};
@@ -73,17 +73,12 @@ fn counted_code_points(value: &mut GoExpression) {
     else {
         return;
     };
-    if !matches!(&**converted, GoExpression::Qualified { package, name }
-        if package == "direct" && name == "ToCodePointArray")
-    {
+    if !converted.is_qualified(GoPackage::Direct, "ToCodePointArray") {
         return;
     }
     let Some(string) = converted_arguments.pop() else { return };
     let mut counted = GoExpression::Call {
-        function: Box::new(GoExpression::Qualified {
-            package: "direct".into(),
-            name: "CodePointLength".into(),
-        }),
+        function: Box::new(GoExpression::qualified(GoPackage::Direct, "CodePointLength")),
         arguments: vec![string],
     };
     literal_length(&mut counted);
@@ -92,13 +87,14 @@ fn counted_code_points(value: &mut GoExpression) {
 
 fn literal_length(value: &mut GoExpression) {
     let GoExpression::Call { function, arguments } = value else { return };
-    let GoExpression::Qualified { package, name } = &**function else { return };
     let [literal] = arguments.as_slice() else { return };
-    let length = match (package.as_str(), name.as_str(), literal) {
-        ("prim", "CodeUnitLength", GoExpression::String(text)) => text.encode_utf16().count(),
-        ("prim", "CodeUnitLength", GoExpression::Utf16(units)) => units.len(),
-        ("direct", "CodePointLength", GoExpression::String(text)) => text.chars().count(),
-        ("direct", "CodePointLength", GoExpression::Utf16(units)) => {
+    let counts_code_units = function.is_qualified(GoPackage::Prim, "CodeUnitLength");
+    let counts_code_points = function.is_qualified(GoPackage::Direct, "CodePointLength");
+    let length = match literal {
+        GoExpression::String(text) if counts_code_units => text.encode_utf16().count(),
+        GoExpression::Utf16(units) if counts_code_units => units.len(),
+        GoExpression::String(text) if counts_code_points => text.chars().count(),
+        GoExpression::Utf16(units) if counts_code_points => {
             char::decode_utf16(units.iter().copied()).count()
         }
         _ => return,
@@ -188,21 +184,23 @@ fn cap(length: &mut GoExpression, literal: i64) {
         call => call,
     };
     let GoExpression::Call { function, arguments } = call else { return };
-    let GoExpression::Qualified { package, name } = &mut **function else { return };
-    let Some(capped) = counted_up_to(package, name) else { return };
+    let Some(capped) = counted_up_to(function) else { return };
     if arguments.len() != 1 || literal < 0 {
         return;
     }
+    let GoExpression::Qualified { name, .. } = &mut **function else { return };
     *name = capped.into();
     arguments.insert(0, GoExpression::Integer(literal + 1));
 }
 
 /// The function that counts what the length function `package.name` counts,
 /// stopping at a limit.
-fn counted_up_to(package: &str, name: &str) -> Option<&'static str> {
-    match (package, name) {
-        ("prim", "CodeUnitLength") => Some("CodeUnitLengthUpTo"),
-        ("direct", "CodePointLength") => Some("CodePointLengthUpTo"),
+fn counted_up_to(function: &GoExpression) -> Option<&'static str> {
+    match () {
+        _ if function.is_qualified(GoPackage::Prim, "CodeUnitLength") => Some("CodeUnitLengthUpTo"),
+        _ if function.is_qualified(GoPackage::Direct, "CodePointLength") => {
+            Some("CodePointLengthUpTo")
+        }
         _ => None,
     }
 }
@@ -426,9 +424,8 @@ pub(super) fn written_by_literals(declaration: &mut GoDeclaration) -> FxHashSet<
 /// the count is, named by the function that counts it up to a limit.
 fn length_of_variable(value: &GoExpression) -> Option<(&'static str, String)> {
     let GoExpression::Call { function, arguments } = value else { return None };
-    let GoExpression::Qualified { package, name } = &**function else { return None };
     let [GoExpression::Identifier(string)] = arguments.as_slice() else { return None };
-    Some((counted_up_to(package, name)?, string.clone()))
+    Some((counted_up_to(function)?, string.clone()))
 }
 
 fn viewed_length<'h>(
@@ -436,11 +433,10 @@ fn viewed_length<'h>(
     value: &'h GoExpression,
 ) -> Option<(&'h str, &'h str, &'h str)> {
     let GoExpression::Call { function, arguments } = value else { return None };
-    let GoExpression::Qualified { package, name } = &**function else { return None };
     let [GoExpression::Identifier(string)] = arguments.as_slice() else { return None };
-    let counted = match (package.as_str(), name.as_str()) {
-        ("prim", "UTF16") => "CodeUnitLength",
-        ("direct", "CodePoints") => "CodePointLength",
+    let counted = match () {
+        _ if function.is_qualified(GoPackage::Prim, "UTF16") => "CodeUnitLength",
+        _ if function.is_qualified(GoPackage::Direct, "CodePoints") => "CodePointLength",
         _ => return None,
     };
     Some((counted, string, local))
@@ -448,7 +444,8 @@ fn viewed_length<'h>(
 
 fn counts_viewed(value: &GoExpression, (counted, string, _): &(&str, &str, &str)) -> bool {
     let GoExpression::Call { function, arguments } = value else { return false };
-    let GoExpression::Qualified { package, name } = &**function else { return false };
     let [GoExpression::Identifier(argument)] = arguments.as_slice() else { return false };
-    matches!(package.as_str(), "prim" | "direct") && name == counted && argument == string
+    let counts = function.is_qualified(GoPackage::Prim, counted)
+        || function.is_qualified(GoPackage::Direct, counted);
+    counts && argument == string
 }

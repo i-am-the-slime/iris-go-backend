@@ -6,14 +6,13 @@ use super::{
     identifier_expression, names, ownership, recycling, unit_value,
 };
 use crate::error::GoResult;
-use crate::foreign::GoPackage;
 use crate::go_traversal::{self, Walk};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::monomorphic::traversal::reference_graph;
 use crate::monomorphic::{Expression, Function, FunctionId, Program};
 use crate::monotype::{Monotype, Monotypes};
 use crate::naming::identifier;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoDeclaration, GoExpression, GoPackage, GoQualifier, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -56,9 +55,9 @@ where
         {
             // Like an embedded host running an `Effect Int`, the program's
             // result is its exit status.
-            self.imports.insert("os".into());
-            self.effects.insert(("os".into(), "Exit".into()));
-            let exit = GoExpression::Qualified { package: "os".into(), name: "Exit".into() };
+            self.import(GoPackage::Os);
+            self.effects.insert((GoQualifier::Package(GoPackage::Os), "Exit".into()));
+            let exit = GoExpression::qualified(GoPackage::Os, "Exit");
             let status = call(identifier_expression(&name), vec![]);
             vec![GoStatement::Expression(call(exit, vec![status]))]
         } else if function.parameters.is_empty()
@@ -379,12 +378,9 @@ where
         statements.push(GoStatement::Return(Some(value)));
         let cell = self.global_name(Spelling::derived("", name.into(), "Cell"));
         let compute = self.global_name(Spelling::derived("compute", name.into(), ""));
-        self.imports.insert(GoPackage::Lazy.path().into());
+        self.import(GoPackage::Lazy);
         let unevaluated = GoExpression::Instantiation {
-            function: Box::new(GoExpression::Qualified {
-                package: "lazy".into(),
-                name: "Unevaluated".into(),
-            }),
+            function: Box::new(GoExpression::qualified(GoPackage::Lazy, "Unevaluated")),
             arguments: vec![type_.clone()],
         };
         let force = GoExpression::Field {
@@ -500,10 +496,8 @@ pub(super) fn await_fibers(
         {
             let await_ = await_.clone();
             // os.Exit skips deferred calls, so an exiting main awaits first.
-            if let Some(GoStatement::Expression(GoExpression::Call { function, .. })) = body.last()
-                && let GoExpression::Qualified { package, name } = function.as_ref()
-                && package == "os"
-                && name == "Exit"
+            if let Some(GoStatement::Expression(last)) = body.last()
+                && last.is_call_to(GoPackage::Os, "Exit")
             {
                 let at = body.len() - 1;
                 body.insert(at, GoStatement::Expression(call(await_, vec![])));

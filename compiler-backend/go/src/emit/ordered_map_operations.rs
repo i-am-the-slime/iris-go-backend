@@ -11,11 +11,11 @@
 
 use super::{Emitter, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoStatement, GoType};
 use smol_str::SmolStr;
 
 impl<Q> Emitter<'_, '_, '_, Q>

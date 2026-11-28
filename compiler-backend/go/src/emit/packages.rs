@@ -20,7 +20,7 @@ use crate::error::{GoError, GoResult};
 use crate::graph::strongly_connected;
 use crate::modules::{ModuleIndex, ModuleSet, Modules};
 use crate::naming::{RESERVED, capitalise, exported, go_safe, lower_camel, numbered, resolve};
-use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, Reference};
+use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, GoQualifier, Reference};
 
 /// How a global name was formed, so that each package can spell it anew.
 #[derive(Debug, Clone)]
@@ -510,7 +510,7 @@ impl Packaging<'_> {
                             GoExpression::Identifier(renamed)
                         } else {
                             GoExpression::Qualified {
-                                package: aliases[&home].clone(),
+                                package: GoQualifier::Named(aliases[&home].clone()),
                                 name: renamed,
                             }
                         };
@@ -825,8 +825,8 @@ fn requalify_support(declaration: &mut GoDeclaration, aliases: &FxHashMap<String
     }
     declaration.for_each_reference_mut(&mut |reference| match reference {
         Reference::Value(GoExpression::Qualified { package, .. }) => {
-            if let Some(alias) = aliases.get(package.as_str()) {
-                *package = alias.clone();
+            if let Some(alias) = aliases.get(package.name()) {
+                *package = GoQualifier::Named(alias.clone());
             }
         }
         Reference::Type(name) => *name = requalified(name, aliases),
@@ -866,7 +866,9 @@ fn collect_support(
     }
     declaration.for_each_reference_mut(&mut |reference| match reference {
         Reference::Type(name) => packages.extend(qualifiers(name)),
-        Reference::Value(GoExpression::Qualified { package, .. }) => packages.push(package.clone()),
+        Reference::Value(GoExpression::Qualified { package, .. }) => {
+            packages.push(package.name().to_string())
+        }
         Reference::Value(_) | Reference::Binder(_) => {}
     });
     for package in packages {

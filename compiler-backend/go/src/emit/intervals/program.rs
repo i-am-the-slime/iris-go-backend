@@ -7,7 +7,7 @@ use super::names::shape_of_type;
 use super::syntax::is_bounds_test;
 use crate::emit::headers::Keeping;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoPackage, GoStatement, GoType};
 
 /// Declarations rewritten while the entries were found, with the entry each was rewritten
 /// under: the rewrite stands if that entry is the final one.
@@ -126,9 +126,11 @@ impl FunctionTable {
             fn expression(&mut self, value: &mut GoExpression) {
                 if let GoExpression::Call { function, .. } = value {
                     match &**function {
-                        GoExpression::Qualified { package, name } => {
-                            self.rewrites |=
-                                package == "prim" && matches!(name.as_str(), "IntMod" | "IntDiv")
+                        GoExpression::Qualified { .. } => {
+                            self.rewrites |= matches!(
+                                function.name_in(GoPackage::Prim),
+                                Some("IntMod" | "IntDiv")
+                            )
                         }
                         GoExpression::Identifier(callee)
                             if self.program.internal.contains(callee) =>

@@ -7,10 +7,10 @@ use super::{
 };
 use crate::erasure::Erasure;
 use crate::error::GoResult;
-use crate::foreign::{ForeignPackages, GoPackage};
+use crate::foreign::ForeignPackages;
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::identifier;
-use crate::syntax::{GoDeclaration, GoType, SourceLine, StructField};
+use crate::syntax::{GoDeclaration, GoPackage, GoType, SourceLine, StructField};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -77,31 +77,31 @@ where
             }
             Monotype::Nullable(element) => GoType::Pointer(Box::new(self.go_type(element)?)),
             Monotype::Regex => {
-                self.imports.insert(GoPackage::Regex.path().into());
+                self.import(GoPackage::Regex);
                 GoType::Pointer(Box::new(GoType::Named("regex.Regex".into())))
             }
             Monotype::Mutex => {
-                self.imports.insert("sync".into());
+                self.import(GoPackage::Sync);
                 GoType::Pointer(Box::new(GoType::Named("sync.Mutex".into())))
             }
             Monotype::BigInt => {
-                self.imports.insert("math/big".into());
+                self.import(GoPackage::MathBig);
                 GoType::Pointer(Box::new(GoType::Named("big.Int".into())))
             }
             Monotype::Lazy(value) => {
-                self.imports.insert(GoPackage::Lazy.path().into());
+                self.import(GoPackage::Lazy);
                 let value = self.go_type(value)?;
                 let lazy = GoType::Generic { name: "lazy.Lazy".into(), arguments: vec![value] };
                 GoType::Pointer(Box::new(lazy))
             }
             Monotype::ConsList(element) => {
-                self.imports.insert(GoPackage::Direct.path().into());
+                self.import(GoPackage::Direct);
                 let element = self.go_type(element)?;
                 let name = "direct.ConsList".into();
                 GoType::Pointer(Box::new(GoType::Generic { name, arguments: vec![element] }))
             }
             Monotype::Error => {
-                self.imports.insert(GoPackage::Exception.path().into());
+                self.import(GoPackage::Exception);
                 GoType::Named("exception.Error".into())
             }
             Monotype::Object(element) => {
@@ -402,7 +402,7 @@ where
         };
         let name = match support {
             Some((package, support_name)) => {
-                self.imports.insert(package.path().into());
+                self.import(package);
                 format!("{}.{support_name}", package.name())
             }
             None => {

@@ -2,10 +2,11 @@
 //! do for the JavaScript backend: `Foo.go`, and further `Foo.<part>.go` files, beside
 //! `Foo.purs`.
 
+use crate::syntax::GoPackage;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{ForeignPackages, GoPackage};
+use super::ForeignPackages;
 use crate::syntax::tokens::{Token, TokenKind, closing, split_top, tokens};
 
 /// The Go files next to a source file, in order of name. Go test files are left out.

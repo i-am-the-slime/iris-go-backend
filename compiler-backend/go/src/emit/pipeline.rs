@@ -18,12 +18,12 @@ use super::{
 };
 use crate::arity::Arities;
 use crate::error::GoResult;
-use crate::foreign::{ForeignPackages, GoFunction, GoPackage, LineCoverage};
+use crate::foreign::{ForeignPackages, GoFunction, LineCoverage};
 use crate::maps::KeptOperations;
 use crate::modules::{ModuleIndex, Modules};
 use crate::monomorphic::{FunctionId, Program};
 use crate::monotype::{DataType, MonotypeId, Monotypes};
-use crate::syntax::{DeclarationNames, GoDeclaration};
+use crate::syntax::{DeclarationNames, GoDeclaration, GoPackage};
 
 pub struct EmissionInputs<'a, Q> {
     pub monotypes: &'a mut Monotypes,

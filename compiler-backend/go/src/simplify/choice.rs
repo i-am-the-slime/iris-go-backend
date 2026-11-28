@@ -3,13 +3,14 @@
 //! choice: each chosen value meets its own copy of the case, which it
 //! resolves. The value is then never built, and its tag never tested.
 
+use crate::syntax::GoPackage;
 use rustc_hash::FxHashMap;
 
 use super::coverage::{alternatives_size, column_outcomes};
 use super::{INLINE_SIZE, Simplifier, substitute};
 use crate::foreign::{
-    ARRAY_DELETE_AT, ARRAY_INSERT_AT, Comparison, Foreign, GoFunction, GoPackage,
-    MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
+    ARRAY_DELETE_AT, ARRAY_INSERT_AT, Comparison, Foreign, GoFunction, MUTABLE_PEEK_UNSAFE,
+    MUTABLE_WITHIN, Operator,
 };
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{

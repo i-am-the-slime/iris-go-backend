@@ -1,7 +1,8 @@
-use crate::foreign::{Foreign, GoPackage};
+use crate::foreign::Foreign;
 use crate::monomorphic::traversal::{reference_graph, visit};
 use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId, LocalId, Program};
 use crate::monotype::{Monotype, Monotypes};
+use crate::syntax::GoPackage;
 
 pub struct Suspension {
     suspending: Vec<bool>,

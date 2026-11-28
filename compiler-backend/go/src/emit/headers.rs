@@ -31,12 +31,13 @@ use super::aliases::target_root;
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoQualifier, GoStatement, GoType,
+    GoUnaryOperator,
 };
 
 /// The Go functions, as `(package, name)`, that the emitted code calls to run
 /// an effect: those of performed foreigns and of effectful constructs.
-pub(super) type Effects = FxHashSet<(String, String)>;
+pub(super) type Effects = FxHashSet<(GoQualifier, String)>;
 
 /// The builtins of the Go language: none runs an effect of the program.
 pub(super) const BUILTINS: &[GoBuiltin] = &[
@@ -761,13 +762,14 @@ pub(super) fn fresh(base: &str, names: &mut FxHashSet<String>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::syntax::GoPackage;
 
     fn identifier(name: &str) -> GoExpression {
         GoExpression::Identifier(name.into())
     }
 
     fn prim_call(name: &str, argument: GoExpression) -> GoExpression {
-        let function = GoExpression::Qualified { package: "prim".into(), name: name.into() };
+        let function = GoExpression::qualified(GoPackage::Prim, name);
         GoExpression::Call { function: Box::new(function), arguments: vec![argument] }
     }
 
@@ -812,7 +814,10 @@ mod tests {
 
     #[test]
     fn a_performed_runtime_function_with_a_pure_looking_name_changes_the_slice() {
-        let effects = Effects::from_iter([("prim".to_string(), "NumberPushAll".to_string())]);
+        let effects = Effects::from_iter([(
+            GoQualifier::Package(GoPackage::Prim),
+            "NumberPushAll".to_string(),
+        )]);
         let rendered = rendered("NumberPushAll", &effects);
         assert!(rendered.contains("func f(xs *[]float64)"), "{rendered}");
         assert!(!rendered.contains("elements"), "{rendered}");

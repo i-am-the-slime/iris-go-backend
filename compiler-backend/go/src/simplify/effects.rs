@@ -1,7 +1,8 @@
+use crate::syntax::GoPackage;
 use smol_str::SmolStr;
 
 use super::{Simplifier, choice, three_way};
-use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
+use crate::foreign::{Comparison, Foreign, Operator};
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Results,
 };

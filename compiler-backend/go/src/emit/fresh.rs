@@ -5,7 +5,7 @@
 //! slices.Clip(accumulator)`. An empty literal has no capacity, and the clip does nothing.
 
 use crate::go_traversal::each_block_in_declaration;
-use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType};
 
 pub(super) fn drop_clips_of_fresh_slices(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -78,5 +78,5 @@ fn clip_of(value: &GoExpression, name: &str) -> bool {
 }
 
 fn is_slices_function(function: &GoExpression, expected: &str) -> bool {
-    matches!(function, GoExpression::Qualified { package, name } if package == "slices" && name == expected)
+    function.is_qualified(GoPackage::Slices, expected)
 }

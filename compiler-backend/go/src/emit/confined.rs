@@ -9,7 +9,7 @@ use crate::foreign::ForeignPackages;
 use crate::go_traversal::{self, Walk};
 use crate::naming::capitalise;
 use crate::primitives::SHARED_CELLS;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoQualifier, GoStatement, GoType};
 
 type InPlace = FxHashMap<(String, String), Vec<usize>>;
 
@@ -90,7 +90,7 @@ impl SharedCell {
             function => function,
         };
         let GoExpression::Qualified { package, name } = function else { return None };
-        if *package != self.package {
+        if package.name() != self.package {
             return None;
         }
         [
@@ -115,8 +115,10 @@ impl SharedCell {
     }
 
     fn call(&self, function: &str, arguments: Vec<GoExpression>) -> GoExpression {
-        let function =
-            GoExpression::Qualified { package: self.package.clone(), name: function.to_string() };
+        let function = GoExpression::Qualified {
+            package: GoQualifier::Named(self.package.clone()),
+            name: function.to_string(),
+        };
         GoExpression::Call { function: Box::new(function), arguments }
     }
 }
@@ -377,7 +379,7 @@ impl Uses<'_> {
                 self.call_sites.entry(callee).or_default().push(site);
             }
             GoExpression::Qualified { package, name } => {
-                let key = (package.clone(), name.clone());
+                let key = (package.name().to_string(), name.clone());
                 let positions = self.in_place.get(&key).cloned().unwrap_or_default();
                 for (position, argument) in arguments.iter_mut().enumerate() {
                     match argument {

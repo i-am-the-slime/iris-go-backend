@@ -27,7 +27,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::go_traversal::{self, Walk, each_block_in_declaration};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoDeclaration, GoExpression, GoQualifier, GoStatement};
 
 use super::aliases::{mentions, writes};
 
@@ -47,7 +47,7 @@ pub(super) fn look_up_and_write_once(
 
 /// A lookup of a key in an object, by the names of its two answers.
 struct Lookup {
-    package: String,
+    package: GoQualifier,
     key: String,
     object: String,
     value: String,

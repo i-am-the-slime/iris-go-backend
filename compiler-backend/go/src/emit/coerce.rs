@@ -7,13 +7,13 @@ use super::{
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, RepresentationChange, UnsupportedState};
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::go_traversal::each_block;
 use crate::monomorphic::{Expression, ExpressionKind, SourcePosition};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement,
-    GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoPackage,
+    GoStatement, GoType, GoUnaryOperator,
 };
 use smol_str::SmolStr;
 
@@ -281,9 +281,7 @@ where
             // JavaScript turns an array that meets a string (`"" + unsafeCoerce array`) into its
             // elements' strings joined with commas.
             (Monotype::Array(element), Monotype::String) => {
-                self.imports.insert("strings".into());
-                let join =
-                    GoExpression::Qualified { package: "strings".into(), name: "Join".into() };
+                let join = self.qualified(GoPackage::Strings, "Join");
                 let comma = GoExpression::String(",".into());
                 if let Monotype::String = self.monotypes.get(element) {
                     return Ok(call(join, vec![value, comma]));

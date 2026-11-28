@@ -1,6 +1,6 @@
 use super::aliases::is_named;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Cell {
@@ -59,8 +59,7 @@ fn defined_cell(statement: &GoStatement) -> Option<(String, Cell)> {
 
 fn is_fresh_array(value: &GoExpression) -> bool {
     let GoExpression::Call { function, .. } = value else { return false };
-    let GoExpression::Qualified { package, name } = function.as_ref() else { return false };
-    package == "array" && matches!(name.as_str(), "Thaw" | "UnsafeThaw")
+    matches!(function.name_in(GoPackage::Array), Some("Thaw" | "UnsafeThaw"))
 }
 
 fn local(statement: GoStatement) -> GoStatement {

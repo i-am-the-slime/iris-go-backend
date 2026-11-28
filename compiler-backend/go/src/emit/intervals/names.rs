@@ -5,7 +5,7 @@ use super::syntax::{each_subexpression, is_bounds_test, is_test};
 use super::written_field;
 use crate::emit::{aliases, headers};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Shape {
@@ -244,11 +244,7 @@ fn shape_of_expression(
         }
         GoExpression::Call { function, arguments } => match &**function {
             _ if function.is_builtin(GoBuiltin::Append) => Some(Shape::Fixed),
-            GoExpression::Qualified { package, name }
-                if package == "array" && name == "Bounded" =>
-            {
-                Some(Shape::Fixed)
-            }
+            _ if function.is_qualified(GoPackage::Array, "Bounded") => Some(Shape::Fixed),
             _ if function.is_builtin(GoBuiltin::Make) => match arguments.first() {
                 Some(GoExpression::Type(GoType::Slice(_))) => Some(Shape::Fixed),
                 _ => None,

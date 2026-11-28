@@ -19,8 +19,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::mutable::in_bounds;
 use super::{binary, builtin_call, call};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator, Name,
-    statements_names,
+    GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator,
+    Name, statements_names,
 };
 
 use crate::go_traversal::{each_block, each_expression_in_statement};
@@ -32,10 +32,10 @@ enum View {
 }
 
 impl View {
-    fn package(self) -> &'static str {
+    fn package(self) -> GoPackage {
         match self {
-            View::CodeUnits => "prim",
-            View::CodePoints => "direct",
+            View::CodeUnits => GoPackage::Prim,
+            View::CodePoints => GoPackage::Direct,
         }
     }
 
@@ -153,10 +153,7 @@ pub(super) fn view_invariant_strings(
     let mut definitions: Vec<(String, GoExpression)> = vec![];
     for ((string, view), local) in views {
         let value = GoExpression::Call {
-            function: Box::new(GoExpression::Qualified {
-                package: view.package().into(),
-                name: view.constructor().into(),
-            }),
+            function: Box::new(GoExpression::qualified(view.package(), view.constructor())),
             arguments: vec![GoExpression::Identifier(string.clone())],
         };
         definitions.push((local.clone(), value));
@@ -245,7 +242,7 @@ fn read_ascii_points(
         test: Some(ascii.clone()),
     };
     let tested = call(
-        GoExpression::Qualified { package: "prim".into(), name: "IsASCII".into() },
+        GoExpression::qualified(GoPackage::Prim, "IsASCII"),
         vec![GoExpression::Identifier(string.to_string())],
     );
     reads.rewrite(looped, view).then_some((ascii, tested))
@@ -696,10 +693,9 @@ fn aliases(
 /// The operation `value` calls on the string named by its last argument.
 fn operation_on(value: &GoExpression) -> Option<(&'static Operation, &str)> {
     let GoExpression::Call { function, arguments } = value else { return None };
-    let GoExpression::Qualified { package, name } = &**function else { return None };
     let operation = OPERATIONS
         .iter()
-        .find(|operation| operation.view.package() == package && operation.function == name)?;
+        .find(|operation| function.is_qualified(operation.view.package(), operation.function))?;
     let Some(GoExpression::Identifier(string)) = arguments.last() else { return None };
     Some((operation, string))
 }

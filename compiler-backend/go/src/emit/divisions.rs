@@ -11,7 +11,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoPackage, GoStatement};
 
 pub(super) fn reduce_constant_divisions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -101,10 +101,9 @@ impl ConstantDivisions {
     /// `prim.IntDiv(10, i)` where `i` is not zero is `10 / i`.
     fn natural_division(&self, value: &mut GoExpression) -> Option<GoExpression> {
         let GoExpression::Call { function, arguments } = value else { return None };
-        let GoExpression::Qualified { package, name } = &**function else { return None };
-        let operator = match (package.as_str(), name.as_str()) {
-            ("prim", "IntDiv") => GoBinaryOperator::Divide,
-            ("prim", "IntMod") => GoBinaryOperator::Remainder,
+        let operator = match function.name_in(GoPackage::Prim) {
+            Some("IntDiv") => GoBinaryOperator::Divide,
+            Some("IntMod") => GoBinaryOperator::Remainder,
             _ => return None,
         };
         let [GoExpression::Integer(dividend), GoExpression::Identifier(divisor)] =
@@ -137,8 +136,7 @@ fn remainder_test(value: &mut GoExpression) -> Option<GoExpression> {
         _ => return None,
     };
     let GoExpression::Call { function, arguments } = remainder else { return None };
-    let GoExpression::Qualified { package, name } = &**function else { return None };
-    let euclidean = package == "prim" && matches!(name.as_str(), "IntMod" | "IntModPositive");
+    let euclidean = matches!(function.name_in(GoPackage::Prim), Some("IntMod" | "IntModPositive"));
     if !euclidean || !matches!(arguments.as_slice(), [_, divisor] if is_nonzero_integer(divisor)) {
         return None;
     }
@@ -245,11 +243,10 @@ struct Division {
 impl Division {
     fn of(value: &GoExpression) -> Option<Division> {
         let GoExpression::Call { function, arguments } = value else { return None };
-        let GoExpression::Qualified { package, name } = &**function else { return None };
-        if package != "prim" || arguments.len() != 2 {
+        if arguments.len() != 2 {
             return None;
         }
-        let operation = match name.as_str() {
+        let operation = match function.name_in(GoPackage::Prim)? {
             "IntDiv" => Operation::Quotient,
             "IntMod" => Operation::Modulo,
             _ => return None,
@@ -282,7 +279,7 @@ impl Division {
             Operation::Quotient => "IntDivPositive",
             Operation::Modulo => "IntModPositive",
         };
-        let function = GoExpression::Qualified { package: "prim".into(), name: name.into() };
+        let function = GoExpression::qualified(GoPackage::Prim, name);
         GoExpression::Call {
             function: Box::new(function),
             arguments: vec![dividend, GoExpression::Integer(self.divisor)],

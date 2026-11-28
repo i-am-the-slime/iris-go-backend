@@ -1,6 +1,8 @@
 use super::Analysis;
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO, kind_of_type};
-use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoType, GoUnaryOperator,
+};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn typing(&self, value: &GoExpression) -> Option<Typing> {
@@ -53,9 +55,10 @@ impl Analysis<'_, '_, '_> {
                     let result = self.program.signatures.get(name)?.result.as_ref()?;
                     kind_of_type(result).map(Typing::Typed)
                 }
-                GoExpression::Qualified { package, name }
-                    if package == "prim"
-                        && matches!(name.as_str(), "IntDiv" | "IntMod" | "ToCharCode") =>
+                _ if matches!(
+                    function.name_in(GoPackage::Prim),
+                    Some("IntDiv" | "IntMod" | "ToCharCode")
+                ) =>
                 {
                     Some(Typing::Typed(Kind::Int))
                 }
@@ -183,17 +186,13 @@ impl Analysis<'_, '_, '_> {
                         blank,
                     )
                 }
-                GoExpression::Qualified { package, name }
-                    if package == "prim" && arguments.len() == 2 =>
-                {
-                    match name.as_str() {
-                        "IntMod" => {
-                            self.remainder(&arguments[0], &arguments[1], state, blank, true)
-                        }
-                        "IntDiv" => self.quotient(&arguments[0], &arguments[1], state, blank),
-                        _ => None,
+                _ if arguments.len() == 2 => match function.name_in(GoPackage::Prim) {
+                    Some("IntMod") => {
+                        self.remainder(&arguments[0], &arguments[1], state, blank, true)
                     }
-                }
+                    Some("IntDiv") => self.quotient(&arguments[0], &arguments[1], state, blank),
+                    _ => None,
+                },
                 _ => None,
             },
             GoExpression::Binary {
@@ -416,9 +415,7 @@ impl Analysis<'_, '_, '_> {
                 .all(|(key, _)| key.is_none())
                 .then_some(Value::constant(fields.len() as i64)),
             GoExpression::Call { function, arguments } => match &**function {
-                GoExpression::Qualified { package, name }
-                    if package == "array" && name == "Bounded" && arguments.len() == 1 =>
-                {
+                _ if function.is_qualified(GoPackage::Array, "Bounded") && arguments.len() == 1 => {
                     self.length_of(&arguments[0], state)
                 }
                 // `append` panics rather than wrap a length.

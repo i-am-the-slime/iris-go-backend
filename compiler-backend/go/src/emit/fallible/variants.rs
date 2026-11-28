@@ -6,7 +6,7 @@ use crate::foreign::ForeignPackages;
 use crate::go_traversal;
 use crate::naming::capitalise;
 use crate::primitives::RESULTS_VARIANTS;
-use crate::syntax::{GoDeclaration, GoExpression, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoQualifier, GoType};
 
 struct Variant {
     package: String,
@@ -76,7 +76,7 @@ impl Variants {
         let variant = self.variant(function)?;
         let shape = either_every_literal_builds(arguments, shapes)?;
         let function = GoExpression::Qualified {
-            package: variant.package.clone(),
+            package: GoQualifier::Named(variant.package.clone()),
             name: variant.results.clone(),
         };
         let literals = std::mem::take(arguments)
@@ -90,7 +90,7 @@ impl Variants {
 
 fn qualified_name(function: &GoExpression) -> Option<(&str, &str)> {
     match function.unattributed() {
-        GoExpression::Qualified { package, name } => Some((package, name)),
+        GoExpression::Qualified { package, name } => Some((package.name(), name)),
         GoExpression::Instantiation { function, .. } => qualified_name(function),
         _ => None,
     }

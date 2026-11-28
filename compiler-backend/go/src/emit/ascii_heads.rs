@@ -6,7 +6,8 @@ use super::{binary, builtin_call, identifier_expression};
 use crate::go_traversal::{self, Walk};
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
+    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoPackage,
+    GoStatement, GoType,
 };
 
 pub fn read_ascii_heads(
@@ -155,12 +156,12 @@ enum HeadKind {
 }
 
 impl HeadKind {
-    fn of(package: &str, name: &str, count: i64) -> Option<HeadKind> {
-        let kind = match (package, name) {
-            ("prim", "CharAt") => HeadKind::CodeUnit,
-            ("prim", "CodeUnitDrop") => HeadKind::Rest,
-            ("prim", "CodeUnitTake") => HeadKind::Prefix,
-            ("prim", "CodeUnitLengthUpTo") => HeadKind::Counted,
+    fn of(function: &GoExpression, count: i64) -> Option<HeadKind> {
+        let kind = match function.name_in(GoPackage::Prim)? {
+            "CharAt" => HeadKind::CodeUnit,
+            "CodeUnitDrop" => HeadKind::Rest,
+            "CodeUnitTake" => HeadKind::Prefix,
+            "CodeUnitLengthUpTo" => HeadKind::Counted,
             _ => return None,
         };
         let counts = match kind {
@@ -198,7 +199,7 @@ impl Head {
     fn of(value: &GoExpression, written_by_literals: &FxHashSet<String>) -> Option<Head> {
         let LiteralPosition { function, count, text } =
             literal_position_call(value, written_by_literals)?;
-        let kind = HeadKind::of(function.0, function.1, count)?;
+        let kind = HeadKind::of(function, count)?;
         Some(Head { kind, count, text, asked: value.clone() })
     }
 
@@ -248,11 +249,8 @@ impl Split {
     fn of(value: &GoExpression, written_by_literals: &FxHashSet<String>) -> Option<Split> {
         let LiteralPosition { function, count, text } =
             literal_position_call(value, written_by_literals)?;
-        (function == ("direct", "SplitAt") && (1..=2).contains(&count)).then(|| Split {
-            count,
-            text,
-            asked: value.clone(),
-        })
+        (function.is_qualified(GoPackage::Direct, "SplitAt") && (1..=2).contains(&count))
+            .then(|| Split { count, text, asked: value.clone() })
     }
 
     fn statements(self, after: &str, before: &str) -> Vec<GoStatement> {
@@ -284,7 +282,7 @@ impl Split {
 }
 
 struct LiteralPosition<'v> {
-    function: (&'v str, &'v str),
+    function: &'v GoExpression,
     count: i64,
     text: String,
 }
@@ -294,13 +292,15 @@ fn literal_position_call<'v>(
     written_by_literals: &FxHashSet<String>,
 ) -> Option<LiteralPosition<'v>> {
     let GoExpression::Call { function, arguments } = value else { return None };
-    let GoExpression::Qualified { package, name } = &**function else { return None };
+    if !matches!(**function, GoExpression::Qualified { .. }) {
+        return None;
+    }
     let [GoExpression::Integer(count), GoExpression::Identifier(text)] = arguments.as_slice()
     else {
         return None;
     };
     (!written_by_literals.contains(text)).then(|| LiteralPosition {
-        function: (package.as_str(), name.as_str()),
+        function,
         count: *count,
         text: text.clone(),
     })

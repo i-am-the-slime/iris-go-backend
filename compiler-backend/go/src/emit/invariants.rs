@@ -15,8 +15,8 @@ use super::lengths::written_by_literals;
 use crate::go_traversal::{self, Walk, each_expression_in_declaration};
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator, Name,
-    statements_names,
+    DeclarationNames, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator,
+    Name, statements_names,
 };
 
 /// `taken` tells which names a new local must not shadow.
@@ -159,8 +159,7 @@ fn loop_body(statement: &mut GoStatement) -> Option<&mut Vec<GoStatement>> {
 
 fn is_range_steps(value: &GoExpression) -> bool {
     matches!(value, GoExpression::Call { function, .. }
-        if matches!(&**function, GoExpression::Qualified { package, name }
-            if package == "array" && name == "RangeSteps"))
+        if function.is_qualified(GoPackage::Array, "RangeSteps"))
 }
 
 /// Whether the value reads nothing the loop changes. A function literal in it binds its own

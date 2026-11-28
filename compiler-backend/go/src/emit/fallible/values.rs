@@ -1097,7 +1097,7 @@ impl<'t> Typer<'t> {
             },
             _ => unreachable!("invariant violated: a foreign call"),
         };
-        let signature = self.foreign.signature(&package, &name).cloned();
+        let signature = self.foreign.signature(package.name(), &name).cloned();
         let shape_at = |position: usize| match &signature {
             Some(signature) => {
                 signature.parameters.get(position).cloned().unwrap_or(ForeignShape::Other)

@@ -4,7 +4,7 @@ use crate::error::GoResult;
 use crate::foreign::{Foreign, ForeignPackages};
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoExpression, GoQualifier, GoStatement, GoType};
 use checking::TypeId;
 use checking::core::{Name, Type};
 use rustc_hash::FxHashMap;
@@ -569,7 +569,7 @@ where
         let module_name = self.context.module(file_id)?.name.clone();
         let name = self.context.term_name(file_id, term)?;
         self.imports.insert(self.foreign_packages.import_path(&module_name));
-        let package = ForeignPackages::package_name(&module_name);
+        let package = GoQualifier::Named(ForeignPackages::package_name(&module_name));
         let name = crate::naming::exported(&name);
         if effectful {
             self.effects.insert((package.clone(), name.clone()));

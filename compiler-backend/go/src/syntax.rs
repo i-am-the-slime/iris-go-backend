@@ -4,12 +4,14 @@ mod builtins;
 mod directives;
 mod names;
 mod operators;
+mod packages;
 mod printer;
 pub mod tokens;
 
 pub use builtins::GoBuiltin;
 pub use names::{DeclarationNames, Name, Reference, statements_names};
 pub use operators::{GoBinaryOperator, GoUnaryOperator};
+pub use packages::{GoPackage, GoQualifier};
 pub use printer::{GoFile, GoImport};
 
 use std::sync::Arc;
@@ -88,7 +90,7 @@ impl StructField {
 pub enum GoExpression {
     Identifier(String),
     Qualified {
-        package: String,
+        package: GoQualifier,
         name: String,
     },
     Integer(i64),

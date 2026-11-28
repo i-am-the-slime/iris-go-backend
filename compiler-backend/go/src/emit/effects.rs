@@ -4,11 +4,13 @@ use super::{
     reference_type, unit_value,
 };
 use crate::error::{GoError, GoResult};
-use crate::foreign::{Foreign, GoFunction, GoPackage};
+use crate::foreign::{Foreign, GoFunction};
 use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBuiltin, GoExpression, GoPackage, GoQualifier, GoStatement, GoType, GoUnaryOperator,
+};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -29,7 +31,7 @@ where
             Foreign::EffectFor => return self.effect_for(arguments, result, sink, out),
             Foreign::WithMutex => return self.with_mutex(arguments, result, sink, out),
             Foreign::MutexNew => {
-                self.imports.insert("sync".into());
+                self.import(GoPackage::Sync);
                 let mutex = builtin_call(
                     GoBuiltin::New,
                     vec![GoExpression::Type(GoType::Named("sync.Mutex".into()))],
@@ -258,7 +260,7 @@ where
 
     /// Notes that the emitted code calls `function` to run an effect.
     fn performs(&mut self, function: GoFunction) {
-        self.effects.insert((function.package.name().into(), function.name.into()));
+        self.effects.insert((GoQualifier::Package(function.package), function.name.into()));
     }
 
     /// `function`, which the emitted code calls to run an effect.

@@ -308,7 +308,7 @@ impl go_traversal::Walk for Walk {
     fn expression(&mut self, expression: &mut GoExpression) {
         match expression {
             GoExpression::Identifier(name) => self.reference(name),
-            GoExpression::Qualified { package, .. } => self.free_name(package.clone()),
+            GoExpression::Qualified { package, .. } => self.free_name(package.name().to_string()),
             GoExpression::Type(type_) => self.type_(type_),
             GoExpression::Function { parameters, result, body } => {
                 self.function(parameters, result.as_mut(), body);
@@ -572,7 +572,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::syntax::GoBinaryOperator;
+    use crate::syntax::{GoBinaryOperator, GoPackage};
 
     fn literal(parameter: &str) -> GoExpression {
         GoExpression::Function {
@@ -632,10 +632,7 @@ mod tests {
             parameters: vec![(format!("array{NUMBERED}2"), GoType::Int)],
             result: None,
             body: vec![GoStatement::Expression(GoExpression::Call {
-                function: Box::new(GoExpression::Qualified {
-                    package: "array".into(),
-                    name: "Length".into(),
-                }),
+                function: Box::new(GoExpression::qualified(GoPackage::Array, "Length")),
                 arguments: vec![GoExpression::Identifier(format!("array{NUMBERED}2"))],
             })],
         };

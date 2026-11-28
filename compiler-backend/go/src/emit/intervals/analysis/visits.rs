@@ -5,7 +5,7 @@ use crate::emit::intervals::constraints::{Kind, State, Typing, Value, kind_of_ty
 use crate::emit::intervals::names::{Shape, shape_of_type};
 use crate::emit::intervals::program::{Entry, Place};
 use crate::emit::intervals::{site_of, written_field};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoUnaryOperator};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoPackage, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn visit(&mut self, value: &mut GoExpression, state: &mut State) {
@@ -43,9 +43,7 @@ impl Analysis<'_, '_, '_> {
                 self.call(&callee, arguments, state);
             }
             if self.rewriting()
-                && let GoExpression::Qualified { package, name } = &**function
-                && package == "prim"
-                && matches!(name.as_str(), "IntMod" | "IntDiv")
+                && let Some(name @ ("IntMod" | "IntDiv")) = function.name_in(GoPackage::Prim)
                 && arguments.len() == 2
                 && self.natural_division(&arguments[0], &arguments[1], state)
             {

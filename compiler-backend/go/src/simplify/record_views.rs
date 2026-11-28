@@ -1,8 +1,9 @@
 use super::Simplifier;
-use crate::foreign::{self, Foreign, GoFunction, GoPackage};
+use crate::foreign::{self, Foreign, GoFunction};
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId, RecordField};
 use crate::purity::is_trivial;
+use crate::syntax::GoPackage;
 
 impl Simplifier<'_> {
     pub(super) fn is_record_view(&self, from: MonotypeId, to: MonotypeId) -> bool {

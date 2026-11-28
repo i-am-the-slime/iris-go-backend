@@ -44,7 +44,7 @@ use super::fusion::Demand;
 use super::iteration::Found;
 use super::{Emitter, GoSourceFile, call, identifier_expression, unique};
 use crate::error::GoResult;
-use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, GoPackage, Iteration, Operator};
+use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, Iteration, Operator};
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Literal, Local, LocalId, Program,
@@ -53,7 +53,7 @@ use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::GO_PREDECLARED;
 use crate::primitives::{Int64Operation, Signedness};
 use crate::syntax::{
-    GoDeclaration, GoExpression, GoFile, GoImport, GoStatement, Reference, SourceLine,
+    GoDeclaration, GoExpression, GoFile, GoImport, GoPackage, GoStatement, Reference, SourceLine,
 };
 
 const NEON_CONSTRAINT: &str = "goexperiment.simd && arm64";

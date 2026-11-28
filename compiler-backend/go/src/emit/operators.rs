@@ -1,7 +1,9 @@
 use super::{Emitter, binary, builtin_call, call, negated};
-use crate::foreign::{Comparison, GoPackage, Operator};
+use crate::foreign::{Comparison, Operator};
 use crate::numeric::fold_bitwise;
-use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoType, GoUnaryOperator,
+};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -25,21 +27,19 @@ where
     }
 
     pub(super) fn number_constant(&mut self, value: f64) -> GoExpression {
-        let math =
-            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
         if value.is_nan() {
-            self.imports.insert("math".into());
-            return call(math("NaN"), vec![]);
+            return call(self.qualified(GoPackage::Math, "NaN"), vec![]);
         }
         if value.is_infinite() {
-            self.imports.insert("math".into());
             let sign = if value < 0.0 { -1 } else { 1 };
-            return call(math("Inf"), vec![GoExpression::Integer(sign)]);
+            return call(self.qualified(GoPackage::Math, "Inf"), vec![GoExpression::Integer(sign)]);
         }
         if value == 0.0 && value.is_sign_negative() {
-            self.imports.insert("math".into());
             let zero = GoExpression::Integer(0);
-            return call(math("Copysign"), vec![zero, GoExpression::Integer(-1)]);
+            return call(
+                self.qualified(GoPackage::Math, "Copysign"),
+                vec![zero, GoExpression::Integer(-1)],
+            );
         }
         GoExpression::Float(format!("{value:?}"))
     }
@@ -56,12 +56,7 @@ where
         if values.iter().any(below_surrogates) {
             return self.operator(Operator::Compare(comparison), values);
         }
-        let package = GoPackage::Prim;
-        self.imports.insert(package.path().into());
-        let function = GoExpression::Qualified {
-            package: package.name().into(),
-            name: "CompareString".into(),
-        };
+        let function = self.qualified(GoPackage::Prim, "CompareString");
         let ordering = call(function, values);
         let zero = GoExpression::Integer(0);
         self.operator(Operator::Compare(comparison), vec![ordering, zero])
@@ -288,8 +283,7 @@ where
 {
     /// `bits.OnesCount(uint(value))`: the set bits of the Int's two's complement.
     fn ones_count(&mut self, value: GoExpression) -> GoExpression {
-        self.imports.insert("math/bits".into());
-        let ones = GoExpression::Qualified { package: "bits".into(), name: "OnesCount".into() };
+        let ones = self.qualified(GoPackage::MathBits, "OnesCount");
         let unsigned = GoExpression::Conversion {
             type_: GoType::Named("uint".into()),
             value: Box::new(value),

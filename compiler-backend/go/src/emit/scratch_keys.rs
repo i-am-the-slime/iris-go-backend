@@ -2,7 +2,7 @@ use rustc_hash::FxHashSet;
 
 use super::aliases::mentions;
 use super::{call, identifier_expression};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator};
 
 const SCRATCH: &str = "scratch";
 
@@ -105,8 +105,8 @@ fn concatenation(statement: &GoStatement) -> Option<(String, Vec<GoExpression>)>
     let GoStatement::Define { names, values } = statement else { return None };
     let ([key], [value]) = (names.as_slice(), values.as_slice()) else { return None };
     let GoExpression::Call { function, arguments } = value.unattributed() else { return None };
-    let concatenates = matches!(function.unattributed(), GoExpression::Qualified { package, name }
-        if package == "prim" && (name == "Concat" || name == "Append"));
+    let concatenates =
+        matches!(function.unattributed().name_in(GoPackage::Prim), Some("Concat" | "Append"));
     (concatenates && key != "_").then(|| (key.clone(), arguments.clone()))
 }
 
@@ -148,14 +148,13 @@ fn appended_parts(scratch: &str, parts: Vec<GoExpression>) -> GoExpression {
         let (append, appended) = match part.unattributed() {
             GoExpression::Call { function, arguments }
                 if arguments.len() == 1
-                    && matches!(function.unattributed(), GoExpression::Qualified { package, name }
-                        if package == "prim" && name == "CharSingleton") =>
+                    && function.unattributed().is_qualified(GoPackage::Prim, "CharSingleton") =>
             {
                 ("AppendRune", arguments[0].clone())
             }
             _ => ("AppendString", part),
         };
-        let function = GoExpression::Qualified { package: "prim".into(), name: append.into() };
+        let function = GoExpression::qualified(GoPackage::Prim, append);
         built = call(function, vec![built, appended]);
     }
     built

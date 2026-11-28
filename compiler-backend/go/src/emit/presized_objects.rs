@@ -17,7 +17,9 @@
 //! that every operation of the runtime keeps up to date once there is one.
 
 use crate::go_traversal::each_block_in_declaration;
-use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, StructField};
+use crate::syntax::{
+    GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, StructField,
+};
 
 pub(super) fn presize_filled_objects(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -46,8 +48,7 @@ fn new_object(statement: &GoStatement) -> Option<(&str, GoType)> {
     let GoExpression::Instantiation { function, arguments: types } = function.unattributed() else {
         return None;
     };
-    let new = matches!(function.unattributed(),
-        GoExpression::Qualified { package, name } if package == "object" && name == "New");
+    let new = function.unattributed().is_qualified(GoPackage::Object, "New");
     match (new, arguments.as_slice(), types.as_slice()) {
         (true, [], [values]) => Some((name, values.clone())),
         _ => None,
@@ -65,10 +66,8 @@ fn pokes(statement: &GoStatement, name: &str) -> bool {
     let GoStatement::Expression(GoExpression::Call { function, arguments }) = statement else {
         return false;
     };
-    let poke = |function: &GoExpression| {
-        matches!(function.unattributed(),
-            GoExpression::Qualified { package, name } if package == "object" && name == "Poke")
-    };
+    let poke =
+        |function: &GoExpression| function.unattributed().is_qualified(GoPackage::Object, "Poke");
     let function = match function.unattributed() {
         GoExpression::Instantiation { function, .. } => function.as_ref(),
         function => function,

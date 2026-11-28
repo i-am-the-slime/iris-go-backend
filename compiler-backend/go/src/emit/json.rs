@@ -16,13 +16,13 @@ use smol_str::SmolStr;
 use super::names::{NamePart, PendingSpelling};
 use super::{Emitter, Mode, Sink, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
-use crate::foreign::{GoPackage, JsonCodec};
+use crate::foreign::JsonCodec;
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier, lower_camel};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement,
-    GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoPackage,
+    GoStatement, GoType, GoUnaryOperator,
 };
 
 /// The decoder's or the encoder's parameter.
@@ -46,7 +46,7 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        self.imports.insert(GoPackage::ForeignValue.path().into());
+        self.import(GoPackage::ForeignValue);
         match codec {
             JsonCodec::Read => {
                 let name = self.temporary("read");
@@ -75,7 +75,7 @@ where
         sink: Sink,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        self.imports.insert(GoPackage::ForeignValue.path().into());
+        self.import(GoPackage::ForeignValue);
         let text = self.value(text, out)?;
         let text = self.hoist(text, "text", out);
         let success = match self.monotypes.get(result).clone() {
@@ -221,7 +221,7 @@ where
             append(&names.shown, call(show, vec![head])),
             assign(&names.cell, tail),
         ]));
-        self.imports.insert(GoPackage::ForeignValue.path().into());
+        self.import(GoPackage::ForeignValue);
         Ok(call(foreign_value("ShowErrors"), vec![identifier_expression(&names.shown)]))
     }
 
@@ -353,9 +353,7 @@ where
                 let value = self.json_decode(element, locals, &mut body)?;
                 body.push(append(&items, value));
                 out.push(members(DECODER, "Array", "MoreElements", body));
-                self.imports.insert("slices".into());
-                let clip =
-                    GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
+                let clip = self.qualified(GoPackage::Slices, "Clip");
                 Ok(call(clip, vec![identifier_expression(&items)]))
             }
             Monotype::Object(element) => {
@@ -376,11 +374,8 @@ where
                 let value = self.json_decode(element, locals, &mut body)?;
                 body.push(append(&values, value));
                 out.push(members(DECODER, "Object", "MoreMembers", body));
-                self.imports.insert(GoPackage::Object.path().into());
-                let from_entries = GoExpression::Qualified {
-                    package: "object".into(),
-                    name: "FromEntries".into(),
-                };
+                self.import(GoPackage::Object);
+                let from_entries = GoExpression::qualified(GoPackage::Object, "FromEntries");
                 Ok(call(
                     from_entries,
                     vec![identifier_expression(&keys), identifier_expression(&values)],
@@ -442,9 +437,8 @@ where
             Monotype::Nullable(payload) => {
                 let null = GoExpression::nil();
                 let value = self.json_decode(payload, locals, &mut otherwise)?;
-                self.imports.insert(GoPackage::Nullable.path().into());
-                let not_null =
-                    GoExpression::Qualified { package: "nullable".into(), name: "NotNull".into() };
+                self.import(GoPackage::Nullable);
+                let not_null = GoExpression::qualified(GoPackage::Nullable, "NotNull");
                 (null, call(not_null, vec![value]))
             }
             Monotype::Data(data) if let Some(payload) = self.maybe_payload(&data)? => {
@@ -627,9 +621,8 @@ where
                         body.extend(written);
                     }
                 }
-                self.imports.insert(GoPackage::Object.path().into());
-                let entries =
-                    GoExpression::Qualified { package: "object".into(), name: "Entries".into() };
+                self.import(GoPackage::Object);
+                let entries = GoExpression::qualified(GoPackage::Object, "Entries");
                 out.push(GoStatement::Range {
                     index: Some(key),
                     element: member,
@@ -848,7 +841,7 @@ impl Locals {
 }
 
 fn foreign_value(name: &str) -> GoExpression {
-    GoExpression::Qualified { package: "foreignvalue".into(), name: name.into() }
+    GoExpression::qualified(GoPackage::ForeignValue, name)
 }
 
 fn method(receiver: &str, name: &str, arguments: Vec<GoExpression>) -> GoExpression {

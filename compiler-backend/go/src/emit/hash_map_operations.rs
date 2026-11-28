@@ -8,12 +8,12 @@
 use super::packages::Spelling;
 use super::{DataKind, Emitter, binary, builtin_call, call, field, identifier_expression};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType,
 };
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -114,15 +114,12 @@ where
             }
             HashMapOperation::Copy => {
                 let table = self.value(&arguments[0], out)?;
-                self.imports.insert("maps".into());
-                let clone =
-                    GoExpression::Qualified { package: "maps".into(), name: "Clone".into() };
+                let clone = self.qualified(GoPackage::Maps, "Clone");
                 call(clone, vec![table])
             }
             HashMapOperation::BalancedHeight => {
                 let count = self.value(&arguments[0], out)?;
-                self.imports.insert("math/bits".into());
-                let length = GoExpression::Qualified { package: "bits".into(), name: "Len".into() };
+                let length = self.qualified(GoPackage::MathBits, "Len");
                 let unsigned = call(identifier_expression("uint"), vec![count]);
                 call(length, vec![unsigned])
             }
@@ -197,7 +194,7 @@ where
         };
         let sorted = match self.monotypes.get(key) {
             Monotype::String => {
-                self.imports.insert("slices".into());
+                self.import(GoPackage::Slices);
                 let function = self.support_function("sortedStringEntries", STRING_ENTRIES_SOURCE);
                 let compare = GoFunction { package: GoPackage::Prim, name: "CompareString" };
                 let compare = self.go_function(compare);
@@ -234,7 +231,7 @@ where
             matches!(self.monotypes.get(*monotype), Monotype::Int | Monotype::Char)
         });
         if !integers {
-            self.imports.insert("slices".into());
+            self.import(GoPackage::Slices);
             let function = self.support_function("sortedEntries", ENTRIES_SOURCE);
             return Ok(call(identifier_expression(&function), vec![table, compare]));
         }
@@ -276,10 +273,7 @@ where
                 Monotype::String => {
                     self.go_function(GoFunction { package: GoPackage::Prim, name: "CompareString" })
                 }
-                _ => {
-                    self.imports.insert("cmp".into());
-                    GoExpression::Qualified { package: "cmp".into(), name: "Compare".into() }
-                }
+                _ => self.qualified(GoPackage::Cmp, "Compare"),
             };
             let compared = call(compare, vec![read("left", path), read("right", path)]);
             if index == last {

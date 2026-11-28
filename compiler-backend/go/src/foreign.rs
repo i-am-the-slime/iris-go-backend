@@ -32,6 +32,7 @@ pub use sources::{
     foreign_structs, recovers, uses_event_loop,
 };
 
+use crate::syntax::GoPackage;
 use std::sync::{Mutex, OnceLock};
 
 use files::FileId;
@@ -392,103 +393,6 @@ pub struct MaybeDestructor {
 pub struct GoFunction {
     pub package: GoPackage,
     pub name: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GoPackage {
-    Prim,
-    Array,
-    Direct,
-    Object,
-    Nullable,
-    Exception,
-    Aff,
-    EventLoop,
-    Promise,
-    ForeignValue,
-    Tauri,
-    Regex,
-    Lazy,
-    Alloc,
-    Argonaut,
-    AVar,
-    YogaOm,
-    BigInts,
-    DateTime,
-    Now,
-    Spec,
-    RefEq,
-    Console,
-    JsBigInt,
-    Int64,
-    HashMap,
-    Random,
-}
-
-impl GoPackage {
-    pub fn path(self) -> &'static str {
-        match self {
-            GoPackage::Prim => "github.com/i-am-the-slime/iris-go/prim",
-            GoPackage::Array => "github.com/i-am-the-slime/iris-go/array",
-            GoPackage::Direct => "github.com/i-am-the-slime/iris-go/direct",
-            GoPackage::Object => "github.com/i-am-the-slime/iris-go/object",
-            GoPackage::Nullable => "github.com/i-am-the-slime/iris-go/nullable",
-            GoPackage::Aff => "github.com/i-am-the-slime/iris-go/aff",
-            GoPackage::EventLoop => "github.com/i-am-the-slime/iris-go/eventloop",
-            GoPackage::Promise => "github.com/i-am-the-slime/iris-go/promise",
-            GoPackage::ForeignValue => "github.com/i-am-the-slime/iris-go/foreignvalue",
-            GoPackage::Tauri => "github.com/i-am-the-slime/iris-go/tauri",
-            GoPackage::Regex => "github.com/i-am-the-slime/iris-go/regex",
-            GoPackage::Lazy => "github.com/i-am-the-slime/iris-go/lazy",
-            GoPackage::Alloc => "github.com/i-am-the-slime/iris-go/alloc",
-            GoPackage::Argonaut => "github.com/i-am-the-slime/iris-go/argonaut",
-            GoPackage::AVar => "github.com/i-am-the-slime/iris-go/avar",
-            GoPackage::YogaOm => "github.com/i-am-the-slime/iris-go/yogaom",
-            GoPackage::BigInts => "github.com/i-am-the-slime/iris-go/bigints",
-            GoPackage::DateTime => "github.com/i-am-the-slime/iris-go/datetime",
-            GoPackage::Now => "github.com/i-am-the-slime/iris-go/now",
-            GoPackage::Spec => "github.com/i-am-the-slime/iris-go/spec",
-            GoPackage::RefEq => "github.com/i-am-the-slime/iris-go/refeq",
-            GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
-            GoPackage::JsBigInt => "github.com/i-am-the-slime/iris-go/jsbigint",
-            GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
-            GoPackage::HashMap => "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi",
-            GoPackage::Random => "github.com/i-am-the-slime/iris-go/random",
-            GoPackage::Exception => "github.com/i-am-the-slime/iris-go/exception",
-        }
-    }
-
-    pub fn name(self) -> &'static str {
-        match self {
-            GoPackage::Prim => "prim",
-            GoPackage::Array => "array",
-            GoPackage::Direct => "direct",
-            GoPackage::Object => "object",
-            GoPackage::Nullable => "nullable",
-            GoPackage::Exception => "exception",
-            GoPackage::Aff => "aff",
-            GoPackage::EventLoop => "eventloop",
-            GoPackage::Promise => "promise",
-            GoPackage::ForeignValue => "foreignvalue",
-            GoPackage::Tauri => "tauri",
-            GoPackage::Regex => "regex",
-            GoPackage::Lazy => "lazy",
-            GoPackage::Alloc => "alloc",
-            GoPackage::Argonaut => "argonaut",
-            GoPackage::AVar => "avar",
-            GoPackage::YogaOm => "yogaom",
-            GoPackage::BigInts => "bigints",
-            GoPackage::DateTime => "datetime",
-            GoPackage::Now => "now",
-            GoPackage::Spec => "spec",
-            GoPackage::RefEq => "refeq",
-            GoPackage::Console => "console",
-            GoPackage::JsBigInt => "jsbigint",
-            GoPackage::Int64 => "Data_Int64_Internal_ffi",
-            GoPackage::HashMap => "Data_HashMap_ffi",
-            GoPackage::Random => "random",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

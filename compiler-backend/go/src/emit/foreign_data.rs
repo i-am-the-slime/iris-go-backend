@@ -17,9 +17,9 @@
 use super::maybe::MaybeLayout;
 use super::{Emitter, call, identifier_expression};
 use crate::error::GoResult;
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::monotype::{DataType, Monotype, MonotypeId};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoPackage, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where

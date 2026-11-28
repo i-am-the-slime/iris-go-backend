@@ -15,10 +15,10 @@
 use super::{Emitter, binary, call, field, is_untyped_constant};
 use crate::blocker::{Blocker, Blockers};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::monomorphic::Expression;
 use crate::syntax::{
-    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, StructField,
+    GoBinaryOperator, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, StructField,
 };
 
 /// Go's predeclared comparable types that the backend names.

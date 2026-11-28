@@ -44,7 +44,7 @@ impl Forwarders {
             function => function,
         };
         let GoExpression::Qualified { package, name } = function else { return None };
-        self.forwards.get(&(package.clone(), name.clone()))
+        self.forwards.get(&(package.name().to_string(), name.clone()))
     }
 }
 
@@ -173,7 +173,7 @@ impl Walk for ForwardedCalls<'_> {
         go_traversal::expression(self, value);
         if let GoExpression::Qualified { package, name } = value
             && let Some(Forward::Function(function)) =
-                self.forwarders.forwards.get(&(package.clone(), name.clone()))
+                self.forwarders.forwards.get(&(package.name().to_string(), name.clone()))
         {
             *name = function.clone();
             return;

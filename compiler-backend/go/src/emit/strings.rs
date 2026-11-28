@@ -8,8 +8,8 @@
 //! the program goes through `prim.ToUTF8`, which writes each lone surrogate as U+FFFD.
 
 use super::{Emitter, binary, builtin_call, call};
-use crate::foreign::{GoFunction, GoPackage};
-use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression};
+use crate::foreign::GoFunction;
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoPackage};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -92,11 +92,7 @@ fn joined_constants(operands: Vec<GoExpression>) -> Vec<GoExpression> {
 }
 
 fn is_prim_append(function: &GoExpression) -> bool {
-    matches!(
-        function,
-        GoExpression::Qualified { package, name }
-            if package == GoPackage::Prim.name() && (name == "Append" || name == "Concat")
-    )
+    matches!(function.name_in(GoPackage::Prim), Some("Append" | "Concat"))
 }
 
 /// A string that begins and ends with whole code points: a non-empty constant of valid UTF-8, or
@@ -107,11 +103,7 @@ fn has_whole_ends(expression: &GoExpression) -> bool {
         GoExpression::String(text) => !text.is_empty(),
         GoExpression::Call { function, .. } => {
             super::standard::is_ascii_ended(function)
-                || matches!(
-                    &**function,
-                    GoExpression::Qualified { package, name }
-                        if package == GoPackage::Prim.name() && ASCII_ENDED.contains(&name.as_str())
-                )
+                || function.name_in(GoPackage::Prim).is_some_and(|name| ASCII_ENDED.contains(&name))
         }
         _ => false,
     }
@@ -123,10 +115,8 @@ pub(super) fn only_writes_text(function: &GoExpression) -> bool {
     super::standard::is_ascii_ended(function)
         || is_prim_append(function)
         || matches!(
-            function,
-            GoExpression::Qualified { package, name }
-                if package == GoPackage::Prim.name()
-                    && matches!(name.as_str(), "ShowInt" | "ShowNumber" | "ShowString" | "ShowChar")
+            function.name_in(GoPackage::Prim),
+            Some("ShowInt" | "ShowNumber" | "ShowString" | "ShowChar")
         )
 }
 

@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::iteration::Found;
 use super::{Emitter, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
-use crate::foreign::{Comparison, Foreign, GoFunction, GoPackage, Operator};
+use crate::foreign::{Comparison, Foreign, GoFunction, Operator};
 use crate::monomorphic::traversal::{
     for_each_binder_mut, for_each_child_mut, free_locals, mentions_local, rename_local,
 };
@@ -13,7 +13,8 @@ use crate::monomorphic::{
 use crate::monotype::Monotype;
 use crate::purity::is_trivial;
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoCase, GoExpression, GoPackage, GoStatement, GoType,
+    GoUnaryOperator,
 };
 
 const INLINING_DEPTH: usize = 4;
@@ -283,8 +284,7 @@ where
     }
 
     pub(super) fn slices(&mut self, name: &str, arguments: Vec<GoExpression>) -> GoExpression {
-        self.imports.insert("slices".into());
-        let function = GoExpression::Qualified { package: "slices".into(), name: name.into() };
+        let function = self.qualified(GoPackage::Slices, name);
         call(function, arguments)
     }
 

@@ -4,9 +4,9 @@
 //! `reflect`. A value of another type (a record, a data type, a function) has no such text.
 
 use super::{Emitter, binary, builtin_call, call, identifier_expression, length};
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -42,11 +42,7 @@ where
             Monotype::Number => self.prim_text("NumberToString", value),
             Monotype::Char => self.prim_text("CharSingleton", value),
             Monotype::Boolean => {
-                self.imports.insert("strconv".into());
-                let format = GoExpression::Qualified {
-                    package: "strconv".into(),
-                    name: "FormatBool".into(),
-                };
+                let format = self.qualified(GoPackage::Strconv, "FormatBool");
                 call(format, vec![value])
             }
             Monotype::Array(element) => self.array_text(value, element, entry, depth, out)?,
@@ -67,8 +63,7 @@ where
             Monotype::String => array,
             _ => identifier_expression(&self.element_texts(array, element, entry, depth, out)?),
         };
-        self.imports.insert("strings".into());
-        let join = GoExpression::Qualified { package: "strings".into(), name: "Join".into() };
+        let join = self.qualified(GoPackage::Strings, "Join");
         let joined = call(join, vec![texts, GoExpression::String(" ".into())]);
         let open = binary(GoBinaryOperator::Add, GoExpression::String("[".into()), joined);
         Some(binary(GoBinaryOperator::Add, open, GoExpression::String("]".into())))

@@ -127,7 +127,7 @@ use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::Context;
 use crate::error::{GoError, GoResult};
-use crate::foreign::{Constructed, ForeignPackages, GoPackage};
+use crate::foreign::{Constructed, ForeignPackages};
 use crate::monomorphic::traversal::{mentions_local, visit};
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
@@ -136,7 +136,7 @@ use crate::monomorphic::{
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::identifier;
 use crate::syntax::{
-    GoDeclaration, GoExpression, GoStatement, GoType, Name, SourceLine, statements_names,
+    GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, Name, SourceLine, statements_names,
 };
 
 pub(crate) use self::closures::Eliminators;
@@ -1280,8 +1280,8 @@ where
         }
         let result = Some(self.go_type(value)?);
         let thunk = GoExpression::Function { parameters: vec![], result, body };
-        self.imports.insert(GoPackage::Lazy.path().into());
-        let defer = GoExpression::Qualified { package: "lazy".into(), name: "Defer".into() };
+        self.import(GoPackage::Lazy);
+        let defer = GoExpression::qualified(GoPackage::Lazy, "Defer");
         Ok(call(defer, vec![thunk]))
     }
 

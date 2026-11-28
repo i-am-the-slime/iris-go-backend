@@ -1,9 +1,10 @@
+use crate::syntax::GoPackage;
 use rustc_hash::FxHashSet;
 
 use crate::emit::reuse::Cells;
 use crate::emit::reuse::plan::is_true;
 use crate::emit::uniqueness::{Branch, Forced, Scope};
-use crate::foreign::{Foreign, GoFunction, GoPackage, Operator};
+use crate::foreign::{Foreign, GoFunction, Operator};
 use crate::monomorphic::traversal::{all_locals, for_each_child, mentions_local, visit};
 use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Guarded, LocalId, Pattern, PatternKind,

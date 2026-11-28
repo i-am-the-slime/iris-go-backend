@@ -3,10 +3,12 @@
 use super::application::Callable;
 use super::{Crossing, Direction, Emitter, binary, call, identifier_expression, returning};
 use crate::error::GoResult;
-use crate::foreign::{Boundary, GoFunction, GoPackage, Spelled};
+use crate::foreign::{Boundary, GoFunction, Spelled};
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator,
+};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -312,11 +314,16 @@ where
     }
 
     pub(super) fn go_function(&mut self, function: GoFunction) -> GoExpression {
-        self.imports.insert(function.package.path().into());
-        GoExpression::Qualified {
-            package: function.package.name().into(),
-            name: function.name.into(),
-        }
+        self.qualified(function.package, function.name)
+    }
+
+    pub(super) fn qualified(&mut self, package: GoPackage, name: &str) -> GoExpression {
+        self.import(package);
+        GoExpression::qualified(package, name)
+    }
+
+    pub(super) fn import(&mut self, package: GoPackage) {
+        self.imports.insert(package.path().into());
     }
 
     pub(super) fn boundary_arguments(

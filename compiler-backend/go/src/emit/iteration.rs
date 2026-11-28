@@ -8,13 +8,13 @@ use super::{
     Emitter, Mode, Sink, binary, builtin_call, call, conjunction, identifier_expression, unit_value,
 };
 use crate::error::GoResult;
-use crate::foreign::{GoFunction, GoPackage, Iteration};
+use crate::foreign::{GoFunction, Iteration};
 use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Guarded, Local, LocalId, Pattern, PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoPackage, GoStatement, GoType};
 
 pub(super) enum Callback<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
@@ -410,8 +410,7 @@ where
 
     fn copy(&mut self, accumulator: &str, place: &Place) -> GoStatement {
         let carried = carried_place(accumulator, place);
-        self.imports.insert("slices".into());
-        let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
+        let clone = self.qualified(GoPackage::Slices, "Clone");
         GoStatement::Assign {
             targets: vec![carried.clone()],
             values: vec![call(clone, vec![carried])],
@@ -432,10 +431,7 @@ where
             Some(carried) if self.is_native_hash_map(carried) => {
                 self.go_function(crate::foreign::HASH_MAP_LEND)
             }
-            _ => {
-                self.imports.insert("slices".into());
-                GoExpression::Qualified { package: "slices".into(), name: "Clip".into() }
-            }
+            _ => self.qualified(GoPackage::Slices, "Clip"),
         };
         GoStatement::Assign {
             targets: vec![carried.clone()],
@@ -1104,10 +1100,10 @@ fn grown(clipped: GoStatement, count: GoExpression) -> GoStatement {
     let GoStatement::Assign { targets, mut values } = clipped else { return clipped };
     let clip = values.remove(0);
     let is_slice_clip = matches!(&clip, GoExpression::Call { function, .. }
-        if matches!(function.as_ref(), GoExpression::Qualified { package, name } if package == "slices" && name == "Clip"));
+        if function.is_qualified(GoPackage::Slices, "Clip"));
     if !is_slice_clip {
         return GoStatement::Assign { targets, values: vec![clip] };
     }
-    let grow = GoExpression::Qualified { package: "slices".into(), name: "Grow".into() };
+    let grow = GoExpression::qualified(GoPackage::Slices, "Grow");
     GoStatement::Assign { targets, values: vec![call(grow, vec![clip, count])] }
 }

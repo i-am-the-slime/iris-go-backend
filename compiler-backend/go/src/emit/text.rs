@@ -7,12 +7,12 @@ use super::{
     Emitter, Mode, Sink, binary, call, has_tail_call, identifier_expression, shown_boolean,
 };
 use crate::error::GoResult;
-use crate::foreign::{Foreign, GoFunction, GoPackage, Operator};
+use crate::foreign::{Foreign, GoFunction, Operator};
 use crate::go_traversal;
 use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Literal};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{
-    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType,
 };
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -108,9 +108,7 @@ where
                     type_: GoType::Named("int64".into()),
                     value: Box::new(value),
                 };
-                self.imports.insert("strconv".into());
-                let append_int =
-                    GoExpression::Qualified { package: "strconv".into(), name: "AppendInt".into() };
+                let append_int = self.qualified(GoPackage::Strconv, "AppendInt");
                 let decimal = GoExpression::Integer(10);
                 let appended =
                     call(append_int, vec![identifier_expression(buffer), widened, decimal]);
@@ -372,22 +370,17 @@ where
         let GoExpression::Call { function, mut arguments } = value else {
             return self.buffer_append(buffer, value);
         };
-        let formatted = match &*function {
-            GoExpression::Qualified { package, name } if package == "strconv" => {
-                match name.as_str() {
-                    "FormatInt" => Some("AppendInt"),
-                    "FormatUint" => Some("AppendUint"),
-                    "FormatBool" => Some("AppendBool"),
-                    _ => None,
-                }
-            }
+        let formatted = match function.name_in(GoPackage::Strconv) {
+            Some("FormatInt") => Some("AppendInt"),
+            Some("FormatUint") => Some("AppendUint"),
+            Some("FormatBool") => Some("AppendBool"),
             _ => None,
         };
         let Some(append) = formatted else {
             return self.buffer_append(buffer, GoExpression::Call { function, arguments });
         };
         arguments.insert(0, buffer);
-        call(GoExpression::Qualified { package: "strconv".into(), name: append.into() }, arguments)
+        call(GoExpression::qualified(GoPackage::Strconv, append), arguments)
     }
 
     fn write_constant(&mut self, buffer: &str, text: &str, out: &mut Vec<GoStatement>) {

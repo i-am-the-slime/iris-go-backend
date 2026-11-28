@@ -1,10 +1,11 @@
+use crate::syntax::GoPackage;
 use std::sync::OnceLock;
 
 use super::{
-    Boundary, CONS_LIST_ACCUMULATOR, Comparison, Constructed, Foreign, GoFunction, GoPackage,
-    INSTANTIATE, Iteration, MaybeDestructor, Operator, PLAIN, RECORD, RESULT_PARAMETER,
-    RecordOperation, Signature, Spelled, UNIT_VALUES, Utility, found, ignoring, maybe_of_maybes,
-    maybe_search, maybe_witnessed,
+    Boundary, CONS_LIST_ACCUMULATOR, Comparison, Constructed, Foreign, GoFunction, INSTANTIATE,
+    Iteration, MaybeDestructor, Operator, PLAIN, RECORD, RESULT_PARAMETER, RecordOperation,
+    Signature, Spelled, UNIT_VALUES, Utility, found, ignoring, maybe_of_maybes, maybe_search,
+    maybe_witnessed,
 };
 
 const fn call(package: GoPackage, name: &'static str, arity: usize, boundary: Boundary) -> Foreign {

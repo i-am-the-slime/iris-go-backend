@@ -4,10 +4,10 @@
 //! lone surrogates may meet, stays in go-support's prim package.
 
 use super::{Emitter, call, is_simple};
-use crate::foreign::{GoFunction, GoPackage};
+use crate::foreign::GoFunction;
 use crate::monomorphic::Expression;
 use crate::monotype::Monotype;
-use crate::syntax::{GoExpression, GoUnaryOperator};
+use crate::syntax::{GoExpression, GoPackage, GoUnaryOperator};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -26,28 +26,36 @@ where
                 Some(GoExpression::String(constant.to_string()))
             }
             (GoPackage::Prim, "ShowInt", [value]) => {
-                Some(self.standard("strconv", "Itoa", vec![value.clone()]))
+                Some(self.standard(GoPackage::Strconv, "Itoa", vec![value.clone()]))
             }
             // strings.Contains takes its operands the other way around, which keeps the order
             // they are worked out in where one of them is a variable or a constant.
             (GoPackage::Prim, "StringContains", [pattern, value])
                 if is_simple(pattern) || is_simple(value) =>
             {
-                Some(self.standard("strings", "Contains", vec![value.clone(), pattern.clone()]))
+                Some(self.standard(
+                    GoPackage::Strings,
+                    "Contains",
+                    vec![value.clone(), pattern.clone()],
+                ))
             }
             // A separator of whole characters splits the WTF-8 bytes where it splits the code
             // units.
             (GoPackage::Prim, "StringSplit", [separator @ GoExpression::String(text), value])
                 if !text.is_empty() =>
             {
-                Some(self.standard("strings", "Split", vec![value.clone(), separator.clone()]))
+                Some(self.standard(
+                    GoPackage::Strings,
+                    "Split",
+                    vec![value.clone(), separator.clone()],
+                ))
             }
             (GoPackage::Int64, "ToString_", [value, radix @ GoExpression::Integer(2..=36)]) => {
                 let name = match self.monotypes.get(arguments[0].monotype) {
                     Monotype::UInt64 => "FormatUint",
                     _ => "FormatInt",
                 };
-                Some(self.standard("strconv", name, vec![value.clone(), radix.clone()]))
+                Some(self.standard(GoPackage::Strconv, name, vec![value.clone(), radix.clone()]))
             }
             _ => None,
         }
@@ -55,17 +63,16 @@ where
 
     /// `strconv.FormatBool(condition)`, `show` of a Boolean.
     pub(super) fn format_boolean(&mut self, condition: GoExpression) -> GoExpression {
-        self.standard("strconv", "FormatBool", vec![condition])
+        self.standard(GoPackage::Strconv, "FormatBool", vec![condition])
     }
 
     fn standard(
         &mut self,
-        package: &str,
+        package: GoPackage,
         name: &str,
         arguments: Vec<GoExpression>,
     ) -> GoExpression {
-        self.imports.insert(package.into());
-        let function = GoExpression::Qualified { package: package.into(), name: name.into() };
+        let function = self.qualified(package, name);
         call(function, arguments)
     }
 }
@@ -86,10 +93,7 @@ fn integer(expression: &GoExpression) -> Option<i64> {
 /// Whether a call is of a `strconv` function whose result is never empty and begins and ends
 /// in ASCII.
 pub(super) fn is_ascii_ended(function: &GoExpression) -> bool {
-    matches!(
-        function,
-        GoExpression::Qualified { package, name }
-            if package == "strconv"
-                && matches!(name.as_str(), "Itoa" | "FormatInt" | "FormatUint" | "FormatBool")
-    )
+    function
+        .name_in(GoPackage::Strconv)
+        .is_some_and(|name| matches!(name, "Itoa" | "FormatInt" | "FormatUint" | "FormatBool"))
 }

@@ -8,7 +8,9 @@ use super::headers::{BUILTINS, Effects};
 use super::inlining::fresh;
 use super::scalars::Structs;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, GoUnaryOperator,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Cell {
@@ -195,13 +197,13 @@ struct References<'a> {
 
 impl References<'_> {
     fn recovers(&self, function: &GoExpression) -> bool {
+        if let Some(name) = function.name_in(GoPackage::Direct) {
+            return name.starts_with("Catch");
+        }
         match function {
-            GoExpression::Qualified { package, name } if package == "direct" => {
-                name.starts_with("Catch")
-            }
             GoExpression::Qualified { package, .. } => {
-                !NEVER_RECOVERING.contains(&package.as_str())
-                    && !self.never_recovering.contains(package)
+                !NEVER_RECOVERING.contains(&package.name())
+                    && !self.never_recovering.contains(package.name())
             }
             GoExpression::Instantiation { function, .. } => self.recovers(function),
             _ => false,
