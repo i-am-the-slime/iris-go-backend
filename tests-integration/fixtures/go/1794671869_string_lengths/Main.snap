@@ -119,7 +119,7 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int, count int) in
 			return count
 		}
 		var result2 bool
-		if i >= 0 && i < len(textASCII) {
+		if uint(i) < uint(len(textASCII)) {
 			result2 = rune(textASCII[i]) == 'a'
 		} else {
 			left0, found := textUnits.CharAt(i)

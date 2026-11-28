@@ -99,7 +99,7 @@ func initializeMain_() []string {
 	for index := range count {
 		i := index * step
 		var codeUnitCharAt maybe.Char
-		if i >= 0 && i < len(textASCII) {
+		if uint(i) < uint(len(textASCII)) {
 			codeUnitCharAt = maybe.Char(rune(textASCII[i]))
 		} else {
 			value, found := textUnits.CharAt(i)
@@ -129,7 +129,7 @@ func charAtLoopViewsTheText(text string, i int, count int) int {
 			return count
 		}
 		var result2 bool
-		if i >= 0 && i < len(textASCII) {
+		if uint(i) < uint(len(textASCII)) {
 			result2 = rune(textASCII[i]) == 'a'
 		} else {
 			left0, found := textUnits.CharAt(i)
@@ -217,7 +217,7 @@ func slicesInALoopViewTheText(text string, i int, pieces []string) []string {
 			textCut2 = textUnits.Take(i)
 		}
 		var textCut3 string
-		if i >= 0 && i < len(textASCII) {
+		if uint(i) < uint(len(textASCII)) {
 			textCut3 = textASCII[i:]
 		} else {
 			textCut3 = textUnits.Drop(i)
@@ -240,7 +240,7 @@ func codePointLoopViewsTheText(text string, i int, count int) int {
 			result2 = maybe.JustInt(direct.CodePointAt0(nil, text))
 		} else {
 			var codePointAt maybe.Int
-			if textIsASCII && (i >= 0 && i < len(text)) {
+			if textIsASCII && uint(i) < uint(len(text)) {
 				codePointAt = maybe.JustInt(int(text[i]))
 			} else {
 				value, found := textPoints.CodePointAt(i)
@@ -313,7 +313,7 @@ func closureInTheLoopReadsTheView(text string, i int, found []maybe.Char) []mayb
 			return found
 		}
 		var codeUnitCharAt maybe.Char
-		if i >= 0 && i < len(textASCII) {
+		if uint(i) < uint(len(textASCII)) {
 			codeUnitCharAt = maybe.Char(rune(textASCII[i]))
 		} else {
 			value, found2 := textUnits.CharAt(i)

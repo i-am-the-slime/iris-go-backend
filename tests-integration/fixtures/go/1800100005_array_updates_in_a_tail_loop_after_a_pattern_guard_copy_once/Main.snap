@@ -64,14 +64,14 @@ func doubled(position int, values []int) []int {
 	copied := false
 	for {
 		var element maybe.Int
-		if position >= 0 && position < len(values) {
+		if uint(position) < uint(len(values)) {
 			element = maybe.JustInt(values[position])
 		} else {
 			element = maybe.NoInt
 		}
 		if element.Tag == maybe.TagJust {
 			var result []int
-			if position >= 0 && position < len(values) {
+			if uint(position) < uint(len(values)) {
 				value := element.Just * 2
 				updated := values
 				if !copied {

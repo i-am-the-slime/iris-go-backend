@@ -1,6 +1,6 @@
 use crate::go_traversal;
 use crate::syntax::{
-    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -165,4 +165,59 @@ fn chained(operator: GoBinaryOperator, first: GoExpression, rest: GoExpression) 
 
 fn binary(operator: GoBinaryOperator, left: GoExpression, right: GoExpression) -> GoExpression {
     GoExpression::Binary { operator, left: Box::new(left), right: Box::new(right) }
+}
+
+pub(super) fn test_bounds_unsigned(declarations: &mut [GoDeclaration]) {
+    for declaration in declarations {
+        go_traversal::declaration(&mut UnsignedBounds, declaration);
+    }
+}
+
+struct UnsignedBounds;
+
+impl go_traversal::Walk for UnsignedBounds {
+    fn expression(&mut self, value: &mut GoExpression) {
+        go_traversal::expression(self, value);
+        let GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } = value
+        else {
+            return;
+        };
+        let (before, natural) = match &**left {
+            GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {
+                (Some(&**left), &**right)
+            }
+            natural => (None, natural),
+        };
+        let Some(bounded) = unsigned_bound(natural, right) else { return };
+        *value = match before {
+            Some(before) => binary(GoBinaryOperator::LogicalAnd, before.clone(), bounded),
+            None => bounded,
+        };
+    }
+}
+
+fn unsigned_bound(natural: &GoExpression, below: &GoExpression) -> Option<GoExpression> {
+    let GoExpression::Binary { operator: GoBinaryOperator::GreaterThanOrEqual, left, right } =
+        natural
+    else {
+        return None;
+    };
+    if **right != GoExpression::Integer(0) || matches!(**left, GoExpression::Integer(_)) {
+        return None;
+    }
+    let GoExpression::Binary { operator: GoBinaryOperator::LessThan, left: index, right: length } =
+        below
+    else {
+        return None;
+    };
+    let is_length = matches!(&**length, GoExpression::Call { function, .. }
+        if function.is_builtin(GoBuiltin::Len));
+    if index != left || !is_length || !is_pure(index) {
+        return None;
+    }
+    let unsigned = |value: &GoExpression| GoExpression::Conversion {
+        type_: GoType::Named("uint".into()),
+        value: Box::new(value.clone()),
+    };
+    Some(binary(GoBinaryOperator::LessThan, unsigned(index), unsigned(length)))
 }

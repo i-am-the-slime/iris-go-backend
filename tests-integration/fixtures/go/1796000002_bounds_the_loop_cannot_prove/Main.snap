@@ -32,7 +32,7 @@ func initializeMain_() []int {
 	size2 := len(result2)
 	for i := 0; i < size2; i++ {
 		i2 := i - 1
-		within := i2 >= 0 && i2 < len(result2)
+		within := uint(i2) < uint(len(result2))
 		var previous int
 		if within {
 			previous = result2[i2]

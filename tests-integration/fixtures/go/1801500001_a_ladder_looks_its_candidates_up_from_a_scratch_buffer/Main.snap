@@ -283,7 +283,7 @@ func ladderLengthClimb(end string, steps int, level []string, unvisited map[stri
 				position := index * step
 				for _, letter := range array {
 					var result2 bool
-					if position >= 0 && position < len(wordASCII) {
+					if uint(position) < uint(len(wordASCII)) {
 						result2 = rune(wordASCII[position]) == letter
 					} else {
 						left0, found2 := wordUnits.CharAt(position)
@@ -301,7 +301,7 @@ func ladderLengthClimb(end string, steps int, level []string, unvisited map[stri
 							wordCut = wordUnits.Take(position)
 						}
 						var wordCut2 string
-						if position+1 >= 0 && position+1 < len(wordASCII) {
+						if uint(position+1) < uint(len(wordASCII)) {
 							wordCut2 = wordASCII[position+1:]
 						} else {
 							wordCut2 = wordUnits.Drop(position + 1)

@@ -24,7 +24,7 @@ func initializeMain_() int {
 	elements := *steps
 	for stair := 1; stair < len(built); stair++ {
 		index := stair - 1
-		within := index >= 0 && index < len(elements)
+		within := uint(index) < uint(len(elements))
 		var fromBelow int
 		if within {
 			element := elements[index]
@@ -33,7 +33,7 @@ func initializeMain_() int {
 			fromBelow = 1000
 		}
 		index2 := stair - 3
-		within2 := index2 >= 0 && index2 < len(elements)
+		within2 := uint(index2) < uint(len(elements))
 		var fromFurther int
 		if within2 {
 			element := elements[index2]
@@ -42,14 +42,14 @@ func initializeMain_() int {
 			fromFurther = 1000
 		}
 		result := min(fromBelow, fromFurther)
-		if stair >= 0 && stair < len(elements) {
+		if uint(stair) < uint(len(elements)) {
 			elements[stair] = result
 		}
 	}
 	performed := shared.Frozen(*steps)
 	index3 := len(performed) - 1
 	var result2 int
-	if index3 >= 0 && index3 < len(performed) {
+	if uint(index3) < uint(len(performed)) {
 		result2 = performed[index3]
 	} else {
 		result2 = 0

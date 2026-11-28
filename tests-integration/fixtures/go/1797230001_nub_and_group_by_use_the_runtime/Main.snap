@@ -43,7 +43,7 @@ func Nub(xs []float64) []float64 {
 			array3 := shared.Frozen(array2)
 			index := len(array3) - 1
 			var result tuple.TupleNumber
-			if index >= 0 && index < len(array3) {
+			if uint(index) < uint(len(array3)) {
 				result = array3[index]
 			} else {
 				panic("Failed pattern match")
@@ -234,7 +234,7 @@ func main() {
 			array3 := shared.Frozen(array2)
 			index := len(array3) - 1
 			var result2 tuple.TupleInt
-			if index >= 0 && index < len(array3) {
+			if uint(index) < uint(len(array3)) {
 				result2 = array3[index]
 			} else {
 				panic("Failed pattern match")

@@ -294,6 +294,7 @@ where
         unreferenced::drop_unreferenced_definitions(declarations);
         constant_fields::drop_calls_of_constant_functions(declarations);
         self.return_failures_apart(declarations)?;
+        conditions::test_bounds_unsigned(declarations);
         // Last, so that every pass before reads the constructions' fields in their literals.
         self.call_constructor_functions(declarations)
     }

@@ -44,7 +44,7 @@ func overwriteEach(values []int, positions []int) []int {
 	accumulator = slices.Clip(accumulator)
 	copied := false
 	for _, position := range positions {
-		if position >= 0 && position < len(accumulator) {
+		if uint(position) < uint(len(accumulator)) {
 			value := position * 3
 			updated := accumulator
 			if !copied {
