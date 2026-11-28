@@ -540,15 +540,38 @@ pub fn sourcemap(path: &Path) -> FixtureResult {
 pub fn go(path: &Path) -> FixtureResult {
     let folder = fixture_folder(path)?;
     let file = module_name(path)?;
+    let (compiled, vendored) = compile_go_fixture(path)?;
+    // Built before the snapshot is compared, so that Go that does not build is never accepted.
+    if let Ok(program) = &compiled {
+        build_go_fixture(&program.files, &vendored)?;
+    }
+    let output = rendered_go_fixture(compiled)?;
+    let mut settings = insta::Settings::clone_current();
+    settings.set_snapshot_path(snapshot_path(folder));
+    settings.set_prepend_module_to_snapshot(false);
+    settings.set_omit_expression(true);
+    settings.bind(|| insta::assert_snapshot!(file, output));
+
+    Ok(())
+}
+
+pub fn go_output(path: &Path) -> FixtureResult<String> {
+    let (compiled, _) = compile_go_fixture(path)?;
+    rendered_go_fixture(compiled)
+}
+
+fn compile_go_fixture(path: &Path) -> FixtureResult<(go::GoResult<go::GoProgram>, VendoredFiles)> {
+    let folder = fixture_folder(path)?;
+    let file = module_name(path)?;
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
     let (foreign_packages, vendored) = go_foreign_packages(&loaded, folder)?;
     let compiled = go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
-    // Built before the snapshot is compared, so that Go that does not build is never accepted.
-    if let Ok(program) = &compiled {
-        build_go_fixture(&program.files, &vendored)?;
-    }
+    Ok((compiled, vendored))
+}
+
+fn rendered_go_fixture(compiled: go::GoResult<go::GoProgram>) -> FixtureResult<String> {
     let output = match compiled {
         // Each package's file follows its path, in order of path.
         Ok(program) => program
@@ -564,13 +587,7 @@ pub fn go(path: &Path) -> FixtureResult {
         ) => error.to_string(),
         Err(error) => return Err(error.into()),
     };
-    let mut settings = insta::Settings::clone_current();
-    settings.set_snapshot_path(snapshot_path(folder));
-    settings.set_prepend_module_to_snapshot(false);
-    settings.set_omit_expression(true);
-    settings.bind(|| insta::assert_snapshot!(file, output));
-
-    Ok(())
+    Ok(output)
 }
 
 /// Files copied into a generated Go module, by their path inside it.
