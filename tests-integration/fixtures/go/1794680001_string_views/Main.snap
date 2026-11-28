@@ -92,10 +92,10 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
-	step, count := array.RangeSteps(0, prim.CodeUnitLength(text)-1)
-	mapped := make([]maybe.Char, count)
 	textUnits := prim.UTF16(text)
 	textASCII := textUnits.ASCII()
+	step, count := array.RangeSteps(0, textUnits.Length()-1)
+	mapped := make([]maybe.Char, count)
 	for index := range count {
 		i := index * step
 		var codeUnitCharAt maybe.Char
@@ -205,23 +205,30 @@ func slicesInALoopViewTheText(text string, i int, pieces []string) []string {
 			return pieces
 		}
 		var textCut string
-		if i > 0 && i <= len(textASCII) {
-			textCut = textASCII[:i]
+		if i >= 0 && i <= i+2 && i+2 <= len(textASCII) {
+			textCut = textASCII[i:i+2]
 		} else {
-			textCut = textUnits.Take(i)
+			textCut = textUnits.Slice(i, i+2)
 		}
 		var textCut2 string
-		if i >= 0 && i < len(textASCII) {
-			textCut2 = textASCII[i:]
+		if i > 0 && i <= len(textASCII) {
+			textCut2 = textASCII[:i]
 		} else {
-			textCut2 = textUnits.Drop(i)
+			textCut2 = textUnits.Take(i)
 		}
-		i, pieces = i+2, append(pieces, textUnits.Slice(i, i+2), textCut, textCut2)
+		var textCut3 string
+		if i >= 0 && i < len(textASCII) {
+			textCut3 = textASCII[i:]
+		} else {
+			textCut3 = textUnits.Drop(i)
+		}
+		i, pieces = i+2, append(pieces, textCut, textCut2, textCut3)
 	}
 }
 
 func codePointLoopViewsTheText(text string, i int, count int) int {
 	textPoints := direct.CodePoints(text)
+	textIsASCII := prim.IsASCII(text)
 	for {
 		if i >= textPoints.Length() {
 			return count
@@ -232,12 +239,16 @@ func codePointLoopViewsTheText(text string, i int, count int) int {
 		} else if i == 0 {
 			result2 = maybe.JustInt(direct.CodePointAt0(nil, text))
 		} else {
-			value, found := textPoints.CodePointAt(i)
 			var codePointAt maybe.Int
-			if found {
-				codePointAt = maybe.JustInt(value)
+			if textIsASCII && (i >= 0 && i < len(text)) {
+				codePointAt = maybe.JustInt(int(text[i]))
 			} else {
-				codePointAt = maybe.NoInt
+				value, found := textPoints.CodePointAt(i)
+				if found {
+					codePointAt = maybe.JustInt(value)
+				} else {
+					codePointAt = maybe.NoInt
+				}
 			}
 			result2 = codePointAt
 		}
@@ -283,7 +294,13 @@ func literalIndexesAloneWalkTheText(text string, count int) int {
 		if count >= 3 {
 			return count
 		}
-		count += prim.CodeUnitLength(prim.CodeUnitTake(2, text))
+		var textPrefix string
+		if len(text) > 1 && text[0]|text[1] < 128 {
+			textPrefix = text[:2]
+		} else {
+			textPrefix = prim.CodeUnitTake(2, text)
+		}
+		count += prim.CodeUnitLength(textPrefix)
 	}
 }
 

@@ -276,9 +276,9 @@ func ladderLengthClimb(end string, steps int, level []string, unvisited map[stri
 		}
 		accumulator := make(map[string]struct{})
 		for _, word := range level {
-			step, count := arraypkg.RangeSteps(0, prim.CodeUnitLength(word)-1)
 			wordUnits := prim.UTF16(word)
 			wordASCII := wordUnits.ASCII()
+			step, count := arraypkg.RangeSteps(0, wordUnits.Length()-1)
 			for index := range count {
 				position := index * step
 				for _, letter := range array {

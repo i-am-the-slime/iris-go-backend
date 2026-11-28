@@ -6,6 +6,7 @@
 
 mod aliases;
 mod application;
+mod ascii_heads;
 mod blocks;
 mod boxing;
 mod branches;
@@ -298,12 +299,16 @@ where
     let mut names: Vec<DeclarationNames> = timed("names used", || {
         declarations.iter_mut().map(GoDeclaration::declared_names).collect()
     });
+    if emitter.imports.contains(GoPackage::Direct.path()) {
+        emitter.imports.insert(GoPackage::Prim.path().into());
+    }
     timed("invariant lengths", || {
         lengths::hoist_loop_invariant_lengths(&mut declarations, &mut names, &taken)
     });
     timed("invariants", || {
         invariants::hoist_loop_invariants(&mut declarations, &mut names, &taken)
     });
+    timed("ascii heads", || ascii_heads::read_ascii_heads(&mut declarations, &mut names, &taken));
     let chunked = timed("chunks", || {
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
     });

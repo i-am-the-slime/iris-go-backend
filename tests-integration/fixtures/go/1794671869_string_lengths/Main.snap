@@ -41,21 +41,56 @@ func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(st
 	for {
 		switch step {
 		case shared.CountSpacesUnconsingCountsUpToTwoStep:
-			codeUnitLength := prim.CodeUnitLengthUpTo(2, text)
+			var codeUnitLength int
+			if len(text) > 1 && text[0]|text[1] < 128 {
+				codeUnitLength = 2
+			} else {
+				codeUnitLength = prim.CodeUnitLengthUpTo(2, text)
+			}
 			switch codeUnitLength {
 			case 0:
 				return count
 			case 1:
-				step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, prim.ToCharCode(prim.CharAt(0, text)), ""
+				var textUnit rune
+				if len(text) > 0 && text[0] < 128 {
+					textUnit = rune(text[0])
+				} else {
+					textUnit = prim.CharAt(0, text)
+				}
+				step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, prim.ToCharCode(textUnit), ""
 				continue
 			default:
-				fieldHead := prim.ToCharCode(prim.CharAt(0, text))
-				cu1 := prim.ToCharCode(prim.CharAt(1, text))
+				var textUnit2 rune
+				if len(text) > 0 && text[0] < 128 {
+					textUnit2 = rune(text[0])
+				} else {
+					textUnit2 = prim.CharAt(0, text)
+				}
+				fieldHead := prim.ToCharCode(textUnit2)
+				var textUnit3 rune
+				if len(text) > 1 && text[0]|text[1] < 128 {
+					textUnit3 = rune(text[1])
+				} else {
+					textUnit3 = prim.CharAt(1, text)
+				}
+				cu1 := prim.ToCharCode(textUnit3)
 				if 55296 <= fieldHead && fieldHead <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-					step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, (fieldHead-55296)*1024+(cu1-56320)+65536, prim.CodeUnitDrop(2, text)
+					var textRest string
+					if len(text) > 1 && text[0]|text[1] < 128 {
+						textRest = text[2:]
+					} else {
+						textRest = prim.CodeUnitDrop(2, text)
+					}
+					step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, (fieldHead-55296)*1024+(cu1-56320)+65536, textRest
 					continue
 				}
-				step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, fieldHead, prim.CodeUnitDrop(1, text)
+				var textRest2 string
+				if len(text) > 0 && text[0] < 128 {
+					textRest2 = text[1:]
+				} else {
+					textRest2 = prim.CodeUnitDrop(1, text)
+				}
+				step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, fieldHead, textRest2
 				continue
 			}
 		default: // shared.CountSpacesUnconsingCountsUpToTwoJoinStep

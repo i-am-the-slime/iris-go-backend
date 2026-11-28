@@ -256,8 +256,10 @@ impl Walk for Function<'_> {
                 _ => vec![],
             };
             let hoisted = lengths.len();
+            let defined_at = self.count_with_views(&mut body[..at], &lengths);
             for (local, length) in lengths.into_iter().rev() {
-                body.insert(at, GoStatement::Define { names: vec![local], values: vec![length] });
+                let definition = GoStatement::Define { names: vec![local], values: vec![length] };
+                body.insert(defined_at, definition);
             }
             at += hoisted;
             self.statement(&mut body[at]);
@@ -269,6 +271,59 @@ impl Walk for Function<'_> {
 }
 
 impl Function<'_> {
+    fn count_with_views(
+        &self,
+        before: &mut [GoStatement],
+        hoisted: &[(String, GoExpression)],
+    ) -> usize {
+        let at = before.len();
+        let mut read: FxHashSet<String> = FxHashSet::default();
+        for (_, value) in hoisted {
+            let mut statement = GoStatement::Expression(value.clone());
+            each_expression_in_statement(&mut statement, |part| {
+                if let GoExpression::Identifier(name) = part {
+                    read.insert(name.clone());
+                }
+            });
+        }
+        if read.iter().any(|name| self.written_by_literals.contains(name)) {
+            return at;
+        }
+        let views: Vec<(&str, &str, &str)> =
+            hoisted.iter().filter_map(|(local, value)| viewed_length(local, value)).collect();
+        let mut earliest = at;
+        for position in (0..at).rev() {
+            let mut changes = false;
+            statements_names(std::slice::from_mut(&mut before[position]), &mut |name| {
+                if let Name::Written(name) | Name::Binder(name) = name {
+                    changes |= read.contains(name.as_str());
+                }
+            });
+            if changes {
+                break;
+            }
+            let mut counted = false;
+            each_expression_in_statement(&mut before[position], |value| {
+                counted |= views.iter().any(|view| counts_viewed(value, view));
+            });
+            if counted {
+                earliest = position;
+            }
+        }
+        for statement in &mut before[earliest..] {
+            each_expression_in_statement(statement, |value| {
+                if let Some((_, _, local)) = views.iter().find(|view| counts_viewed(value, view)) {
+                    let length = GoExpression::Field {
+                        value: Box::new(GoExpression::Identifier(local.to_string())),
+                        name: "Length".into(),
+                    };
+                    *value = GoExpression::Call { function: Box::new(length), arguments: vec![] };
+                }
+            });
+        }
+        earliest
+    }
+
     /// The loops of the declaration's body and of every function literal in it.
     fn declaration(&mut self, declaration: &mut GoDeclaration) {
         if let GoDeclaration::Function { body, .. } = declaration {
@@ -365,4 +420,26 @@ fn length_of_variable(value: &GoExpression) -> Option<(&'static str, String)> {
     let GoExpression::Qualified { package, name } = &**function else { return None };
     let [GoExpression::Identifier(string)] = arguments.as_slice() else { return None };
     Some((counted_up_to(package, name)?, string.clone()))
+}
+
+fn viewed_length<'h>(
+    local: &'h str,
+    value: &'h GoExpression,
+) -> Option<(&'h str, &'h str, &'h str)> {
+    let GoExpression::Call { function, arguments } = value else { return None };
+    let GoExpression::Qualified { package, name } = &**function else { return None };
+    let [GoExpression::Identifier(string)] = arguments.as_slice() else { return None };
+    let counted = match (package.as_str(), name.as_str()) {
+        ("prim", "UTF16") => "CodeUnitLength",
+        ("direct", "CodePoints") => "CodePointLength",
+        _ => return None,
+    };
+    Some((counted, string, local))
+}
+
+fn counts_viewed(value: &GoExpression, (counted, string, _): &(&str, &str, &str)) -> bool {
+    let GoExpression::Call { function, arguments } = value else { return false };
+    let GoExpression::Qualified { package, name } = &**function else { return false };
+    let [GoExpression::Identifier(argument)] = arguments.as_slice() else { return false };
+    matches!(package.as_str(), "prim" | "direct") && name == counted && argument == string
 }

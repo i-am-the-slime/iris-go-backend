@@ -157,8 +157,11 @@ pub(super) fn view_invariant_strings(
             arguments: vec![GoExpression::Identifier(string.clone())],
         };
         definitions.push((local.clone(), value));
-        if view == View::CodeUnits {
-            definitions.extend(read_ascii_bytes(looped, &string, &local, fresh));
+        match view {
+            View::CodeUnits => definitions.extend(read_ascii_bytes(looped, &string, &local, fresh)),
+            View::CodePoints => {
+                definitions.extend(read_ascii_points(looped, &string, &local, fresh))
+            }
         }
     }
     definitions
@@ -186,78 +189,9 @@ fn read_ascii_bytes(
     fresh: &mut dyn FnMut(String) -> String,
 ) -> Option<(String, GoExpression)> {
     let ascii = fresh(format!("{string}ASCII"));
-    let mut read = false;
-    // A read moved behind the ASCII test is visited again in its new block.
-    let mut moved: FxHashSet<String> = FxHashSet::default();
-    each_block(looped, |block| {
-        let mut position = 0;
-        while position < block.len() {
-            if let Some((char, found, index)) = char_at_definition(&block[position], view)
-                && !moved.contains(&found)
-            {
-                let byte = GoExpression::Conversion {
-                    type_: GoType::Rune,
-                    value: Box::new(GoExpression::Index {
-                        value: Box::new(GoExpression::Identifier(ascii.clone())),
-                        index: Box::new(index.clone()),
-                    }),
-                };
-                if let Some(built) = built_from_char(block, position, &char, &found, &byte) {
-                    moved.insert(found.clone());
-                    let asked = block.drain(position + 1..position + 3).collect::<Vec<_>>();
-                    let defined = std::mem::replace(&mut block[position], built.variable);
-                    block.insert(
-                        position + 1,
-                        GoStatement::If {
-                            condition: in_bounds(&index, GoExpression::Identifier(ascii.clone())),
-                            then: vec![built.from_byte],
-                            otherwise: [vec![defined], asked[1..].to_vec()].concat(),
-                        },
-                    );
-                    read = true;
-                    position += 2;
-                    continue;
-                }
-                let asked = block[position].clone();
-                let GoStatement::Define { values, .. } = asked else { unreachable!() };
-                let targets =
-                    [&char, &found].map(|name| GoExpression::Identifier(name.clone())).to_vec();
-                let mut rewritten = vec![];
-                let mut then = vec![];
-                if char != "_" {
-                    rewritten.push(GoStatement::Variable {
-                        name: char.clone(),
-                        type_: GoType::Rune,
-                        value: None,
-                    });
-                    then.push(GoStatement::Assign {
-                        targets: vec![GoExpression::Identifier(char.clone())],
-                        values: vec![byte],
-                    });
-                }
-                rewritten.push(GoStatement::Define {
-                    names: vec![found.clone()],
-                    values: vec![in_bounds(&index, GoExpression::Identifier(ascii.clone()))],
-                });
-                let asked = vec![GoStatement::Assign { targets, values }];
-                let found = GoExpression::Identifier(found);
-                rewritten.push(match then.is_empty() {
-                    true => GoStatement::If {
-                        condition: GoExpression::Unary { operator: "!", operand: Box::new(found) },
-                        then: asked,
-                        otherwise: vec![],
-                    },
-                    false => GoStatement::If { condition: found, then, otherwise: asked },
-                });
-                let added = rewritten.len();
-                block.splice(position..=position, rewritten);
-                read = true;
-                position += added;
-                continue;
-            }
-            position += 1;
-        }
-    });
+    let reads =
+        ByteReads { method: "CharAt", type_: GoType::Rune, text: ascii.clone(), test: None };
+    let mut read = reads.rewrite(looped, view);
     let mut cut_names: FxHashSet<String> = FxHashSet::default();
     each_block(looped, |block| {
         let mut position = 0;
@@ -265,7 +199,7 @@ fn read_ascii_bytes(
             let mut cuts = vec![];
             let asking = matches!(&block[position], GoStatement::Assign { targets, .. }
                 if matches!(targets.as_slice(), [GoExpression::Identifier(name)] if cut_names.contains(name)));
-            if !asking && let Some(values) = evaluated_values(&mut block[position]) {
+            if !asking && let Some(values) = evaluated_first(&mut block[position]) {
                 for value in values {
                     cut_ascii_text(value, view, &mut |cut| {
                         let name = fresh(format!("{string}Cut"));
@@ -294,11 +228,138 @@ fn read_ascii_bytes(
     read.then_some((ascii, value))
 }
 
+fn read_ascii_points(
+    looped: &mut Vec<GoStatement>,
+    string: &str,
+    view: &str,
+    fresh: &mut dyn FnMut(String) -> String,
+) -> Option<(String, GoExpression)> {
+    let ascii = fresh(format!("{string}IsASCII"));
+    let reads = ByteReads {
+        method: "CodePointAt",
+        type_: GoType::Int,
+        text: string.to_string(),
+        test: Some(ascii.clone()),
+    };
+    let tested = call(
+        GoExpression::Qualified { package: "prim".into(), name: "IsASCII".into() },
+        vec![GoExpression::Identifier(string.to_string())],
+    );
+    reads.rewrite(looped, view).then_some((ascii, tested))
+}
+
+struct ByteReads {
+    method: &'static str,
+    type_: GoType,
+    text: String,
+    test: Option<String>,
+}
+
+impl ByteReads {
+    fn condition(&self, index: &GoExpression) -> GoExpression {
+        let within = in_bounds(index, GoExpression::Identifier(self.text.clone()));
+        match &self.test {
+            Some(test) => binary("&&", GoExpression::Identifier(test.clone()), within),
+            None => within,
+        }
+    }
+
+    fn rewrite(&self, looped: &mut Vec<GoStatement>, view: &str) -> bool {
+        let mut read = false;
+        let mut moved: FxHashSet<String> = FxHashSet::default();
+        each_block(looped, |block| {
+            let mut position = 0;
+            while position < block.len() {
+                match self.rewrite_at(block, position, view, &mut moved) {
+                    Some(added) => {
+                        read = true;
+                        position += added;
+                    }
+                    None => position += 1,
+                }
+            }
+        });
+        read
+    }
+
+    fn rewrite_at(
+        &self,
+        block: &mut Vec<GoStatement>,
+        position: usize,
+        view: &str,
+        moved: &mut FxHashSet<String>,
+    ) -> Option<usize> {
+        let (char, found, index) = char_at_definition(&block[position], view, self.method)?;
+        if moved.contains(&found) {
+            return None;
+        }
+        let byte = GoExpression::Conversion {
+            type_: self.type_.clone(),
+            value: Box::new(GoExpression::Index {
+                value: Box::new(GoExpression::Identifier(self.text.clone())),
+                index: Box::new(index.clone()),
+            }),
+        };
+        if let Some(built) = built_from_char(block, position, &char, &found, &byte) {
+            moved.insert(found.clone());
+            let asked = block.drain(position + 1..position + 3).collect::<Vec<_>>();
+            let defined = std::mem::replace(&mut block[position], built.variable);
+            block.insert(
+                position + 1,
+                GoStatement::If {
+                    condition: self.condition(&index),
+                    then: vec![built.from_byte],
+                    otherwise: [vec![defined], asked[1..].to_vec()].concat(),
+                },
+            );
+            return Some(2);
+        }
+        let asked = block[position].clone();
+        let GoStatement::Define { values, .. } = asked else { unreachable!() };
+        let targets = [&char, &found].map(|name| GoExpression::Identifier(name.clone())).to_vec();
+        let mut rewritten = vec![];
+        let mut then = vec![];
+        if char != "_" {
+            rewritten.push(GoStatement::Variable {
+                name: char.clone(),
+                type_: self.type_.clone(),
+                value: None,
+            });
+            then.push(GoStatement::Assign {
+                targets: vec![GoExpression::Identifier(char.clone())],
+                values: vec![byte],
+            });
+        }
+        rewritten.push(GoStatement::Define {
+            names: vec![found.clone()],
+            values: vec![self.condition(&index)],
+        });
+        let asked = vec![GoStatement::Assign { targets, values }];
+        let found = GoExpression::Identifier(found);
+        rewritten.push(match then.is_empty() {
+            true => GoStatement::If {
+                condition: GoExpression::Unary { operator: "!", operand: Box::new(found) },
+                then: asked,
+                otherwise: vec![],
+            },
+            false => GoStatement::If { condition: found, then, otherwise: asked },
+        });
+        let added = rewritten.len();
+        block.splice(position..=position, rewritten);
+        Some(added)
+    }
+}
+
 /// A `view.Take(n)` or `view.Drop(n)` whose `n` is as cheap to repeat as to read.
 struct Cut {
-    take: bool,
-    count: GoExpression,
+    kind: CutKind,
     asked: GoExpression,
+}
+
+enum CutKind {
+    Take(GoExpression),
+    Drop(GoExpression),
+    Slice(GoExpression, GoExpression),
 }
 
 impl Cut {
@@ -315,18 +376,28 @@ impl Cut {
     /// and for a drop `n >= 0 && n < len(textASCII)` and `textASCII[n:]`.
     fn statements(self, name: &str, ascii: &str) -> [GoStatement; 2] {
         let text = || Box::new(GoExpression::Identifier(ascii.to_string()));
-        let count = || Some(Box::new(self.count.clone()));
-        let (condition, sliced) = match self.take {
-            true => {
-                let length = call(identifier_expression("len"), vec![*text()]);
-                let positive = binary(">", self.count.clone(), GoExpression::Integer(0));
-                let within = binary("<=", self.count.clone(), length);
-                let sliced = GoExpression::Slice { value: text(), low: None, high: count() };
+        let length = || call(identifier_expression("len"), vec![*text()]);
+        let (condition, sliced) = match self.kind {
+            CutKind::Take(count) => {
+                let positive = binary(">", count.clone(), GoExpression::Integer(0));
+                let within = binary("<=", count.clone(), length());
+                let high = Some(Box::new(count));
+                let sliced = GoExpression::Slice { value: text(), low: None, high };
                 (binary("&&", positive, within), sliced)
             }
-            false => {
-                let sliced = GoExpression::Slice { value: text(), low: count(), high: None };
-                (in_bounds(&self.count, *text()), sliced)
+            CutKind::Drop(count) => {
+                let condition = in_bounds(&count, *text());
+                let sliced =
+                    GoExpression::Slice { value: text(), low: Some(Box::new(count)), high: None };
+                (condition, sliced)
+            }
+            CutKind::Slice(begin, end) => {
+                let natural = binary(">=", begin.clone(), GoExpression::Integer(0));
+                let ordered = binary("<=", begin.clone(), end.clone());
+                let within = binary("<=", end.clone(), length());
+                let condition = binary("&&", binary("&&", natural, ordered), within);
+                let (low, high) = (Some(Box::new(begin)), Some(Box::new(end)));
+                (condition, GoExpression::Slice { value: text(), low, high })
             }
         };
         let assign = |value| GoStatement::Assign {
@@ -357,6 +428,14 @@ fn evaluated_values(statement: &mut GoStatement) -> Option<Vec<&mut GoExpression
         | GoStatement::Expression(value)
         | GoStatement::Return(Some(value)) => Some(vec![value]),
         _ => None,
+    }
+}
+
+pub(super) fn evaluated_first(statement: &mut GoStatement) -> Option<Vec<&mut GoExpression>> {
+    match statement {
+        GoStatement::If { condition: value, .. }
+        | GoStatement::Switch { value: Some(value), .. } => Some(vec![value]),
+        statement => evaluated_values(statement),
     }
 }
 
@@ -397,25 +476,23 @@ fn cut_ascii_text(
 fn cut_of(value: &GoExpression, view: &str) -> Option<Cut> {
     let GoExpression::Call { function, arguments } = value else { return None };
     let GoExpression::Field { value: viewed, name } = &**function else { return None };
-    let (GoExpression::Identifier(viewed), [count]) = (&**viewed, arguments.as_slice()) else {
+    let GoExpression::Identifier(viewed) = &**viewed else { return None };
+    if viewed != view || !arguments.iter().all(is_repeatable_count) {
         return None;
-    };
-    let take = match name.as_str() {
-        "Take" => true,
-        "Drop" => false,
+    }
+    let kind = match (name.as_str(), arguments.as_slice()) {
+        ("Take", [count]) => CutKind::Take(count.clone()),
+        ("Drop", [count]) => CutKind::Drop(count.clone()),
+        ("Slice", [begin, end]) => CutKind::Slice(begin.clone(), end.clone()),
         _ => return None,
     };
-    (viewed == view && is_repeatable_count(count)).then(|| Cut {
-        take,
-        count: count.clone(),
-        asked: value.clone(),
-    })
+    Some(Cut { kind, asked: value.clone() })
 }
 
 fn is_repeatable_count(value: &GoExpression) -> bool {
     match value {
-        GoExpression::Binary { operator: "+" | "-", left, right } => {
-            is_repeatable(left) && is_repeatable(right)
+        GoExpression::Binary { operator: "+" | "-" | "*", left, right } => {
+            is_repeatable_count(left) && is_repeatable_count(right)
         }
         value => is_repeatable(value),
     }
@@ -476,6 +553,7 @@ fn built_from_char(
 fn char_at_definition(
     statement: &GoStatement,
     view: &str,
+    method: &str,
 ) -> Option<(String, String, GoExpression)> {
     let GoStatement::Define { names, values } = statement else { return None };
     let ([char, found], [GoExpression::Call { function, arguments }]) =
@@ -487,7 +565,7 @@ fn char_at_definition(
     let ([index], GoExpression::Identifier(viewed)) = (arguments.as_slice(), &**value) else {
         return None;
     };
-    (viewed == view && name == "CharAt" && found != "_" && is_repeatable(index))
+    (viewed == view && name == method && found != "_" && is_repeatable(index))
         .then(|| (char.clone(), found.clone(), index.clone()))
 }
 
