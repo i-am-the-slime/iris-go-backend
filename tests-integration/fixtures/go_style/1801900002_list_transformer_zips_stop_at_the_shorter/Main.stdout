@@ -1,0 +1,10 @@
+-- zips of lists of unequal lengths stop at the shorter
+[2,4,6]
+[2,4]
+[]
+[]
+-- zips whose step runs in the monad
+[0,0,0,0]
+[2,4]
+-- zips in the array monad
+[[4,2]]
