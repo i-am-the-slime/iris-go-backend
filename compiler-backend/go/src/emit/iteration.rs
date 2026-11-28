@@ -2,7 +2,7 @@ use super::buffers::{to_bytes, to_string};
 use super::conditions::negated;
 use super::foreign_values::updated_arrays;
 use super::fusion::{Demand, Need, Order, Pipeline};
-use super::ownership::{Carried, Place, owned_snocs};
+use super::ownership::{Carried, Place, appends_every_step, owned_snocs};
 use super::recycling::Recycled;
 use super::{
     Emitter, Mode, Sink, binary, call, conjunction, identifier_expression, unit_value, uses_local,
@@ -214,7 +214,14 @@ where
         let callback = self.owning_callback(callback, accumulator_position, &accumulator, out);
         let owned = self.owned_arrays(&callback, accumulator_position, monotype);
         for (place, _) in &owned {
-            out.push(self.clip(&accumulator, place, monotype));
+            let clipped = self.clip(&accumulator, place, monotype);
+            let appended = appended_every_step(&callback, accumulator_position, place)
+                .then(|| pipeline.known_length())
+                .flatten();
+            match appended {
+                Some(count) => out.push(grown(clipped, count)),
+                None => out.push(clipped),
+            }
         }
         let owned_places: Vec<Vec<*const Expression>> = owned
             .iter()
@@ -247,7 +254,10 @@ where
         }
         let flags = self.release_updates(&owned_places, flags);
         out.extend(flags);
-        out.push(outcome?);
+        let places: Vec<&Place> = owned.iter().map(|(place, _)| place).collect();
+        let absorbing = absorbing.as_ref().filter(|_| !buffered);
+        let looped = self.carried_apart(outcome?, &places, absorbing, &accumulator)?;
+        out.extend(looped);
         if buffered {
             let built = self.temporary("built");
             let value = to_string(identifier_expression(&accumulator));
@@ -1071,4 +1081,26 @@ fn carried_place(accumulator: &str, place: &Place) -> GoExpression {
             super::field(identifier_expression(accumulator), go_field)
         }
     }
+}
+
+fn appended_every_step(
+    callback: &Callback<'_>,
+    accumulator_position: usize,
+    place: &Place,
+) -> bool {
+    let Callback::Inline { parameters, body } = callback else { return false };
+    let carried = Carried::new(parameters[accumulator_position].id, place);
+    appends_every_step(carried, body)
+}
+
+fn grown(clipped: GoStatement, count: GoExpression) -> GoStatement {
+    let GoStatement::Assign { targets, mut values } = clipped else { return clipped };
+    let clip = values.remove(0);
+    let is_slice_clip = matches!(&clip, GoExpression::Call { function, .. }
+        if matches!(function.as_ref(), GoExpression::Qualified { package, name } if package == "slices" && name == "Clip"));
+    if !is_slice_clip {
+        return GoStatement::Assign { targets, values: vec![clip] };
+    }
+    let grow = GoExpression::Qualified { package: "slices".into(), name: "Grow".into() };
+    GoStatement::Assign { targets, values: vec![call(grow, vec![clip, count])] }
 }

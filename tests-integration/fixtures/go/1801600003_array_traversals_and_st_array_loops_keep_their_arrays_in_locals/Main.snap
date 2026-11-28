@@ -1,0 +1,160 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "fixture/Data/Maybe"
+
+type Either struct {
+	Left  string
+	Right []int
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type MainResult struct {
+	ChecksOf func([]int) ([]int, StringFailure)
+	Drained  func([]int) int
+	HalvesOf func([]int) maybe.ArrayInt
+}
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type ArrayInt struct {
+	Just []int
+	Tag  uint8
+}
+
+func JustArrayInt(just []int) ArrayInt {
+	return ArrayInt{Tag: TagJust, Just: just}
+}
+
+var NoArrayInt = ArrayInt{Tag: TagNothing}
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"slices"
+)
+
+var main_ either.MainResult = either.MainResult{HalvesOf: halvesOf, ChecksOf: checksOf, Drained: drained}
+
+func halvesOf(array []int) maybe.ArrayInt {
+	accumulator := maybe.JustArrayInt([]int{})
+	accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(array))
+	carried := accumulator.Just
+	for _, number := range array {
+		if accumulator.Tag == maybe.TagNothing {
+			break
+		}
+		switch accumulator.Tag {
+		case maybe.TagJust:
+			if number&1 == 0 {
+				carried = append(carried, number>>1)
+			} else {
+				accumulator = maybe.NoArrayInt
+			}
+		default:
+			accumulator = maybe.NoArrayInt
+		}
+	}
+	if accumulator.Tag != maybe.TagNothing {
+		accumulator.Just = carried
+	}
+	return accumulator
+}
+
+func checksOf(array []int) ([]int, either.StringFailure) {
+	array_ := []int{}
+	var err either.StringFailure
+	array_ = slices.Grow(slices.Clip(array_), len(array))
+	carried := array_
+	for _, number := range array {
+		if err.Failed {
+			break
+		}
+		if !err.Failed {
+			if number < 0 {
+				err = either.StringFailure{Failed: true, Left: "negative"}
+			} else {
+				carried = append(carried, number+1)
+			}
+		}
+	}
+	if !err.Failed {
+		array_ = carried
+	}
+	return array_, err
+}
+
+func drained(values []int) int {
+	stack := array.Thaw(values)
+	return drain(0, stack)
+}
+
+func drain(total int, stack *[]int) int {
+	stackElements := *stack
+	for {
+		var removed maybe.Int
+		if len(stackElements) > 0 {
+			removed = maybe.JustInt(stackElements[len(stackElements)-1])
+			stackElements = shared.WithoutLast(stackElements)
+		} else {
+			removed = maybe.NoInt
+		}
+		switch removed.Tag {
+		case maybe.TagJust:
+			total += removed.Just
+			continue
+		default: // maybe.TagNothing
+			*stack = stackElements
+			return total
+		}
+	}
+}
+
+func main() {
+	_ = main_
+}
+
+// shared/shared.go
+package shared
+
+func WithoutLast[T any](elements []T) []T {
+	var zero T
+	elements[len(elements)-1] = zero
+	return elements[:len(elements)-1]
+}
+
+// note: the entry's value of type { checksOf, drained, halvesOf } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

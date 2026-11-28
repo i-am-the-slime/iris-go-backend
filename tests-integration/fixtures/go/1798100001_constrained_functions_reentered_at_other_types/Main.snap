@@ -66,7 +66,8 @@ var tree Rose = Rose{First: 1, Second: []Rose{{First: 2, Second: []Rose{}}, {Fir
 
 func traverseVisit(rose Rose) MaybeRoseInt {
 	accumulator := JustArrayRoseInt([]Rose{})
-	accumulator.Just = slices.Clip(accumulator.Just)
+	accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(rose.Second))
+	carried := accumulator.Just
 	for _, element := range rose.Second {
 		if accumulator.Tag == maybe.TagNothing {
 			break
@@ -76,13 +77,16 @@ func traverseVisit(rose Rose) MaybeRoseInt {
 			scrutinee := traverseVisit(element)
 			switch scrutinee.Tag {
 			case maybe.TagJust:
-				accumulator = JustArrayRoseInt(append(accumulator.Just, scrutinee.Just))
+				carried = append(carried, scrutinee.Just)
 			default:
 				accumulator = NoArrayRoseInt
 			}
 		default:
 			accumulator = NoArrayRoseInt
 		}
+	}
+	if accumulator.Tag != maybe.TagNothing {
+		accumulator.Just = carried
 	}
 	switch accumulator.Tag {
 	case maybe.TagJust:

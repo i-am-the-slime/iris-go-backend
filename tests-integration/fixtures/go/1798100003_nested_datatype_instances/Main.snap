@@ -355,7 +355,8 @@ func initializeMain_() []string {
 		}
 		original2 := func(array []int) maybe.ArrayInt {
 			accumulator := maybe.JustArrayInt([]int{})
-			accumulator.Just = slices.Clip(accumulator.Just)
+			accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(array))
+			carried := accumulator.Just
 			for _, element := range array {
 				if accumulator.Tag == maybe.TagNothing {
 					break
@@ -363,13 +364,16 @@ func initializeMain_() []string {
 				switch accumulator.Tag {
 				case maybe.TagJust:
 					if element > 0 {
-						accumulator = maybe.JustArrayInt(append(accumulator.Just, element+1))
+						carried = append(carried, element+1)
 					} else {
 						accumulator = maybe.NoArrayInt
 					}
 				default:
 					accumulator = maybe.NoArrayInt
 				}
+			}
+			if accumulator.Tag != maybe.TagNothing {
+				accumulator.Just = carried
 			}
 			return accumulator
 		}

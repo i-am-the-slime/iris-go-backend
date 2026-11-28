@@ -53,7 +53,8 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	accumulator := maybe.JustArrayString([]string{})
-	accumulator.Just = slices.Clip(accumulator.Just)
+	accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(origin.Tags))
+	carried := accumulator.Just
 	for _, tag := range origin.Tags {
 		if accumulator.Tag == maybe.TagNothing {
 			break
@@ -63,11 +64,14 @@ func initializeMain_() []string {
 			if tag == "" {
 				accumulator = maybe.NoArrayString
 			} else {
-				accumulator = maybe.JustArrayString(append(accumulator.Just, tag+"!"))
+				carried = append(carried, tag+"!")
 			}
 		default:
 			accumulator = maybe.NoArrayString
 		}
+	}
+	if accumulator.Tag != maybe.TagNothing {
+		accumulator.Just = carried
 	}
 	var result string
 	switch accumulator.Tag {

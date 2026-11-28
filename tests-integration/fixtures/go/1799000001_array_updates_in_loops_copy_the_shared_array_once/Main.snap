@@ -88,7 +88,7 @@ func initializeMain_() []string {
 		}
 	}
 	accumulator3 := tuple.Tuple{First: shared, Second: [][]int{}}
-	accumulator3.Second = slices.Clip(accumulator3.Second)
+	accumulator3.Second = slices.Grow(slices.Clip(accumulator3.Second), 3)
 	for position := 0; position < 3; position++ {
 		current := accumulator3.First
 		var result []int
