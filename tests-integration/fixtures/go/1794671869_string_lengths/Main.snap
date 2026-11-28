@@ -52,13 +52,18 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int) int {
 			var textUnit rune
 			if len(text) > 0 && text[0] < 128 {
 				textUnit = rune(text[0])
+				if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
+					result = count + 1
+				} else {
+					result = count
+				}
 			} else {
 				textUnit = prim.CharAt(0, text)
-			}
-			if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
-				result = count + 1
-			} else {
-				result = count
+				if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
+					result = count + 1
+				} else {
+					result = count
+				}
 			}
 			text, count = "", result
 			continue

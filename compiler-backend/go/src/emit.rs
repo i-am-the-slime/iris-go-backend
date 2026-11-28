@@ -10,6 +10,7 @@ mod array_parameters;
 mod ascii_heads;
 mod blocks;
 mod boxing;
+mod branch_tests;
 mod branches;
 mod buffers;
 mod build;
