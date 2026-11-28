@@ -133,11 +133,11 @@ impl Workspace {
         self
     }
 
-    pub fn require_selected(&self) -> Result<&WorkspacePackage, WorkspaceError> {
+    pub fn require_selected(&self) -> Result<(&str, &WorkspacePackage), WorkspaceError> {
         let Some(name) = &self.selected else {
             return Err(WorkspaceError::AmbiguousPackage);
         };
-        Ok(&self.packages[name])
+        Ok((name, &self.packages[name]))
     }
 }
 

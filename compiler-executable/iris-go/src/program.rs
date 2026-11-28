@@ -92,12 +92,11 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
     let workspace = Workspace::discover(&current_directory, config.package.as_deref())
         .map_err(|error| error.to_string())?
         .select_root_package_by_default();
-    let package = workspace.require_selected().map_err(|error| error.to_string())?;
-    let name = workspace.selected.clone().expect("invariant violated: a package is selected");
+    let (name, package) = workspace.require_selected().map_err(|error| error.to_string())?;
     let execution = if config.tests { tests(package)? } else { program(package) };
     let entry = config.entry.unwrap_or_else(|| format!("{}.main", execution.main));
 
-    let cache = workspace.root.join(".spago").join("go").join(&name);
+    let cache = workspace.root.join(".spago").join("go").join(name);
     // The tests get their own module and executable, so switching between running the program
     // and its tests does not build either again.
     let cache = if config.tests { cache.join("test") } else { cache };
@@ -105,11 +104,11 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
     let module = cache.join("module");
     let previous_requirements = previous_requirements(&module)?;
     clear_generated(&module)?;
-    let fresh = go_mod(&name)?;
+    let fresh = go_mod(name)?;
     let declaration = requirements::with_requirements(&fresh, &previous_requirements);
     write(&module.join("go.mod"), &declaration.unwrap_or(fresh))?;
     crate::run(GoConfig {
-        package: Some(name.clone()),
+        package: Some(name.to_string()),
         entry,
         destination: PathBuf::clone(&module),
         version: config.version,

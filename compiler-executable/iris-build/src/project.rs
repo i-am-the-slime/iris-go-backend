@@ -222,7 +222,7 @@ fn initialize_project_inner(
 fn run_project(config: RunConfig) -> Result<(), ProjectFailure> {
     let current_directory = env::current_dir().map_err(ProjectFailure::CurrentDirectory)?;
     let workspace = Workspace::discover(&current_directory, config.project.package.as_deref())?;
-    let package = workspace.require_selected()?;
+    let (_, package) = workspace.require_selected()?;
     let execution = Option::clone(&package.manifest.run).unwrap_or_default();
     let main = config.main.or(execution.main).unwrap_or_else(|| "Main".to_owned());
     let arguments =
@@ -244,7 +244,8 @@ fn test_project(config: TestConfig) -> Result<(), ProjectFailure> {
     let current_directory = env::current_dir().map_err(ProjectFailure::CurrentDirectory)?;
     let workspace = Workspace::discover(&current_directory, config.project.package.as_deref())?;
     if workspace.selected.is_some() {
-        if !workspace.require_selected()?.has_tests {
+        let (_, package) = workspace.require_selected()?;
+        if !package.has_tests {
             return Err(ProjectFailure::NoTests);
         }
     } else if !workspace.packages.values().any(|package| package.has_tests) {
