@@ -85,6 +85,7 @@ mod reference_equality;
 mod references;
 mod reuse;
 mod scalars;
+mod scratch_keys;
 mod sharing;
 mod shorthands;
 mod sorting;
@@ -333,6 +334,9 @@ where
     timed("upserts", || upsert::look_up_and_write_once(&mut declarations, &global));
     timed("probes", || probes::probe_once(&mut declarations, &global));
     timed("index arrays", || index_arrays::count_instead_of_listing_indices(&mut declarations));
+    timed("scratch keys", || {
+        scratch_keys::build_looked_up_keys_in_scratch(&mut declarations, &global)
+    });
     let mut record_value_name = |type_name: &str| {
         let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
         Some(emitter.value_base(monotype))

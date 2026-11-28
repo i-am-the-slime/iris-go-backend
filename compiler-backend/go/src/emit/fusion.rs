@@ -36,6 +36,7 @@
 
 use std::collections::VecDeque;
 
+use super::conditions::negated;
 use super::iteration::{Callback, Found};
 use super::{
     Emitter, Mode, Sink, binary, call, identifier_expression, is_simple, length, lines, uses_local,
@@ -44,7 +45,9 @@ use crate::error::GoResult;
 use crate::foreign::{
     ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, GoPackage, Iteration,
 };
-use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local};
+use crate::monomorphic::{
+    Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, Pattern, PatternKind,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
 use crate::syntax::{GoExpression, GoStatement, SourceLine};
@@ -75,10 +78,14 @@ enum Source<'e> {
         value: GoExpression,
     },
     Zip(Box<Zip<'e>>),
+    Guard {
+        condition: GoExpression,
+        value: GoExpression,
+    },
 }
 
 struct Zip<'e> {
-    operands: [Pipeline<'e>; 2],
+    operands: Vec<Pipeline<'e>>,
     callback: Callback<'e>,
     produces: MonotypeId,
     count: GoExpression,
@@ -243,6 +250,7 @@ impl<'e> Pipeline<'e> {
             Source::Stepping(steps) => steps.count.clone(),
             Source::Replicate { count, .. } => count.clone(),
             Source::Zip(zip) => zip.count.clone(),
+            Source::Guard { .. } => return None,
         })
     }
 
@@ -264,6 +272,49 @@ where
             || (demand.order == Order::Forward && self.generated(array).is_some())
     }
 
+    fn guarded<'e>(&self, array: &'e Expression) -> Option<(&'e Expression, &'e Expression, bool)> {
+        let (condition, then, otherwise) = choice(array)?;
+        let constant = |expression: &Expression| {
+            matches!(
+                expression.kind,
+                ExpressionKind::Unit
+                    | ExpressionKind::Literal(_)
+                    | ExpressionKind::Foreign { foreign: Foreign::Unit, .. }
+            )
+        };
+        let single = |expression: &'e Expression| match &expression.kind {
+            ExpressionKind::Array(elements) => match elements.as_slice() {
+                [element] if constant(element) => Some(element),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(kept) = single(then)
+            && self.is_empty_array(otherwise)
+        {
+            return Some((condition, kept, true));
+        }
+        if let Some(kept) = single(otherwise)
+            && self.is_empty_array(then)
+        {
+            return Some((condition, kept, false));
+        }
+        None
+    }
+
+    fn is_empty_array(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Array(elements) => elements.is_empty(),
+            ExpressionKind::Function(id) => {
+                let function = self.program.function(*id);
+                function.parameters.is_empty()
+                    && !matches!(function.body.kind, ExpressionKind::Function(_))
+                    && self.is_empty_array(&function.body)
+            }
+            _ => false,
+        }
+    }
+
     fn generated<'e>(&self, array: &'e Expression) -> Option<Generated<'e>> {
         let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return None };
         if foreign.calls(ARRAY_REPLICATE)
@@ -271,18 +322,54 @@ where
         {
             return Some(Generated::Replicate { count, value });
         }
+        let zips = self.zips(array);
+        let (callback, operands) = zips.into_iter().find_map(|(function, operands)| {
+            if self.effect_after(function.monotype, operands.len()) {
+                return None;
+            }
+            Some((self.callback(function, operands.len())?, operands))
+        })?;
+        Some(Generated::Zip { callback, operands })
+    }
+
+    fn zips<'e>(&self, array: &'e Expression) -> Vec<(&'e Expression, Vec<&'e Expression>)> {
+        let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return vec![] };
         let Foreign::Call {
             boundary: Boundary { iteration: Some(Iteration::ZipWith), .. }, ..
         } = foreign
         else {
-            return None;
+            return vec![];
         };
-        let [function, left, right] = arguments.as_slice() else { return None };
-        if self.effect_after(function.monotype, 2) {
-            return None;
+        let [function, left, right] = arguments.as_slice() else { return vec![] };
+        let mut zips = vec![];
+        if self.is_application(function) {
+            for (partial, mut operands) in self.zips(left) {
+                operands.push(right);
+                zips.push((partial, operands));
+            }
         }
-        let callback = self.callback(function, 2)?;
-        Some(Generated::Zip { callback, operands: [left, right] })
+        zips.push((function, vec![left, right]));
+        zips
+    }
+
+    fn is_application(&self, function: &Expression) -> bool {
+        let applies = |parameters: &[&Local], body: &Expression| {
+            let ExpressionKind::Apply { function, arguments } = &body.kind else { return false };
+            let ([applied, argument], [given]) = (parameters, arguments.as_slice()) else {
+                return false;
+            };
+            matches!(function.kind, ExpressionKind::Local(id) if id == applied.id)
+                && matches!(given.kind, ExpressionKind::Local(id) if id == argument.id)
+        };
+        match self.callback(function, 2) {
+            Some(Found::Inline { parameters, body }) => applies(&parameters, body),
+            Some(Found::Direct { callee, leading: [], .. }) => {
+                let callee = self.program.function(callee);
+                let parameters: Vec<&Local> = callee.parameters.iter().collect();
+                applies(&parameters, &callee.body)
+            }
+            _ => false,
+        }
     }
 
     /// The pipeline a `concatMap` callback returns, which can run as a loop
@@ -366,7 +453,10 @@ where
         let source = match (literal_range(current), range_bounds(current)) {
             (Some((first, last)), _) if !positional => Source::Range { first, last },
             (_, Some(bounds)) => Source::Stepping(self.steps(bounds, read, out)?),
-            (_, None) => self.source(current, demand, read, out)?,
+            (_, None) => {
+                let demand = Demand { positions: positional, ..demand };
+                self.source(current, demand, read, out)?
+            }
         };
         Ok(Pipeline { source, stages, order: demand.order })
     }
@@ -405,28 +495,42 @@ where
                     _ => unreachable!("invariant violated: zipWith produces an array"),
                 };
                 let positional = Demand { positions: true, ..Demand::FORWARD };
-                let [left, right] = operands;
-                let left =
-                    self.pipeline_reading(left, positional, read && callback.reads(0), out)?;
-                let right =
-                    self.pipeline_reading(right, positional, read && callback.reads(1), out)?;
-                let lengths = [&left, &right].map(|pipeline| {
-                    let count = pipeline.count();
-                    count.expect("invariant violated: a positional pipeline has a length")
+                let mut pipelines = vec![];
+                let mut lengths = vec![];
+                for (position, operand) in operands.into_iter().enumerate() {
+                    let reads = read && callback.reads(position);
+                    let pipeline = self.pipeline_reading(operand, positional, reads, out)?;
+                    let length = pipeline.count();
+                    lengths.push(
+                        length.expect("invariant violated: a positional pipeline has a length"),
+                    );
+                    pipelines.push(pipeline);
+                }
+                let shortest = lengths.iter().try_fold(i64::MAX, |shortest, length| match length {
+                    GoExpression::Integer(length) => Some(shortest.min(*length)),
+                    _ => None,
                 });
-                let count = match lengths {
-                    [GoExpression::Integer(left), GoExpression::Integer(right)] => {
-                        GoExpression::Integer(left.min(right))
-                    }
-                    [left, right] => {
-                        let count = call(identifier_expression("min"), vec![left, right]);
+                let count = match shortest {
+                    Some(shortest) => GoExpression::Integer(shortest),
+                    None => {
+                        let count = call(identifier_expression("min"), lengths);
                         self.hoist(count, "count", out)
                     }
                 };
-                let operands = [left, right];
+                let operands = pipelines;
                 Ok(Source::Zip(Box::new(Zip { operands, callback, produces, count })))
             }
             None => {
+                if demand.order == Order::Forward
+                    && !demand.positions
+                    && let Some((condition, kept, holds)) = self.guarded(array)
+                {
+                    let condition = self.value(condition, out)?;
+                    let condition = if holds { condition } else { negated(&condition) };
+                    let mut ignored = vec![];
+                    let value = self.value(kept, &mut ignored)?;
+                    return Ok(Source::Guard { condition, value });
+                }
                 let value = self.value(array, out)?;
                 Ok(Source::Array(self.hoist(value, "array", out)))
             }
@@ -603,6 +707,15 @@ where
                             nested.source
                         }
                         None => {
+                            if let Callback::Inline { body: returned, .. } = &stage.callback
+                                && let Some((bindings, single)) = singleton(returned)
+                            {
+                                for bound in bindings {
+                                    self.bindings(bound, body.body())?;
+                                }
+                                flow = self.value(single, body.body())?;
+                                continue;
+                            }
                             let produced =
                                 self.callback_value(&stage.callback, vec![argument], body.body())?;
                             if remaining.is_empty() && matches!(need, Need::Value) {
@@ -680,7 +793,20 @@ where
                 self.zip_element(*zip, &index, &element, &mut prefix)?;
                 return Ok((Header::Positions { index: Some(index), count }, prefix));
             }
-            (Source::Replicate { .. } | Source::Zip(_), Order::Backward) => {
+            (Source::Guard { condition, value }, Order::Forward) => {
+                let mut prefix = vec![];
+                if let Some(index) = index {
+                    prefix.push(GoStatement::Define {
+                        names: vec![index],
+                        values: vec![GoExpression::Integer(0)],
+                    });
+                }
+                if element != "_" {
+                    prefix.push(GoStatement::Define { names: vec![element], values: vec![value] });
+                }
+                return Ok((Header::If(condition, None), prefix));
+            }
+            (Source::Replicate { .. } | Source::Zip(_) | Source::Guard { .. }, Order::Backward) => {
                 unreachable!("invariant violated: generated arrays are read forwards")
             }
         };
@@ -694,13 +820,14 @@ where
         element: &str,
         body: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        let Zip { operands: [left, right], callback, produces, .. } = zip;
-        let left = self.element_at(left, index, body)?;
-        let left = self.receive(left, &callback, 0, true, body)?;
-        let right = self.element_at(right, index, body)?;
-        let right = self.receive(right, &callback, 1, true, body)?;
+        let Zip { operands, callback, produces, .. } = zip;
+        let mut arguments = vec![];
+        for (position, operand) in operands.into_iter().enumerate() {
+            let flow = self.element_at(operand, index, body)?;
+            arguments.push(self.receive(flow, &callback, position, true, body)?);
+        }
         let sink = Sink::Define(element.to_string());
-        self.apply_callback(&callback, vec![left, right], produces, sink, body)
+        self.apply_callback(&callback, arguments, produces, sink, body)
     }
 
     fn element_at(
@@ -722,6 +849,9 @@ where
             }
             Source::Stepping(steps) => stepped_value(&steps, index),
             Source::Replicate { value, .. } => value,
+            Source::Guard { .. } => {
+                unreachable!("invariant violated: a guard is not read by position")
+            }
             Source::Zip(zip) => {
                 let element = self.temporary("element");
                 self.zip_element(*zip, index, &element, body)?;
@@ -1202,7 +1332,7 @@ fn element_position(kind: StageKind) -> usize {
 
 enum Generated<'e> {
     Replicate { count: &'e Expression, value: &'e Expression },
-    Zip { callback: Found<'e>, operands: [&'e Expression; 2] },
+    Zip { callback: Found<'e>, operands: Vec<&'e Expression> },
 }
 
 fn indexed(array: &str, slot: GoExpression) -> GoExpression {
@@ -1282,4 +1412,51 @@ fn literal_bounds(first: &Expression, last: &Expression) -> Option<(i64, i64)> {
         return None;
     };
     Some((*first, *last))
+}
+
+fn singleton(mut expression: &Expression) -> Option<(Vec<&[Binding]>, &Expression)> {
+    let mut bindings = vec![];
+    while let ExpressionKind::Let { bindings: bound, body } = &expression.kind {
+        bindings.push(bound.as_slice());
+        expression = body;
+    }
+    match &expression.kind {
+        ExpressionKind::Array(elements) => match elements.as_slice() {
+            [element] => Some((bindings, element)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn body(alternative: &Alternative) -> Option<&Expression> {
+    match &alternative.body {
+        Guarded::Unconditional(body) => Some(body),
+        Guarded::Guards(_) => None,
+    }
+}
+
+fn choice(expression: &Expression) -> Option<(&Expression, &Expression, &Expression)> {
+    match &expression.kind {
+        ExpressionKind::If { condition, then, otherwise } => Some((condition, then, otherwise)),
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            let ([scrutinee], [first, second]) = (scrutinees.as_slice(), alternatives.as_slice())
+            else {
+                return None;
+            };
+            let truth = |alternative: &Alternative| match alternative.patterns.as_slice() {
+                [Pattern { kind: PatternKind::Literal(Literal::Boolean(truth)), .. }] => {
+                    Some(Some(*truth))
+                }
+                [Pattern { kind: PatternKind::Wildcard, .. }] => Some(None),
+                _ => None,
+            };
+            match (truth(first)?, truth(second)?) {
+                (Some(true), Some(false) | None) => Some((scrutinee, body(first)?, body(second)?)),
+                (Some(false), Some(true) | None) => Some((scrutinee, body(second)?, body(first)?)),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
 }

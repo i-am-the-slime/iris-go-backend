@@ -104,9 +104,9 @@ func main() {
 	journal.Log(show.ArrayString(bound2))
 	array3 := [][]shared.LeftRight{{{Left: 1, Right: "x"}}, {{Left: 2, Right: "x"}}}
 	mapped := []string{}
-	for _, element := range array3 {
-		for leftRightIndex := range element {
-			mapped = append(mapped, strconv.Itoa(element[leftRightIndex].Left)+element[leftRightIndex].Right)
+	for _, value := range array3 {
+		for leftRightIndex := range value {
+			mapped = append(mapped, strconv.Itoa(value[leftRightIndex].Left)+value[leftRightIndex].Right)
 		}
 	}
 	journal.Log(show.ArrayString(mapped))

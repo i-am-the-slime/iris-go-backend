@@ -1,0 +1,9 @@
+-- the steps of a ladder climbed a level at a time, halves of a surrogate pair joining
+0
+4
+5
+0
+-- the words one letter away from a word that are not in a dictionary
+["�b","�b","a�"]
+-- the guard keeps a value it hands on
+["ab!","abcd!"]

@@ -1,0 +1,355 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Control/Plus/plus.go
+package plus
+
+var Empty []struct{} = []struct{}{}
+
+// Data/List/Types/types.go
+package types
+
+import "fixture/Data/Maybe"
+
+type List struct {
+	Cons0 string
+	Cons1 *List
+}
+
+var SharedListNil = &List{}
+
+type Tuple struct {
+	First  string
+	Second *List
+}
+
+type MaybeTupleStringListString struct {
+	Just Tuple
+	Tag  uint8
+}
+
+var NoTupleStringListString = MaybeTupleStringListString{Tag: maybe.TagNothing}
+
+func JustTupleStringListString(just Tuple) MaybeTupleStringListString {
+	return MaybeTupleStringListString{Tag: maybe.TagJust, Just: just}
+}
+
+func Cons(cons0 string, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
+}
+
+// Data/Map/Internal/internal.go
+package internal
+
+import (
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"math/bits"
+	"slices"
+)
+
+type Map struct {
+	Node3 struct{}
+	Node2 string
+	Node4 *Map
+	Node5 *Map
+	Node0 int
+	Node1 int
+}
+
+var SharedMapLeaf = &Map{}
+
+type Entries struct {
+	Keys   []string
+	Values []struct{}
+}
+
+func SortedStringEntries[V any](table map[string]V, compare func(string, string) int) ([]string, []V) {
+	count := len(table)
+	keys := make([]string, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	for _, key := range keys {
+		for at := 0; at < len(key); at++ {
+			if key[at] >= 0xEE {
+				slices.SortFunc(keys, compare)
+				for index, key := range keys {
+					values[index] = table[key]
+				}
+				return keys, values
+			}
+		}
+	}
+	insertion := func(keys []string, values []V) {
+		for index := 1; index < len(keys); index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && keys[at-1] > key; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+	}
+	if count <= 32 {
+		insertion(keys, values)
+		return keys, values
+	}
+	prefixes := make([]uint64, count)
+	var counts [8][256]int
+	for index, key := range keys {
+		var prefix uint64
+		for at := 0; at < 8 && at < len(key); at++ {
+			prefix |= uint64(key[at]) << (56 - 8*at)
+		}
+		prefixes[index] = prefix
+		for digit := range 8 {
+			counts[digit][byte(prefix>>(8*digit))]++
+		}
+	}
+	sparePrefixes := make([]uint64, count)
+	spareKeys := make([]string, count)
+	spareValues := make([]V, count)
+	for digit := range 8 {
+		starts := &counts[digit]
+		shift := 8 * digit
+		if starts[byte(prefixes[0]>>shift)] == count {
+			continue
+		}
+		total := 0
+		for bucket := range starts {
+			starts[bucket], total = total, total+starts[bucket]
+		}
+		for index, prefix := range prefixes {
+			bucket := byte(prefix >> shift)
+			at := starts[bucket]
+			sparePrefixes[at], spareKeys[at], spareValues[at] = prefix, keys[index], values[index]
+			starts[bucket] = at + 1
+		}
+		prefixes, sparePrefixes = sparePrefixes, prefixes
+		keys, spareKeys = spareKeys, keys
+		values, spareValues = spareValues, values
+	}
+	for low := 0; low < count; {
+		high := low + 1
+		for high < count && prefixes[high] == prefixes[low] {
+			high++
+		}
+		if high-low <= 16 {
+			insertion(keys[low:high], values[low:high])
+		} else {
+			order := make([]int, high-low)
+			for index := range order {
+				order[index] = low + index
+			}
+			slices.SortFunc(order, func(left int, right int) int { return compare(keys[left], keys[right]) })
+			for index, from := range order {
+				spareKeys[index], spareValues[index] = keys[from], values[from]
+			}
+			copy(keys[low:high], spareKeys[:high-low])
+			copy(values[low:high], spareValues[:high-low])
+		}
+		low = high
+	}
+	return keys, values
+}
+
+func TreeFromKeys(keys []string, values []struct{}, low int, high int) *Map {
+	var cells alloc.Cells[Map]
+	return TreeFromKeysChunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeysChunked(keys []string, values []struct{}, low int, high int, cells *alloc.Cells[Map]) *Map {
+	if low == high {
+		return SharedMapLeaf
+	}
+	var middle int
+	var key string
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(Map{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeysChunked(keys, values, low, middle, cells), Node5: TreeFromKeysChunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable(table map[string]struct{}) *Map {
+	var entries Entries
+	var keys []string
+	var values []struct{}
+	keys2, values2 := SortedStringEntries(table, prim.CompareString)
+	entries = Entries{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys(keys, values, 0, len(keys))
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+type Char int64
+
+const NoChar Char = 1 << 32
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  any
+	Second any
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/List/Types"
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	return ladderLength("hit", "cog", []string{"hot", "dot", "dog", "lot", "log", "cog"})
+}
+
+func ladderLength(begin string, end string, words []string) int {
+	accumulator := make(map[string]struct{}, len(words))
+	for _, a := range words {
+		m := accumulator
+		m[a] = struct{}{}
+		accumulator = m
+	}
+	delete(accumulator, begin)
+	return ladderLengthClimb(end, 1, []string{begin}, accumulator)
+}
+
+func ladderLengthClimb(end string, steps int, level []string, unvisited map[string]struct{}) int {
+	var scratch []byte
+	array := []rune{'a', 'c', 'd', 'g', 'h', 'i', 'l', 'o', 't'}
+	for {
+		unvisitedCaptured := unvisited
+		if len(level) == 0 {
+			return 0
+		}
+		found := maybe.NoInt
+		for index, value := range level {
+			if value == end {
+				found = maybe.JustInt(index)
+				break
+			}
+		}
+		var result bool
+		switch found.Tag {
+		case maybe.TagNothing:
+			result = false
+		default: // maybe.TagJust
+			result = true
+		}
+		if result {
+			return steps
+		}
+		accumulator := make(map[string]struct{})
+		for _, word := range level {
+			step, count := arraypkg.RangeSteps(0, prim.CodeUnitLength(word)-1)
+			wordUnits := prim.UTF16(word)
+			wordASCII := wordUnits.ASCII()
+			for index := range count {
+				position := index * step
+				for _, letter := range array {
+					var result2 bool
+					if position >= 0 && position < len(wordASCII) {
+						result2 = rune(wordASCII[position]) == letter
+					} else {
+						left0, found2 := wordUnits.CharAt(position)
+						if found2 {
+							result2 = left0 == letter
+						} else {
+							result2 = false
+						}
+					}
+					if !result2 {
+						var wordCut string
+						if position > 0 && position <= len(wordASCII) {
+							wordCut = wordASCII[:position]
+						} else {
+							wordCut = wordUnits.Take(position)
+						}
+						var wordCut2 string
+						if position+1 >= 0 && position+1 < len(wordASCII) {
+							wordCut2 = wordASCII[position+1:]
+						} else {
+							wordCut2 = wordUnits.Drop(position + 1)
+						}
+						scratch = prim.AppendString(prim.AppendRune(prim.AppendString(scratch[:0], wordCut), letter), wordCut2)
+						_, found2 := unvisitedCaptured[string(scratch)]
+						if found2 {
+							value := string(scratch)
+							m := accumulator
+							m[value] = struct{}{}
+							accumulator = m
+						}
+					}
+				}
+			}
+		}
+		for key := range accumulator {
+			delete(unvisitedCaptured, key)
+		}
+		steps, level, unvisited = steps+1, arraypkg.Unfoldr(func(value types.MaybeTupleStringListString) bool {
+			return value.Tag == maybe.TagNothing
+		}, func(value types.MaybeTupleStringListString) types.Tuple {
+			return value.Just
+		}, func(value types.Tuple) string {
+			return value.First
+		}, func(value types.Tuple) *types.List {
+			return value.Second
+		}, func(xs *types.List) types.MaybeTupleStringListString {
+			if xs == types.SharedListNil {
+				return types.NoTupleStringListString
+			}
+			return types.JustTupleStringListString(types.Tuple{First: xs.Cons0, Second: xs.Cons1})
+		}, ladderLengthClimbGo(internal.TreeFromTable(accumulator), types.SharedListNil)), unvisitedCaptured
+	}
+}
+
+func ladderLengthClimbGo(m_ *internal.Map, z_ *types.List) *types.List {
+	for {
+		if m_ == internal.SharedMapLeaf {
+			return z_
+		}
+		k := m_.Node2
+		l := m_.Node4
+		r := m_.Node5
+		m_, z_ = l, types.Cons(k, ladderLengthClimbGo(r, z_))
+	}
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}

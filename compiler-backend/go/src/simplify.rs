@@ -434,13 +434,16 @@ impl Simplifier<'_> {
         table && arguments.get(position).is_some_and(unknown)
     }
 
-    fn saturated_callback(&mut self, argument: Expression) -> Expression {
+    fn saturated_callback(&mut self, argument: Expression, binds: bool) -> Expression {
         let ExpressionKind::Function(id) = argument.kind else { return argument };
         let Some(function) = self.inlinable(id) else { return argument };
         let count = function.parameters.len();
         let wraps_foreign = is_foreign_wrapper(&function.parameters, &function.body);
+        let bound_once = binds && count > 0 && self.uses[id.0 as usize] == 1;
         let templates: Vec<Local> = function.parameters.clone();
-        if !wraps_foreign || crate::arity::arrows(self.monotypes, argument.monotype) < count {
+        if !(wraps_foreign || bound_once)
+            || crate::arity::arrows(self.monotypes, argument.monotype) < count
+        {
             return argument;
         }
         let mut parameters = vec![];
@@ -784,16 +787,19 @@ impl Simplifier<'_> {
                 }
             }
             ExpressionKind::Foreign { foreign, arguments } => {
-                let iterates = matches!(
-                    foreign,
-                    Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. }
-                        if boundary.iteration.is_some()
-                );
+                let iteration = match foreign {
+                    Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => {
+                        boundary.iteration
+                    }
+                    _ => None,
+                };
+                let iterates = iteration.is_some();
+                let binds = iteration == Some(crate::foreign::Iteration::Bind);
                 let arguments: Vec<Expression> = arguments
                     .into_iter()
                     .map(|argument| {
                         let argument = self.expression(argument);
-                        if iterates { self.saturated_callback(argument) } else { argument }
+                        if iterates { self.saturated_callback(argument, binds) } else { argument }
                     })
                     .collect();
                 let arguments = match self.viewed_object_operation(foreign, arguments, monotype) {
