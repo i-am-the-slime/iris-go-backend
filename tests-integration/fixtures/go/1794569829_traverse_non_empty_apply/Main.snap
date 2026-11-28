@@ -36,18 +36,11 @@ func initializeMain_() maybe.ArrayInt {
 	accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(array))
 	carried := accumulator.Just
 	for _, element := range array {
-		if accumulator.Tag == maybe.TagNothing {
-			break
-		}
-		switch accumulator.Tag {
-		case maybe.TagJust:
-			if element&1 == 0 {
-				carried = append(carried, element>>1)
-			} else {
-				accumulator = maybe.NoArrayInt
-			}
-		default:
+		if element&1 == 0 {
+			carried = append(carried, element>>1)
+		} else {
 			accumulator = maybe.NoArrayInt
+			break
 		}
 	}
 	if accumulator.Tag != maybe.TagNothing {

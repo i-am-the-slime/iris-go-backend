@@ -7,6 +7,7 @@ import Data.Either (Either(..))
 import Data.Foldable (foldl)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence, traverse)
+import Partial.Unsafe (unsafeCrashWith)
 import Effect (Effect)
 import Effect.Console (log)
 
@@ -31,6 +32,15 @@ appendedAfter start = foldl step (Just start)
   step (Just kept) number = if number > 100 then Nothing else Just (Array.snoc kept number)
   step Nothing _ = Nothing
 
+startingFrom :: Maybe (Array Int) -> Array Int -> Maybe (Array Int)
+startingFrom = foldl step
+  where
+  step (Just kept) number
+    | number == 99 = unsafeCrashWith "a step ran on an absorbed accumulator"
+    | number > 100 = Nothing
+    | otherwise = Just (Array.snoc kept number)
+  step Nothing _ = Nothing
+
 main :: Effect Unit
 main = do
   log (show (traverse doubledWhenNatural [ 1, 2, 3 ]))
@@ -49,3 +59,6 @@ main = do
   log (show (appendedAfter source [ 30 ]))
   log (show (appendedAfter source [ 40 ]))
   log (show source)
+  log (show (startingFrom Nothing [ 99, 1 ]))
+  log (show (startingFrom (Just [ 5 ]) [ 6, 7 ]))
+  log (show (startingFrom (Just [ 5 ]) [ 6, 200, 99 ]))

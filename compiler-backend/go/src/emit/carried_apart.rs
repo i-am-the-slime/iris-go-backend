@@ -15,18 +15,20 @@ where
         looped: GoStatement,
         places: &[&Place],
         absorbing: Option<&Pattern>,
-        accumulator: &str,
+        (accumulator, initial): (&str, &GoExpression),
     ) -> GoResult<Vec<GoStatement>> {
         let ([Place::Constructor { constructor, index: 0, go_field }], Some(absorbing)) =
             (places, absorbing)
         else {
             return Ok(vec![looped]);
         };
-        let PatternKind::Constructor { data, constructor: absorbed, .. } = &absorbing.kind else {
+        let PatternKind::Constructor { data, constructor: absorbing_constructor, .. } =
+            &absorbing.kind
+        else {
             return Ok(vec![looped]);
         };
         let layout = self.data_layout(data)?;
-        if absorbed == constructor
+        if absorbing_constructor == constructor
             || layout.boxed
             || layout.constructors.len() != 2
             || layout.constructors[*constructor].fields.len() != 1
@@ -51,6 +53,19 @@ where
         apart.statement(&mut rewritten);
         if !apart.intact {
             return Ok(vec![looped]);
+        }
+        let absorbed_fields = layout.constructors[*absorbing_constructor].fields.len();
+        let placeholders = vec![identifier_expression(&scalar); absorbed_fields];
+        let absorbing_value = self.construct(data, *absorbing_constructor, placeholders)?;
+        let leaving = Leaving {
+            accumulator,
+            absorbed: &absorbed,
+            value: &absorbing_value,
+            placeholder: &scalar,
+        };
+        if let Some(body) = loop_body(&mut rewritten) {
+            let starts_kept = kept_argument(&kept, initial, &scalar).is_some();
+            leaving.leave_once_absorbed(body, starts_kept);
         }
         let carried = field(identifier_expression(accumulator), go_field);
         let read =
@@ -184,5 +199,200 @@ fn kept_argument(
             kept_argument(expected, given, placeholder)
         }
         _ => None,
+    }
+}
+
+fn loop_body(looped: &mut GoStatement) -> Option<&mut Vec<GoStatement>> {
+    match looped {
+        GoStatement::Range { body, .. }
+        | GoStatement::Counting { body, .. }
+        | GoStatement::CountingDown { body, .. }
+        | GoStatement::Loop(body) => Some(body),
+        _ => None,
+    }
+}
+
+struct Leaving<'a> {
+    accumulator: &'a str,
+    absorbed: &'a GoExpression,
+    value: &'a GoExpression,
+    placeholder: &'a str,
+}
+
+impl Leaving<'_> {
+    fn leave_once_absorbed(&self, body: &mut Vec<GoStatement>, starts_kept: bool) {
+        let Some(check) = body.iter().position(|statement| self.is_check(statement)) else {
+            return;
+        };
+        let copies = copies_of(self.accumulator, &body[check + 1..]);
+        let Some(switch) = (check + 1..body.len())
+            .find(|&position| self.kept_branch(&body[position], &copies).is_some())
+        else {
+            return;
+        };
+        if body[check + 1..switch].iter().any(|statement| self.assigns_accumulator(statement)) {
+            return;
+        }
+        let kept = self.kept_branch(&body[switch], &copies).cloned().unwrap_or_default();
+        body.splice(switch..=switch, kept);
+        let mut rest = body.split_off(switch);
+        if self.break_after_absorbing(&mut rest) && starts_kept {
+            body.remove(check);
+        }
+        body.extend(rest);
+    }
+
+    fn is_check(&self, statement: &GoStatement) -> bool {
+        matches!(statement, GoStatement::If { condition, then, otherwise }
+            if condition == self.absorbed
+                && matches!(then.as_slice(), [GoStatement::Break])
+                && otherwise.is_empty())
+    }
+
+    fn kept_branch<'s>(
+        &self,
+        statement: &'s GoStatement,
+        copies: &[String],
+    ) -> Option<&'s Vec<GoStatement>> {
+        let GoExpression::Binary { operator: "==", left: tag, right: absorbed_tag } = self.absorbed
+        else {
+            return None;
+        };
+        let GoStatement::Switch { value: Some(value), cases, default: Some(default) } = statement
+        else {
+            return None;
+        };
+        let [case] = cases.as_slice() else { return None };
+        let reads_tag = match (value, tag.as_ref()) {
+            (
+                GoExpression::Field { value: read, name },
+                GoExpression::Field { value: accumulator, name: tag_name },
+            ) => {
+                name == tag_name
+                    && (read == accumulator
+                        || matches!(read.as_ref(), GoExpression::Identifier(copy) if copies.contains(copy)))
+            }
+            _ => false,
+        };
+        if !reads_tag {
+            return None;
+        }
+        match case.values.contains(absorbed_tag) {
+            true => Some(&default.body),
+            false => Some(&case.body),
+        }
+    }
+
+    fn assigns_accumulator(&self, statement: &GoStatement) -> bool {
+        let mut assigned = Assigned { accumulator: self.accumulator, found: false };
+        assigned.statement(&mut statement.clone());
+        assigned.found
+    }
+
+    fn is_absorbing(&self, value: &GoExpression) -> bool {
+        value == self.value || kept_argument(self.value, value, self.placeholder).is_some()
+    }
+
+    fn break_after_absorbing(&self, block: &mut Vec<GoStatement>) -> bool {
+        let mut position = 0;
+        while position < block.len() {
+            if self.assigns_accumulator(&block[position])
+                && let Some(branches) = switch_as_branches(&block[position])
+            {
+                block[position] = branches;
+            }
+            match &mut block[position] {
+                GoStatement::Assign { targets, values } if matches!(targets.as_slice(), [GoExpression::Identifier(target)] if target == self.accumulator) =>
+                {
+                    if !matches!(values.as_slice(), [value] if self.is_absorbing(value)) {
+                        return false;
+                    }
+                    block.insert(position + 1, GoStatement::Break);
+                    position += 2;
+                    continue;
+                }
+                GoStatement::If { then, otherwise, .. } => {
+                    if !self.break_after_absorbing(then) || !self.break_after_absorbing(otherwise) {
+                        return false;
+                    }
+                }
+                statement if self.assigns_accumulator(statement) => return false,
+                _ => {}
+            }
+            position += 1;
+        }
+        true
+    }
+}
+
+struct Assigned<'a> {
+    accumulator: &'a str,
+    found: bool,
+}
+
+impl Walk for Assigned<'_> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        if let GoStatement::Assign { targets, .. } = statement
+            && targets.iter().any(|target| matches!(target, GoExpression::Identifier(name) if name == self.accumulator))
+        {
+            self.found = true;
+        }
+        go_traversal::statement(self, statement);
+    }
+}
+
+fn copies_of(accumulator: &str, statements: &[GoStatement]) -> Vec<String> {
+    let mut copies = vec![];
+    for statement in statements {
+        if let GoStatement::Define { names, values } = statement
+            && let ([copy], [GoExpression::Identifier(copied)]) =
+                (names.as_slice(), values.as_slice())
+            && (copied == accumulator || copies.contains(copied))
+        {
+            copies.push(copy.clone());
+        }
+    }
+    copies
+}
+
+fn switch_as_branches(statement: &GoStatement) -> Option<GoStatement> {
+    let GoStatement::Switch { value: Some(value), cases, default: Some(default) } = statement
+    else {
+        return None;
+    };
+    let [case] = cases.as_slice() else { return None };
+    if !is_pure_read(value) || case.values.is_empty() {
+        return None;
+    }
+    let tests = case.values.iter().map(|tested| GoExpression::Binary {
+        operator: "==",
+        left: Box::new(value.clone()),
+        right: Box::new(tested.clone()),
+    });
+    let condition = tests
+        .reduce(|left, right| GoExpression::Binary {
+            operator: "||",
+            left: Box::new(left),
+            right: Box::new(right),
+        })
+        .expect("a case tests a value");
+    let lined = |line: &Option<crate::syntax::SourceLine>, body: &[GoStatement]| {
+        line.iter().cloned().map(GoStatement::Line).chain(body.iter().cloned()).collect()
+    };
+    Some(GoStatement::If {
+        condition,
+        then: lined(&case.line, &case.body),
+        otherwise: lined(&default.line, &default.body),
+    })
+}
+
+fn is_pure_read(expression: &GoExpression) -> bool {
+    match expression {
+        GoExpression::Identifier(_) | GoExpression::Qualified { .. } | GoExpression::Integer(_) => {
+            true
+        }
+        GoExpression::Field { value, .. } => is_pure_read(value),
+        GoExpression::Index { value, index } => is_pure_read(value) && is_pure_read(index),
+        _ => false,
     }
 }

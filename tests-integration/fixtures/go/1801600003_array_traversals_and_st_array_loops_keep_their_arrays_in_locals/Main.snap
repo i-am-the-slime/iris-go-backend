@@ -75,18 +75,11 @@ func halvesOf(array []int) maybe.ArrayInt {
 	accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(array))
 	carried := accumulator.Just
 	for _, number := range array {
-		if accumulator.Tag == maybe.TagNothing {
-			break
-		}
-		switch accumulator.Tag {
-		case maybe.TagJust:
-			if number&1 == 0 {
-				carried = append(carried, number>>1)
-			} else {
-				accumulator = maybe.NoArrayInt
-			}
-		default:
+		if number&1 == 0 {
+			carried = append(carried, number>>1)
+		} else {
 			accumulator = maybe.NoArrayInt
+			break
 		}
 	}
 	if accumulator.Tag != maybe.TagNothing {
@@ -101,15 +94,11 @@ func checksOf(array []int) ([]int, either.StringFailure) {
 	array_ = slices.Grow(slices.Clip(array_), len(array))
 	carried := array_
 	for _, number := range array {
-		if err.Failed {
+		if number < 0 {
+			err = either.StringFailure{Failed: true, Left: "negative"}
 			break
-		}
-		if !err.Failed {
-			if number < 0 {
-				err = either.StringFailure{Failed: true, Left: "negative"}
-			} else {
-				carried = append(carried, number+1)
-			}
+		} else {
+			carried = append(carried, number+1)
 		}
 	}
 	if !err.Failed {
