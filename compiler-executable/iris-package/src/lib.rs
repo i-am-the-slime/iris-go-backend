@@ -15,7 +15,7 @@ const GITIGNORE: &str = include_str!("../bundled/project/gitignore");
 
 /// The Go package set `googoo new` starts projects on. Bump the tag in it when a release is
 /// checked against a newer set from https://github.com/rowtype-yoga/purescript-go-package-sets.
-pub const GO_PACKAGE_SET: &str = "https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json";
+pub const GO_PACKAGE_SET: &str = "https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261128/packages.json";
 
 pub struct NewConfig {
     pub name: Option<String>,

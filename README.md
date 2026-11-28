@@ -68,7 +68,7 @@ package:
       - spec
 workspace:
   packageSet:
-    url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json
+    url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261128/packages.json
 ```
 
 `googoo add go-time` adds one more later on.

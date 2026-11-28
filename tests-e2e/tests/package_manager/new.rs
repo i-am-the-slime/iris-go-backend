@@ -12,7 +12,7 @@ fn creates_a_spago_project_on_the_go_package_set() {
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
     --- stdout
-    Created package `example` with package set https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json.
+    Created package `example` with package set https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261128/packages.json.
     Run `googoo run` to get started.
     --- stderr
     ");
@@ -36,7 +36,7 @@ fn creates_a_spago_project_on_the_go_package_set() {
           - spec
     workspace:
       packageSet:
-        url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json
+        url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261128/packages.json
     --- src/Main.purs
     module Main where
 
