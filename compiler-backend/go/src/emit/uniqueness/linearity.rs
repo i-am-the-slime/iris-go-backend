@@ -81,13 +81,14 @@ pub(in crate::emit) type Forced = FxHashMap<*const Expression, Vec<Branch>>;
 #[derive(Clone, Copy)]
 pub(in crate::emit) enum Scope<'e> {
     Expression(&'e Expression),
+    Run(&'e Expression),
     Guarded(&'e Guarded),
 }
 
 impl<'e> Scope<'e> {
     pub(in crate::emit) fn expressions(self) -> Vec<&'e Expression> {
         match self {
-            Scope::Expression(expression) => vec![expression],
+            Scope::Expression(expression) | Scope::Run(expression) => vec![expression],
             Scope::Guarded(guarded) => guarded_expressions(guarded),
         }
     }
@@ -107,6 +108,7 @@ pub(in crate::emit) fn is_unique(
     let counter = Counter::new(target, None, &relatives, forced);
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
+        Scope::Run(expression) => counter.run(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
     };
     counter.is_linear(paths)
@@ -123,6 +125,7 @@ pub(in crate::emit) fn is_only_read(
     let counter = Counter::new(target, None, &relatives, &forced);
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
+        Scope::Run(expression) => counter.run(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
     };
     paths.never_consumed()
@@ -153,6 +156,7 @@ pub(in crate::emit) fn is_unique_path(
     let counter = Counter::new(record, Some(path), &relatives, &forced);
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
+        Scope::Run(expression) => counter.run(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
     };
     counter.is_linear(paths)
@@ -248,6 +252,26 @@ impl<'f> Counter<'f> {
         let closures_see_it_unchanged = !self.read_by_closure.get() || paths.never_consumed();
         paths.all_linear() && closures_see_it_unchanged
     }
+    fn run(&self, shapes: &mut impl Shapes, expression: &Expression) -> Paths {
+        if !shapes.effects_only_peek() {
+            return self.count(shapes, expression);
+        }
+        match &expression.kind {
+            ExpressionKind::EffectBind { action, body, .. } => {
+                self.run(shapes, action).then(self.run(shapes, body))
+            }
+            ExpressionKind::EffectPure(value) => self.count(shapes, value),
+            ExpressionKind::Let { bindings, body } => {
+                let mut paths = Paths::empty();
+                for binding in bindings {
+                    paths = paths.then(self.count(shapes, &binding.value));
+                }
+                paths.then(self.run(shapes, body))
+            }
+            _ => self.count(shapes, expression),
+        }
+    }
+
     fn count(&self, shapes: &mut impl Shapes, expression: &Expression) -> Paths {
         if let Some(field) = self.field
             && let Some(paths) = self.count_field(shapes, field, expression)

@@ -340,6 +340,7 @@ struct SoftEdge {
 #[derive(Clone, Copy)]
 enum ScopeAt {
     Expression(*const Expression),
+    Run(*const Expression),
     Guarded(*const Guarded),
 }
 
@@ -347,6 +348,7 @@ impl ScopeAt {
     fn of(scope: Scope<'_>) -> ScopeAt {
         match scope {
             Scope::Expression(expression) => ScopeAt::Expression(expression),
+            Scope::Run(expression) => ScopeAt::Run(expression),
             Scope::Guarded(guarded) => ScopeAt::Guarded(guarded),
         }
     }
@@ -355,6 +357,7 @@ impl ScopeAt {
     fn scope<'p>(self) -> Scope<'p> {
         match self {
             ScopeAt::Expression(expression) => Scope::Expression(unsafe { &*expression }),
+            ScopeAt::Run(expression) => Scope::Run(unsafe { &*expression }),
             ScopeAt::Guarded(guarded) => Scope::Guarded(unsafe { &*guarded }),
         }
     }
@@ -1173,7 +1176,7 @@ impl<'p> Webs<'p> {
         };
         let bound = self.local(local.id, local.monotype);
         self.hand_back(foreign, arguments, result, bound.clone());
-        self.require_linear(&bound, local, Scope::Expression(body));
+        self.require_linear(&bound, local, Scope::Run(body));
     }
 
     /// The maps a foreign hands back ([`HandsBack`]) flow from its argument, or from what its

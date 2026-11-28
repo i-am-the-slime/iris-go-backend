@@ -1,0 +1,1061 @@
+---
+source: tests-integration/src/fixtures/go_backend.rs
+---
+// Data/List/Types/types.go
+package types
+
+import "fixture/Data/Maybe"
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int
+}
+
+var SharedListIntNil = &ListInt{}
+
+type TupleInt struct {
+	Second *ListInt
+	First  int
+}
+
+type MaybeTupleIntListInt struct {
+	Just TupleInt
+	Tag  uint8
+}
+
+var NoTupleIntListInt = MaybeTupleIntListInt{Tag: maybe.TagNothing}
+
+func JustTupleIntListInt(just TupleInt) MaybeTupleIntListInt {
+	return MaybeTupleIntListInt{Tag: maybe.TagJust, Just: just}
+}
+
+type ListString struct {
+	Cons0 string
+	Cons1 *ListString
+}
+
+var SharedListStringNil = &ListString{}
+
+type TupleString struct {
+	First  string
+	Second *ListString
+}
+
+type MaybeTupleStringListString struct {
+	Just TupleString
+	Tag  uint8
+}
+
+var NoTupleStringListString = MaybeTupleStringListString{Tag: maybe.TagNothing}
+
+func JustTupleStringListString(just TupleString) MaybeTupleStringListString {
+	return MaybeTupleStringListString{Tag: maybe.TagJust, Just: just}
+}
+
+func ConsListInt(cons0 int, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
+
+func ConsListString(cons0 string, cons1 *ListString) *ListString {
+	return &ListString{Cons0: cons0, Cons1: cons1}
+}
+
+// Data/Map/Internal/internal.go
+package internal
+
+import (
+	"cmp"
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"math/bits"
+	"slices"
+)
+
+type MapIntInt struct {
+	Node4 *MapIntInt
+	Node5 *MapIntInt
+	Node0 int
+	Node1 int
+	Node2 int
+	Node3 int
+}
+
+var SharedMapIntIntLeaf = &MapIntInt{}
+
+type MapIterInt struct {
+	IterEmit2 *MapIterInt
+	IterNode0 *MapIntInt
+	IterNode1 *MapIterInt
+	IterEmit0 int
+	IterEmit1 int
+	Tag       uint8
+}
+
+const (
+	MapIterIntIterLeaf = iota
+	MapIterIntIterEmit
+	MapIterIntIterNode
+)
+
+type TupleTupleIntInt struct {
+	Second *MapIterInt
+	First  tuple.TupleInt
+}
+
+type MaybeTupleTupleIntIntMapIterIntInt struct {
+	Just TupleTupleIntInt
+	Tag  uint8
+}
+
+var SharedMapIterIntIterLeaf = &MapIterInt{Tag: MapIterIntIterLeaf}
+
+type MapTupleIntInt struct {
+	Node4 *MapTupleIntInt
+	Node5 *MapTupleIntInt
+	Node0 int
+	Node1 int
+	Node2 tuple.TupleInt
+	Node3 int
+}
+
+var SharedMapTupleIntIntLeaf = &MapTupleIntInt{}
+
+type MapIterTupleIntInt struct {
+	IterEmit2 *MapIterTupleIntInt
+	IterNode0 *MapTupleIntInt
+	IterNode1 *MapIterTupleIntInt
+	IterEmit0 tuple.TupleInt
+	IterEmit1 int
+	Tag       uint8
+}
+
+const (
+	MapIterTupleIntIntIterLeaf = iota
+	MapIterTupleIntIntIterEmit
+	MapIterTupleIntIntIterNode
+)
+
+type TupleTupleTupleIntIntInt struct {
+	Second *MapIterTupleIntInt
+	First  tuple.TupleTupleIntInt
+}
+
+type MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt struct {
+	Just TupleTupleTupleIntIntInt
+	Tag  uint8
+}
+
+var SharedMapIterTupleIntIntIterLeaf = &MapIterTupleIntInt{Tag: MapIterTupleIntIntIterLeaf}
+
+type MapStringInt struct {
+	Node2 string
+	Node4 *MapStringInt
+	Node5 *MapStringInt
+	Node0 int
+	Node1 int
+	Node3 int
+}
+
+var SharedMapStringIntLeaf = &MapStringInt{}
+
+type MapIterString struct {
+	IterEmit0 string
+	IterEmit2 *MapIterString
+	IterNode0 *MapStringInt
+	IterNode1 *MapIterString
+	IterEmit1 int
+	Tag       uint8
+}
+
+const (
+	MapIterStringIterLeaf = iota
+	MapIterStringIterEmit
+	MapIterStringIterNode
+)
+
+type TupleTupleStringInt struct {
+	First  tuple.TupleString
+	Second *MapIterString
+}
+
+type MaybeTupleTupleStringIntMapIterStringInt struct {
+	Just TupleTupleStringInt
+	Tag  uint8
+}
+
+var SharedMapIterStringIterLeaf = &MapIterString{Tag: MapIterStringIterLeaf}
+
+type MapIntUnit struct {
+	Node3 struct{}
+	Node4 *MapIntUnit
+	Node5 *MapIntUnit
+	Node0 int
+	Node1 int
+	Node2 int
+}
+
+var SharedMapIntUnitLeaf = &MapIntUnit{}
+
+type MapStringUnit struct {
+	Node3 struct{}
+	Node2 string
+	Node4 *MapStringUnit
+	Node5 *MapStringUnit
+	Node0 int
+	Node1 int
+}
+
+var SharedMapStringUnitLeaf = &MapStringUnit{}
+
+var NoTupleTupleIntIntMapIterIntInt = MaybeTupleTupleIntIntMapIterIntInt{Tag: maybe.TagNothing}
+
+func JustTupleTupleIntIntMapIterIntInt(just TupleTupleIntInt) MaybeTupleTupleIntIntMapIterIntInt {
+	return MaybeTupleTupleIntIntMapIterIntInt{Tag: maybe.TagJust, Just: just}
+}
+
+var NoTupleTupleTupleIntIntIntMapIterTupleIntIntInt = MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt{Tag: maybe.TagNothing}
+
+func JustTupleTupleTupleIntIntIntMapIterTupleIntIntInt(just TupleTupleTupleIntIntInt) MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt {
+	return MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt{Tag: maybe.TagJust, Just: just}
+}
+
+var NoTupleTupleStringIntMapIterStringInt = MaybeTupleTupleStringIntMapIterStringInt{Tag: maybe.TagNothing}
+
+func JustTupleTupleStringIntMapIterStringInt(just TupleTupleStringInt) MaybeTupleTupleStringIntMapIterStringInt {
+	return MaybeTupleTupleStringIntMapIterStringInt{Tag: maybe.TagJust, Just: just}
+}
+
+type EntriesOfArrayIntArrayInt struct {
+	Keys   []int
+	Values []int
+}
+
+func SortedIntegerEntries[K ~int | ~int32, V any](table map[K]V) ([]K, []V) {
+	count := len(table)
+	keys := make([]K, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	if count <= 32 {
+		for index := 1; index < count; index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && keys[at-1] > key; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+		return keys, values
+	}
+	lowest, highest := keys[0], keys[0]
+	for _, key := range keys {
+		lowest = min(lowest, key)
+		highest = max(highest, key)
+	}
+	base := uint64(int64(lowest))
+	span := uint64(int64(highest)) - base
+	spareKeys := make([]K, count)
+	spareValues := make([]V, count)
+	for shift := 0; shift < 64 && span>>shift != 0; shift += 8 {
+		var starts [256]int
+		for _, key := range keys {
+			starts[byte((uint64(int64(key))-base)>>shift)]++
+		}
+		total := 0
+		for digit := range starts {
+			starts[digit], total = total, total+starts[digit]
+		}
+		for index, key := range keys {
+			digit := byte((uint64(int64(key)) - base) >> shift)
+			at := starts[digit]
+			spareKeys[at], spareValues[at] = key, values[index]
+			starts[digit] = at + 1
+		}
+		keys, spareKeys = spareKeys, keys
+		values, spareValues = spareValues, values
+	}
+	return keys, values
+}
+
+type EntriesOfArrayTupleIntIntArrayInt struct {
+	Keys   []tuple.TupleInt
+	Values []int
+}
+
+func CompareKeys(left tuple.TupleInt, right tuple.TupleInt) int {
+	order := cmp.Compare(left.First, right.First)
+	if order != 0 {
+		return order
+	}
+	return cmp.Compare(left.Second, right.Second)
+}
+
+func SortedFieldEntries[K comparable, V any](table map[K]V, compare func(K, K) int, fields ...func(K) int64) ([]K, []V) {
+	count := len(table)
+	keys := make([]K, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	if count <= 32 {
+		for index := 1; index < count; index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && compare(keys[at-1], key) > 0; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+		return keys, values
+	}
+	order := make([]int32, count)
+	for index := range order {
+		order[index] = int32(index)
+	}
+	spare := make([]int32, count)
+	digits := make([]uint64, count)
+	for field := len(fields) - 1; field >= 0; field-- {
+		project := fields[field]
+		lowest := project(keys[0])
+		highest := lowest
+		for index, key := range keys {
+			digit := project(key)
+			digits[index] = uint64(digit)
+			lowest = min(lowest, digit)
+			highest = max(highest, digit)
+		}
+		base := uint64(lowest)
+		span := uint64(highest) - base
+		for shift := 0; shift < 64 && span>>shift != 0; shift += 8 {
+			var starts [256]int
+			for _, at := range order {
+				starts[byte((digits[at]-base)>>shift)]++
+			}
+			total := 0
+			for bucket := range starts {
+				starts[bucket], total = total, total+starts[bucket]
+			}
+			for _, at := range order {
+				bucket := byte((digits[at] - base) >> shift)
+				spare[starts[bucket]] = at
+				starts[bucket]++
+			}
+			order, spare = spare, order
+		}
+	}
+	sortedKeys := make([]K, count)
+	sortedValues := make([]V, count)
+	for index, at := range order {
+		sortedKeys[index], sortedValues[index] = keys[at], values[at]
+	}
+	return sortedKeys, sortedValues
+}
+
+type EntriesOfArrayStringArrayInt struct {
+	Keys   []string
+	Values []int
+}
+
+func SortedStringEntries[V any](table map[string]V, compare func(string, string) int) ([]string, []V) {
+	count := len(table)
+	keys := make([]string, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	for _, key := range keys {
+		for at := 0; at < len(key); at++ {
+			if key[at] >= 0xEE {
+				slices.SortFunc(keys, compare)
+				for index, key := range keys {
+					values[index] = table[key]
+				}
+				return keys, values
+			}
+		}
+	}
+	insertion := func(keys []string, values []V) {
+		for index := 1; index < len(keys); index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && keys[at-1] > key; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+	}
+	if count <= 32 {
+		insertion(keys, values)
+		return keys, values
+	}
+	prefixes := make([]uint64, count)
+	var counts [8][256]int
+	for index, key := range keys {
+		var prefix uint64
+		for at := 0; at < 8 && at < len(key); at++ {
+			prefix |= uint64(key[at]) << (56 - 8*at)
+		}
+		prefixes[index] = prefix
+		for digit := range 8 {
+			counts[digit][byte(prefix>>(8*digit))]++
+		}
+	}
+	sparePrefixes := make([]uint64, count)
+	spareKeys := make([]string, count)
+	spareValues := make([]V, count)
+	for digit := range 8 {
+		starts := &counts[digit]
+		shift := 8 * digit
+		if starts[byte(prefixes[0]>>shift)] == count {
+			continue
+		}
+		total := 0
+		for bucket := range starts {
+			starts[bucket], total = total, total+starts[bucket]
+		}
+		for index, prefix := range prefixes {
+			bucket := byte(prefix >> shift)
+			at := starts[bucket]
+			sparePrefixes[at], spareKeys[at], spareValues[at] = prefix, keys[index], values[index]
+			starts[bucket] = at + 1
+		}
+		prefixes, sparePrefixes = sparePrefixes, prefixes
+		keys, spareKeys = spareKeys, keys
+		values, spareValues = spareValues, values
+	}
+	for low := 0; low < count; {
+		high := low + 1
+		for high < count && prefixes[high] == prefixes[low] {
+			high++
+		}
+		if high-low <= 16 {
+			insertion(keys[low:high], values[low:high])
+		} else {
+			order := make([]int, high-low)
+			for index := range order {
+				order[index] = low + index
+			}
+			slices.SortFunc(order, func(left int, right int) int { return compare(keys[left], keys[right]) })
+			for index, from := range order {
+				spareKeys[index], spareValues[index] = keys[from], values[from]
+			}
+			copy(keys[low:high], spareKeys[:high-low])
+			copy(values[low:high], spareValues[:high-low])
+		}
+		low = high
+	}
+	return keys, values
+}
+
+type EntriesOfArrayIntArrayUnit struct {
+	Keys   []int
+	Values []struct{}
+}
+
+type EntriesOfArrayStringArrayUnit struct {
+	Keys   []string
+	Values []struct{}
+}
+
+func IterNodeMapIterInt(iterNode0 *MapIntInt, iterNode1 *MapIterInt) *MapIterInt {
+	return &MapIterInt{Tag: MapIterIntIterNode, IterNode0: iterNode0, IterNode1: iterNode1}
+}
+
+func IterNodeMapIterTupleIntInt(iterNode0 *MapTupleIntInt, iterNode1 *MapIterTupleIntInt) *MapIterTupleIntInt {
+	return &MapIterTupleIntInt{Tag: MapIterTupleIntIntIterNode, IterNode0: iterNode0, IterNode1: iterNode1}
+}
+
+func IterNodeMapIterString(iterNode0 *MapStringInt, iterNode1 *MapIterString) *MapIterString {
+	return &MapIterString{Tag: MapIterStringIterNode, IterNode0: iterNode0, IterNode1: iterNode1}
+}
+
+func Node(node0 int, node1 int, node2 tuple.TupleInt, node3 int, node4 *MapTupleIntInt, node5 *MapTupleIntInt) *MapTupleIntInt {
+	return &MapTupleIntInt{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+var IterMapLInt func(*MapIterInt, *MapIntInt) *MapIterInt = IterMapLGoInt
+
+var IterMapLTupleIntInt func(*MapIterTupleIntInt, *MapTupleIntInt) *MapIterTupleIntInt = IterMapLGoTupleIntInt
+
+var IterMapLString func(*MapIterString, *MapStringInt) *MapIterString = IterMapLGoString
+
+func StepUnfoldrGoInt(value *MapIterInt) MaybeTupleTupleIntIntMapIterIntInt {
+	for {
+		switch value.Tag {
+		case MapIterIntIterLeaf:
+			return NoTupleTupleIntIntMapIterIntInt
+		case MapIterIntIterEmit:
+			k := value.IterEmit0
+			v := value.IterEmit1
+			iter := value.IterEmit2
+			return JustTupleTupleIntIntMapIterIntInt(TupleTupleIntInt{First: tuple.TupleInt{First: k, Second: v}, Second: iter})
+		default: // MapIterIntIterNode
+			m := value.IterNode0
+			iter := value.IterNode1
+			value = IterMapLInt(iter, m)
+			continue
+		}
+	}
+}
+
+func StepUnfoldrGoTupleIntInt(value *MapIterTupleIntInt) MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt {
+	for {
+		switch value.Tag {
+		case MapIterTupleIntIntIterLeaf:
+			return NoTupleTupleTupleIntIntIntMapIterTupleIntIntInt
+		case MapIterTupleIntIntIterEmit:
+			k := value.IterEmit0
+			v := value.IterEmit1
+			iter := value.IterEmit2
+			return JustTupleTupleTupleIntIntIntMapIterTupleIntIntInt(TupleTupleTupleIntIntInt{First: tuple.TupleTupleIntInt{First: k, Second: v}, Second: iter})
+		default: // MapIterTupleIntIntIterNode
+			m := value.IterNode0
+			iter := value.IterNode1
+			value = IterMapLTupleIntInt(iter, m)
+			continue
+		}
+	}
+}
+
+func StepUnfoldrGoString(value *MapIterString) MaybeTupleTupleStringIntMapIterStringInt {
+	for {
+		switch value.Tag {
+		case MapIterStringIterLeaf:
+			return NoTupleTupleStringIntMapIterStringInt
+		case MapIterStringIterEmit:
+			k := value.IterEmit0
+			v := value.IterEmit1
+			iter := value.IterEmit2
+			return JustTupleTupleStringIntMapIterStringInt(TupleTupleStringInt{First: tuple.TupleString{First: k, Second: v}, Second: iter})
+		default: // MapIterStringIterNode
+			m := value.IterNode0
+			iter := value.IterNode1
+			value = IterMapLString(iter, m)
+			continue
+		}
+	}
+}
+
+func IterMapLGoInt(iter *MapIterInt, value *MapIntInt) *MapIterInt {
+	var mapIterIntIntCells alloc.Cells[MapIterInt]
+	for {
+		if value == SharedMapIntIntLeaf {
+			return iter
+		}
+		k := value.Node2
+		v := value.Node3
+		l := value.Node4
+		r := value.Node5
+		if r == SharedMapIntIntLeaf {
+			iter, value = mapIterIntIntCells.New(MapIterInt{Tag: MapIterIntIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: iter}), l
+			continue
+		}
+		iter, value = mapIterIntIntCells.New(MapIterInt{Tag: MapIterIntIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: mapIterIntIntCells.New(MapIterInt{Tag: MapIterIntIterNode, IterNode0: r, IterNode1: iter})}), l
+	}
+}
+
+func IterMapLGoTupleIntInt(iter *MapIterTupleIntInt, value *MapTupleIntInt) *MapIterTupleIntInt {
+	var mapIterTupleIntIntIntCells alloc.Cells[MapIterTupleIntInt]
+	for {
+		if value == SharedMapTupleIntIntLeaf {
+			return iter
+		}
+		k := value.Node2
+		v := value.Node3
+		l := value.Node4
+		r := value.Node5
+		if r == SharedMapTupleIntIntLeaf {
+			iter, value = mapIterTupleIntIntIntCells.New(MapIterTupleIntInt{Tag: MapIterTupleIntIntIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: iter}), l
+			continue
+		}
+		iter, value = mapIterTupleIntIntIntCells.New(MapIterTupleIntInt{Tag: MapIterTupleIntIntIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: mapIterTupleIntIntIntCells.New(MapIterTupleIntInt{Tag: MapIterTupleIntIntIterNode, IterNode0: r, IterNode1: iter})}), l
+	}
+}
+
+func IterMapLGoString(iter *MapIterString, value *MapStringInt) *MapIterString {
+	var mapIterStringIntCells alloc.Cells[MapIterString]
+	for {
+		if value == SharedMapStringIntLeaf {
+			return iter
+		}
+		k := value.Node2
+		v := value.Node3
+		l := value.Node4
+		r := value.Node5
+		if r == SharedMapStringIntLeaf {
+			iter, value = mapIterStringIntCells.New(MapIterString{Tag: MapIterStringIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: iter}), l
+			continue
+		}
+		iter, value = mapIterStringIntCells.New(MapIterString{Tag: MapIterStringIterEmit, IterEmit0: k, IterEmit1: v, IterEmit2: mapIterStringIntCells.New(MapIterString{Tag: MapIterStringIterNode, IterNode0: r, IterNode1: iter})}), l
+	}
+}
+
+func TreeFromKeys(keys []int, values []int, low int, high int) *MapIntInt {
+	var cells alloc.Cells[MapIntInt]
+	return TreeFromKeysChunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeysChunked(keys []int, values []int, low int, high int, cells *alloc.Cells[MapIntInt]) *MapIntInt {
+	if low == high {
+		return SharedMapIntIntLeaf
+	}
+	var middle int
+	var key int
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(MapIntInt{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeysChunked(keys, values, low, middle, cells), Node5: TreeFromKeysChunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable(table map[int]int) *MapIntInt {
+	var entries EntriesOfArrayIntArrayInt
+	var keys []int
+	var values []int
+	keys2, values2 := SortedIntegerEntries(table)
+	entries = EntriesOfArrayIntArrayInt{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys(keys, values, 0, len(keys))
+}
+
+func TreeFromKeys2(keys []tuple.TupleInt, values []int, low int, high int) *MapTupleIntInt {
+	if low == high {
+		return SharedMapTupleIntIntLeaf
+	}
+	var middle int
+	var key tuple.TupleInt
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return Node(bits.Len(uint(count)), count, key, values[middle], TreeFromKeys2(keys, values, low, middle), TreeFromKeys2(keys, values, middle+1, high))
+}
+
+func TreeFromTable2(table map[tuple.TupleInt]int) *MapTupleIntInt {
+	var entries EntriesOfArrayTupleIntIntArrayInt
+	var keys []tuple.TupleInt
+	var values []int
+	keys2, values2 := SortedFieldEntries(table, CompareKeys, func(key tuple.TupleInt) int64 {
+		return int64(key.First)
+	}, func(key tuple.TupleInt) int64 {
+		return int64(key.Second)
+	})
+	entries = EntriesOfArrayTupleIntIntArrayInt{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys2(keys, values, 0, len(keys))
+}
+
+func TreeFromKeys3(keys []string, values []int, low int, high int) *MapStringInt {
+	var cells alloc.Cells[MapStringInt]
+	return TreeFromKeys3Chunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeys3Chunked(keys []string, values []int, low int, high int, cells *alloc.Cells[MapStringInt]) *MapStringInt {
+	if low == high {
+		return SharedMapStringIntLeaf
+	}
+	var middle int
+	var key string
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(MapStringInt{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeys3Chunked(keys, values, low, middle, cells), Node5: TreeFromKeys3Chunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable3(table map[string]int) *MapStringInt {
+	var entries EntriesOfArrayStringArrayInt
+	var keys []string
+	var values []int
+	keys2, values2 := SortedStringEntries(table, prim.CompareString)
+	entries = EntriesOfArrayStringArrayInt{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys3(keys, values, 0, len(keys))
+}
+
+func TreeFromKeys4(keys []int, values []struct{}, low int, high int) *MapIntUnit {
+	var cells alloc.Cells[MapIntUnit]
+	return TreeFromKeys4Chunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeys4Chunked(keys []int, values []struct{}, low int, high int, cells *alloc.Cells[MapIntUnit]) *MapIntUnit {
+	if low == high {
+		return SharedMapIntUnitLeaf
+	}
+	var middle int
+	var key int
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(MapIntUnit{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeys4Chunked(keys, values, low, middle, cells), Node5: TreeFromKeys4Chunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable4(table map[int]struct{}) *MapIntUnit {
+	var entries EntriesOfArrayIntArrayUnit
+	var keys []int
+	var values []struct{}
+	keys2, values2 := SortedIntegerEntries(table)
+	entries = EntriesOfArrayIntArrayUnit{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys4(keys, values, 0, len(keys))
+}
+
+func TreeFromKeys5(keys []string, values []struct{}, low int, high int) *MapStringUnit {
+	var cells alloc.Cells[MapStringUnit]
+	return TreeFromKeys5Chunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeys5Chunked(keys []string, values []struct{}, low int, high int, cells *alloc.Cells[MapStringUnit]) *MapStringUnit {
+	if low == high {
+		return SharedMapStringUnitLeaf
+	}
+	var middle int
+	var key string
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(MapStringUnit{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeys5Chunked(keys, values, low, middle, cells), Node5: TreeFromKeys5Chunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable5(table map[string]struct{}) *MapStringUnit {
+	var entries EntriesOfArrayStringArrayUnit
+	var keys []string
+	var values []struct{}
+	keys2, values2 := SortedStringEntries(table, prim.CompareString)
+	entries = EntriesOfArrayStringArrayUnit{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys5(keys, values, 0, len(keys))
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type TupleInt struct {
+	First  int
+	Second int
+}
+
+type TupleTupleIntInt struct {
+	First  TupleInt
+	Second int
+}
+
+type TupleString struct {
+	First  string
+	Second int
+}
+
+type Tuple struct {
+	First  any
+	Second any
+}
+
+func AppendShowArrayTupleStringInt(buffer []byte, array []TupleString) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowTupleStringInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowTupleStringInt(buffer []byte, tuple TupleString) []byte {
+	buffer = append(buffer, "(Tuple "...)
+	buffer = prim.AppendShowString(buffer, tuple.First)
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.Second), 10)
+	buffer = append(buffer, ')')
+	return buffer
+}
+
+func AppendShowArrayTupleTupleIntIntInt(buffer []byte, array []TupleTupleIntInt) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowTupleTupleIntIntInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowTupleTupleIntIntInt(buffer []byte, tuple TupleTupleIntInt) []byte {
+	buffer = append(buffer, "(Tuple (Tuple "...)
+	buffer = strconv.AppendInt(buffer, int64(tuple.First.First), 10)
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.First.Second), 10)
+	buffer = append(buffer, ')')
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.Second), 10)
+	buffer = append(buffer, ')')
+	return buffer
+}
+
+func AppendShowArrayTupleIntInt(buffer []byte, array []TupleInt) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowTupleIntInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowTupleIntInt(buffer []byte, tuple TupleInt) []byte {
+	buffer = append(buffer, "(Tuple "...)
+	buffer = strconv.AppendInt(buffer, int64(tuple.First), 10)
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.Second), 10)
+	buffer = append(buffer, ')')
+	return buffer
+}
+
+func ArrayTupleStringInt(array []TupleString) string {
+	return string(AppendShowArrayTupleStringInt(nil, array))
+}
+
+func ArrayTupleTupleIntIntInt(array []TupleTupleIntInt) string {
+	return string(AppendShowArrayTupleTupleIntIntInt(nil, array))
+}
+
+func ArrayTupleIntInt(array []TupleInt) string {
+	return string(AppendShowArrayTupleIntInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/List/Types"
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	mainffi "fixture/Main_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+)
+
+func main() {
+	ints := mainffi.Timed(func(_ struct{}) map[int]int {
+		table := make(map[int]int)
+		table[17] = 17
+		table[3] = 3
+		table[11] = 11
+		table[3] = 3
+		table[29] = 29
+		table[0] = 0
+		table[8] = 8
+		table[17] = 17
+		table[22] = 22
+		table[5] = 5
+		table[14] = 14
+		return table
+	})
+	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleIntIntMapIterIntInt) internal.TupleTupleIntInt {
+		return value.Just
+	}, func(value internal.TupleTupleIntInt) tuple.TupleInt {
+		return value.First
+	}, func(value internal.TupleTupleIntInt) *internal.MapIterInt {
+		return value.Second
+	}, internal.StepUnfoldrGoInt, internal.IterNodeMapIterInt(internal.TreeFromTable(ints), internal.SharedMapIterIntIterLeaf))))
+	pairs := mainffi.Timed(func(_ struct{}) map[tuple.TupleInt]int {
+		table := make(map[tuple.TupleInt]int)
+		table[tuple.TupleInt{First: 2, Second: 5}] = 17
+		table[tuple.TupleInt{First: 0, Second: 1}] = 3
+		table[tuple.TupleInt{First: 2, Second: 3}] = 11
+		table[tuple.TupleInt{First: 0, Second: 1}] = 3
+		table[tuple.TupleInt{First: 2, Second: 9}] = 29
+		table[tuple.TupleInt{First: 0, Second: 0}] = 0
+		table[tuple.TupleInt{First: 2, Second: 2}] = 8
+		table[tuple.TupleInt{First: 2, Second: 5}] = 17
+		table[tuple.TupleInt{First: 1, Second: 7}] = 22
+		table[tuple.TupleInt{First: 2, Second: 1}] = 5
+		table[tuple.TupleInt{First: 2, Second: 4}] = 14
+		return table
+	})
+	mainffi.Log(tuple.ArrayTupleTupleIntIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleTupleIntIntIntMapIterTupleIntIntInt) internal.TupleTupleTupleIntIntInt {
+		return value.Just
+	}, func(value internal.TupleTupleTupleIntIntInt) tuple.TupleTupleIntInt {
+		return value.First
+	}, func(value internal.TupleTupleTupleIntIntInt) *internal.MapIterTupleIntInt {
+		return value.Second
+	}, internal.StepUnfoldrGoTupleIntInt, internal.IterNodeMapIterTupleIntInt(internal.TreeFromTable2(pairs), internal.SharedMapIterTupleIntIntIterLeaf))))
+	words := mainffi.Timed(func(_ struct{}) map[string]int {
+		table := make(map[string]int)
+		table["pear"] = 1
+		table["apple"] = 1
+		table["fig"] = 1
+		table["apple"] = 1
+		table["kiwi"] = 1
+		table["banana"] = 1
+		table["fig"] = 1
+		return table
+	})
+	mainffi.Log(tuple.ArrayTupleStringInt(array.Unfoldr(func(value internal.MaybeTupleTupleStringIntMapIterStringInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value internal.MaybeTupleTupleStringIntMapIterStringInt) internal.TupleTupleStringInt {
+		return value.Just
+	}, func(value internal.TupleTupleStringInt) tuple.TupleString {
+		return value.First
+	}, func(value internal.TupleTupleStringInt) *internal.MapIterString {
+		return value.Second
+	}, internal.StepUnfoldrGoString, internal.IterNodeMapIterString(internal.TreeFromTable3(words), internal.SharedMapIterStringIterLeaf))))
+	intSet := mainffi.Timed(func(_ struct{}) map[int]struct{} {
+		table := make(map[int]struct{})
+		table[17] = struct{}{}
+		table[3] = struct{}{}
+		table[11] = struct{}{}
+		table[3] = struct{}{}
+		table[29] = struct{}{}
+		table[0] = struct{}{}
+		table[8] = struct{}{}
+		table[17] = struct{}{}
+		table[22] = struct{}{}
+		table[5] = struct{}{}
+		table[14] = struct{}{}
+		return table
+	})
+	mainffi.Log(show.ArrayInt(array.Unfoldr(func(value types.MaybeTupleIntListInt) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value types.MaybeTupleIntListInt) types.TupleInt {
+		return value.Just
+	}, func(value types.TupleInt) int {
+		return value.First
+	}, func(value types.TupleInt) *types.ListInt {
+		return value.Second
+	}, func(xs *types.ListInt) types.MaybeTupleIntListInt {
+		if xs == types.SharedListIntNil {
+			return types.NoTupleIntListInt
+		}
+		return types.JustTupleIntListInt(types.TupleInt{First: xs.Cons0, Second: xs.Cons1})
+	}, mainGo(internal.TreeFromTable4(intSet), types.SharedListIntNil))))
+	wordSet := mainffi.Timed(func(_ struct{}) map[string]struct{} {
+		table := make(map[string]struct{})
+		table["pear"] = struct{}{}
+		table["apple"] = struct{}{}
+		table["fig"] = struct{}{}
+		table["apple"] = struct{}{}
+		table["kiwi"] = struct{}{}
+		table["banana"] = struct{}{}
+		table["fig"] = struct{}{}
+		return table
+	})
+	mainffi.Log(show.ArrayString(array.Unfoldr(func(value types.MaybeTupleStringListString) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value types.MaybeTupleStringListString) types.TupleString {
+		return value.Just
+	}, func(value types.TupleString) string {
+		return value.First
+	}, func(value types.TupleString) *types.ListString {
+		return value.Second
+	}, func(xs *types.ListString) types.MaybeTupleStringListString {
+		if xs == types.SharedListStringNil {
+			return types.NoTupleStringListString
+		}
+		return types.JustTupleStringListString(types.TupleString{First: xs.Cons0, Second: xs.Cons1})
+	}, mainGo2(internal.TreeFromTable5(wordSet), types.SharedListStringNil))))
+}
+
+func mainGo(m_ *internal.MapIntUnit, z_ *types.ListInt) *types.ListInt {
+	for {
+		if m_ == internal.SharedMapIntUnitLeaf {
+			return z_
+		}
+		k := m_.Node2
+		l := m_.Node4
+		r := m_.Node5
+		m_, z_ = l, types.ConsListInt(k, mainGo(r, z_))
+	}
+}
+
+func mainGo2(m_ *internal.MapStringUnit, z_ *types.ListString) *types.ListString {
+	for {
+		if m_ == internal.SharedMapStringUnitLeaf {
+			return z_
+		}
+		k := m_.Node2
+		l := m_.Node4
+		r := m_.Node5
+		m_, z_ = l, types.ConsListString(k, mainGo2(r, z_))
+	}
+}

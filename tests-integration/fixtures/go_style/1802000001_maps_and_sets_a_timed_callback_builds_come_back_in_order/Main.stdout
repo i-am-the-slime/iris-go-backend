@@ -1,0 +1,18 @@
+-- maps built from empty in a timed callback come back in order
+[(Tuple 0 0),(Tuple 3 3),(Tuple 5 5),(Tuple 8 8),(Tuple 11 11),(Tuple 14 14),(Tuple 17 17),(Tuple 22 22),(Tuple 29 29)]
+[0,3,5,8,11,14,17,22,29]
+[(Tuple (Tuple 0 0) 0),(Tuple (Tuple 0 1) 3),(Tuple (Tuple 1 7) 22),(Tuple (Tuple 2 1) 5),(Tuple (Tuple 2 2) 8),(Tuple (Tuple 2 3) 11),(Tuple (Tuple 2 4) 14),(Tuple (Tuple 2 5) 17),(Tuple (Tuple 2 9) 29)]
+[(Tuple "apple" 1),(Tuple "banana" 1),(Tuple "fig" 1),(Tuple "kiwi" 1),(Tuple "pear" 1)]
+[(Tuple 0 2),(Tuple 1 4),(Tuple 2 2),(Tuple 3 3)]
+[0,1,2,3] [8,68,36,17]
+-- sets built from empty in a timed callback come back in order
+[0,3,5,8,11,14,17,22,29]
+725157
+["apple","banana","fig","kiwi","pear"]
+"applebananafigkiwipear"
+-- a map a timed callback builds is not changed by an insert into it or an effect run twice
+10
+false
+(Just 103)
+(Just 103)
+(Just 3) 9

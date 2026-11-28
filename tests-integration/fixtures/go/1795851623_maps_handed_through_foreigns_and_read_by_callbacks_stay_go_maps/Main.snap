@@ -624,7 +624,7 @@ func main() {
 		result4 = "Nothing"
 	}
 	mainffi.Log(result2 + " " + result3 + " " + result4)
-	trimmed := mainffi.Twice(func(_ struct{}) *internal.Map {
+	trimmed := mainffi.Twice(func(_ struct{}) map[int]int {
 		accumulator2 := maps.Clone(table2)
 		for key := 1; key < 7; key++ {
 			if key < 4 || key == 5 {
@@ -633,7 +633,7 @@ func main() {
 				accumulator2 = kept
 			}
 		}
-		return internal.TreeFromTable(accumulator2)
+		return accumulator2
 	})
 	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
 		return value.Tag == maybe.TagNothing
@@ -643,10 +643,10 @@ func main() {
 		return value.First
 	}, func(value internal.Tuple) *internal.MapIter {
 		return value.Second
-	}, internal.StepUnfoldrGo, internal.IterNode(trimmed, internal.SharedMapIterIterLeaf))))
+	}, internal.StepUnfoldrGo, internal.IterNode(internal.TreeFromTable(trimmed), internal.SharedMapIterIterLeaf))))
 	mainffi.Log(strconv.Itoa(len(table2)))
 	mainffi.Log("-- a map a callback builds comes back in order")
-	built := mainffi.Twice(func(_ struct{}) *internal.Map {
+	built := mainffi.Twice(func(_ struct{}) map[int]int {
 		accumulator2 := make(map[int]int)
 		for key := 1; key < 24; key++ {
 			counts := accumulator2
@@ -654,7 +654,7 @@ func main() {
 			counts[key2] += 1
 			accumulator2 = counts
 		}
-		return internal.TreeFromTable(accumulator2)
+		return accumulator2
 	})
 	mainffi.Log(tuple.ArrayTupleIntInt(array.Unfoldr(func(value internal.MaybeTupleTupleIntIntMapIterIntInt) bool {
 		return value.Tag == maybe.TagNothing
@@ -664,7 +664,7 @@ func main() {
 		return value.First
 	}, func(value internal.Tuple) *internal.MapIter {
 		return value.Second
-	}, internal.StepUnfoldrGo, internal.IterNode(built, internal.SharedMapIterIterLeaf))))
+	}, internal.StepUnfoldrGo, internal.IterNode(internal.TreeFromTable(built), internal.SharedMapIterIterLeaf))))
 	mainffi.Log("-- a function that reads a map an insert changes afterwards reads the map it closed over")
 	before := internal.InsertGoIntReusing(2, 20, internal.InsertGoIntReusing(1, 10, internal.Empty))
 	scrutinee := internal.LookupGo(3, before)
