@@ -151,7 +151,7 @@ impl SpagoCommand {
 
 fn execute_failure(error: &io::Error) -> String {
     if error.kind() == io::ErrorKind::NotFound {
-        return "`spago` was not found on PATH; Iris fetches packages with Spago, so install it \
+        return "`spago` was not found on PATH; googoo fetches packages with Spago, so install it \
                 with `brew install spago` or `npm install -g spago`"
             .to_owned();
     }

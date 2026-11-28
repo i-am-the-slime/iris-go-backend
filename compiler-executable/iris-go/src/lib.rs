@@ -226,7 +226,7 @@ fn new_go_mod(go_mod: &Path, package: Option<&str>) -> Result<String, String> {
     let Some(name) = workspace.selected else {
         return Err(format!(
             "{} is missing, and it names the Go module the generated packages share; pick a \
-             package with -p so Iris can write it, or write one yourself:\n\n{}",
+             package with -p so googoo can write it, or write one yourself:\n\n{}",
             go_mod.display(),
             program::go_mod("my-app")?
         ));

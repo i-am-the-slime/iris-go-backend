@@ -38,7 +38,7 @@ pub enum Command {
     Watch(WatchOptions),
     /// Run the language server over standard input and output.
     Lsp(LspOptions),
-    /// Print agent skills for using Iris, which match this version.
+    /// Print agent skills for using googoo, which match this version.
     Skills(SkillsOptions),
     /// Format a Spago workspace or explicit source files.
     Format(FormatOptions),
@@ -52,7 +52,7 @@ pub enum Command {
         #[usage(flatten)]
         options: TestOptions,
     },
-    /// Manage this installation of Iris.
+    /// Manage this installation of googoo.
     #[usage(name = "self")]
     Installation(InstallationOptions),
     /// Compile a Spago workspace from an entry point to a single Go program.
@@ -66,12 +66,12 @@ pub struct GoOptions {
     #[usage(short, long, value_name = "NAME")]
     package: Option<String>,
 
-    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `googoo run --go`
+    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `googoo run`
     /// uses.
     #[usage(long, value_name = "MODULE.NAME")]
     entry: Option<String>,
 
-    /// Directory to write main.go to. Without one, builds the executable that `googoo run --go`
+    /// Directory to write main.go to. Without one, builds the executable that `googoo run`
     /// runs and prints its path.
     #[usage(value_name = "DIR")]
     destination: Option<PathBuf>,
@@ -772,14 +772,14 @@ pub struct InstallationOptions {
 
 #[derive(Debug, Subcommands)]
 pub enum InstallationCommand {
-    /// Replace this Iris with a published release.
+    /// Replace this googoo with a published release.
     Update(UpdateOptions),
 }
 
 #[derive(Debug, Args)]
 #[usage(args_override_self = false)]
 pub struct UpdateOptions {
-    /// Release to install, such as v0.1.6. Defaults to the latest release on this Iris's channel.
+    /// Release to install, such as v0.1.6. Defaults to the latest release on this googoo's channel.
     #[usage(value_name = "VERSION", conflicts("--stable", "--canary", "--check"))]
     version: Option<String>,
 

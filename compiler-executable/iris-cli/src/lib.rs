@@ -208,11 +208,11 @@ fn self_update(options: cli::UpdateOptions) -> i32 {
     if options.check {
         return match iris_self_update::check(options.into_config()) {
             Ok(Availability::UpToDate(release)) => {
-                println!("Iris {release} is up to date.");
+                println!("googoo {release} is up to date.");
                 0
             }
             Ok(Availability::Available(release)) => {
-                println!("Iris {release} is available; this is Iris {VERSION}.");
+                println!("googoo {release} is available; this is googoo {VERSION}.");
                 UPDATE_AVAILABLE
             }
             Err(error) => {
@@ -223,19 +223,19 @@ fn self_update(options: cli::UpdateOptions) -> i32 {
     }
     match iris_self_update::update(options.into_config()) {
         Ok(Update::AlreadyInstalled(release)) => {
-            println!("Iris {release} is already installed.");
+            println!("googoo {release} is already installed.");
             0
         }
         Ok(Update::Installed(installed)) => {
             let release = installed.release;
             println!(
-                "Replaced Iris {VERSION} with Iris {release} at {}.",
+                "Replaced googoo {VERSION} with googoo {release} at {}.",
                 installed.executable.display()
             );
-            println!("Restart `googoo watch` and editor language servers to use Iris {release}.");
+            println!("Restart `googoo watch` and editor language servers to use googoo {release}.");
             if !installed.has_self_update {
                 eprintln!(
-                    "warning: Iris {release} cannot update itself; run the installer to update it."
+                    "warning: googoo {release} cannot update itself; run the installer to update it."
                 );
             }
             0
@@ -293,7 +293,7 @@ fn query(options: cli::QueryOptions) -> i32 {
                     0
                 }
                 Err(error) => {
-                    eprintln!("the watcher sent an answer this Iris cannot read: {error}");
+                    eprintln!("the watcher sent an answer this googoo cannot read: {error}");
                     1
                 }
             }
@@ -358,7 +358,7 @@ fn refactor(options: cli::RefactorOptions) -> i32 {
             let answer = match iris_watch_query::parse_refactor_answer(value) {
                 Ok(answer) => answer,
                 Err(error) => {
-                    eprintln!("the watcher sent an answer this Iris cannot read: {error}");
+                    eprintln!("the watcher sent an answer this googoo cannot read: {error}");
                     return 1;
                 }
             };

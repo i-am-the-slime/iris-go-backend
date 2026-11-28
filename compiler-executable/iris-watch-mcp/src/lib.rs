@@ -356,5 +356,5 @@ fn contents(text: String, warning: Option<String>) -> Vec<ContentBlock> {
 }
 
 fn unreadable(error: &serde_json::Error) -> String {
-    format!("the watcher sent an answer this Iris cannot read: {error}")
+    format!("the watcher sent an answer this googoo cannot read: {error}")
 }

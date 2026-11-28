@@ -16,8 +16,8 @@ Commands:
   lsp     Run the language server over standard input and output.
   new     Create a Spago project in the current directory.
   run     Build a Spago package to Go and run it, or with --js run it with Node.js.
-  self    Manage this installation of Iris.
-  skills  Print agent skills for using Iris, which match this version.
+  self    Manage this installation of googoo.
+  skills  Print agent skills for using googoo, which match this version.
   test    Build a Spago package's tests to Go and run them, or with --js test with Node.js.
   watch   Build a Spago workspace or package and rebuild when inputs change.
   help    Print this message or the help of the given subcommand(s)

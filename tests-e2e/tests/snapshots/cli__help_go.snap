@@ -8,14 +8,14 @@ Compile a Spago workspace from an entry point to a single Go program.
 Usage: googoo go [FLAGS] [DIR] [-- ARGUMENTS]…
 
 Arguments:
-  [DIR]            Directory to write main.go to. Without one, builds the executable that `googoo run --go` runs and
-                   prints its path.
+  [DIR]            Directory to write main.go to. Without one, builds the executable that `googoo run` runs and prints
+                   its path.
   [-- ARGUMENTS]…  Arguments for the --profile run. Defaults to run.execArgs.
 
 Flags:
   -p, --package <NAME>           Workspace package to compile.
-      --entry <MODULE.NAME>      Qualified entry point. Defaults to Main.main, or without DIR to the one `googoo run
-                                 --go` uses.
+      --entry <MODULE.NAME>      Qualified entry point. Defaults to Main.main, or without DIR to the one `googoo run`
+                                 uses.
       --no-line-directives       Leaves out of the Go written to DIR the //line comments that make stack traces,
                                  debuggers and profiles point at your .purs files.
       --line-directives <WHICH>  Which Go lines name their .purs line: `every` puts a //line comment in front of each
