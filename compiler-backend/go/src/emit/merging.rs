@@ -6,7 +6,7 @@
 //! `||`, `if a { x } else if b { x }` is `if a || b { x }`, and a last test whose branch does
 //! what the `else` does is dropped when evaluating it has no effect.
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::conditions::is_pure;
 use super::inlining::Rename;
@@ -201,10 +201,11 @@ fn without_lines(statements: &[GoStatement]) -> Vec<GoStatement> {
 /// two move up.
 pub(super) fn join_repeated_tests(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
+        let strings = super::known::unchanging_strings(declaration);
         each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
-                if !join_next_test(block, position) {
+                if !join_next_test(block, position, &strings) {
                     position += 1;
                 }
             }
@@ -212,9 +213,14 @@ pub(super) fn join_repeated_tests(declarations: &mut [GoDeclaration]) {
     }
 }
 
-fn join_next_test(block: &mut Vec<GoStatement>, position: usize) -> bool {
+fn join_next_test(
+    block: &mut Vec<GoStatement>,
+    position: usize,
+    strings: &FxHashSet<String>,
+) -> bool {
     let GoStatement::If { condition, then, otherwise } = &block[position] else { return false };
-    if !is_pure(condition) || [then, otherwise].iter().any(|branch| leaves(branch)) {
+    let stable = super::known::reads_only(condition, strings);
+    if !stable || [then, otherwise].iter().any(|branch| leaves(branch)) {
         return false;
     }
     let declared = block[position + 1..]

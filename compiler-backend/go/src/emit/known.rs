@@ -10,27 +10,42 @@ use rustc_hash::FxHashSet;
 use super::conditions::{is_pure, negated};
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{
-    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoUnaryOperator, Name,
-    statements_names,
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    Name, statements_names,
 };
 
 pub(super) fn drop_known_tests(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        go_traversal::declaration(&mut Literals, declaration);
+        let strings = unchanging_strings(declaration);
+        go_traversal::declaration(&mut Literals(&strings), declaration);
     }
 }
 
-/// Starts afresh in each function body, which runs when it is called rather than where it is.
-struct Literals;
+pub(super) fn unchanging_strings(declaration: &mut GoDeclaration) -> FxHashSet<String> {
+    let GoDeclaration::Function { parameters, body, .. } = declaration else {
+        return FxHashSet::default();
+    };
+    let strings = parameters.iter().filter(|(_, type_)| *type_ == GoType::String);
+    let mut strings: FxHashSet<String> = strings.map(|(name, _)| name.clone()).collect();
+    statements_names(body, &mut |name| {
+        if let Name::Binder(name) = name {
+            strings.remove(name.as_str());
+        }
+    });
+    strings
+}
 
-impl Walk for Literals {
+/// Starts afresh in each function body, which runs when it is called rather than where it is.
+struct Literals<'s>(&'s FxHashSet<String>);
+
+impl Walk for Literals<'_> {
     fn block(&mut self, body: &mut Vec<GoStatement>) {
-        settle(body, vec![]);
+        settle(body, vec![], self.0);
     }
 }
 
 /// Settles the block's tests, knowing the facts on entry.
-fn settle(block: &mut Vec<GoStatement>, mut facts: Vec<GoExpression>) {
+fn settle(block: &mut Vec<GoStatement>, mut facts: Vec<GoExpression>, strings: &FxHashSet<String>) {
     let mut position = 0;
     while position < block.len() {
         if let GoStatement::If { condition, then, otherwise } = &mut block[position] {
@@ -50,8 +65,8 @@ fn settle(block: &mut Vec<GoStatement>, mut facts: Vec<GoExpression>) {
             }
         }
         let statement = &mut block[position];
-        nested(statement, &facts);
-        forget_changed(statement, &mut facts);
+        nested(statement, &facts, strings);
+        forget_changed(statement, &mut facts, strings);
         facts.extend(after(statement));
         position += 1;
     }
@@ -69,7 +84,8 @@ fn decided(condition: &mut GoExpression, facts: &[GoExpression]) -> Decision {
     if conjuncts.iter().any(|conjunct| facts.contains(&negated(conjunct))) {
         return Decision::Never;
     }
-    let open = conjuncts.iter().filter(|conjunct| !facts.contains(conjunct)).cloned();
+    let known = |conjunct: &GoExpression| facts.contains(conjunct) || implied(conjunct, facts);
+    let open = conjuncts.iter().filter(|conjunct| !known(conjunct)).cloned();
     let open: Vec<GoExpression> = open.collect();
     if open.is_empty() {
         return Decision::Always;
@@ -88,45 +104,49 @@ fn decided(condition: &mut GoExpression, facts: &[GoExpression]) -> Decision {
 }
 
 /// Settles the blocks nested in the statement, with what is known in each.
-fn nested(statement: &mut GoStatement, facts: &[GoExpression]) {
+fn nested(statement: &mut GoStatement, facts: &[GoExpression], strings: &FxHashSet<String>) {
     match statement {
         GoStatement::If { condition, then, otherwise } => {
-            go_traversal::expression(&mut Literals, condition);
-            let pure = |conjunct: &GoExpression| is_pure(conjunct);
+            go_traversal::expression(&mut Literals(strings), condition);
+            let pure = |conjunct: &GoExpression| is_stable(conjunct);
             let mut inside = facts.to_vec();
             inside.extend(conjuncts(condition).into_iter().filter(pure));
-            settle(then, inside);
+            settle(then, inside, strings);
             let mut outside = facts.to_vec();
             if let [single] = conjuncts(condition).as_slice()
                 && is_pure(single)
             {
                 outside.push(negated(single));
             }
-            settle(otherwise, outside);
+            settle(otherwise, outside, strings);
         }
         GoStatement::Switch { value, cases, default } => {
             if let Some(value) = value {
-                go_traversal::expression(&mut Literals, value);
+                go_traversal::expression(&mut Literals(strings), value);
             }
             for case in cases {
-                settle(&mut case.body, facts.to_vec());
+                settle(&mut case.body, facts.to_vec(), strings);
             }
             if let Some(default) = default {
-                settle(&mut default.body, facts.to_vec());
+                settle(&mut default.body, facts.to_vec(), strings);
             }
         }
         GoStatement::IfAssert { value, then, .. } => {
-            go_traversal::expression(&mut Literals, value);
-            settle(then, facts.to_vec());
+            go_traversal::expression(&mut Literals(strings), value);
+            settle(then, facts.to_vec(), strings);
         }
         // A loop's body runs again after it has changed what it tests.
-        statement => go_traversal::statement(&mut Literals, statement),
+        statement => go_traversal::statement(&mut Literals(strings), statement),
     }
 }
 
 /// Forgets the facts the statement may make false: those naming a variable it assigns or
 /// defines, and, when it calls a function or writes through a pointer, those reading memory.
-fn forget_changed(statement: &mut GoStatement, facts: &mut Vec<GoExpression>) {
+fn forget_changed(
+    statement: &mut GoStatement,
+    facts: &mut Vec<GoExpression>,
+    strings: &FxHashSet<String>,
+) {
     if facts.is_empty() {
         return;
     }
@@ -138,7 +158,7 @@ fn forget_changed(statement: &mut GoStatement, facts: &mut Vec<GoExpression>) {
     });
     let touches_memory = writes_memory(statement);
     let changed = |fact: &GoExpression| {
-        mentions_any(fact, &written) || (touches_memory && reads_memory(fact))
+        mentions_any(fact, &written) || (touches_memory && reads_memory(fact, strings))
     };
     facts.retain(|fact| !changed(fact));
 }
@@ -207,15 +227,20 @@ fn mentions_any(fact: &GoExpression, names: &FxHashSet<String>) -> bool {
     }
 }
 
-fn reads_memory(fact: &GoExpression) -> bool {
+fn reads_memory(fact: &GoExpression, strings: &FxHashSet<String>) -> bool {
     match fact {
+        GoExpression::Index { value, index } if matches!(&**value, GoExpression::Identifier(name) if strings.contains(name)) => {
+            reads_memory(index, strings)
+        }
         GoExpression::Field { .. }
         | GoExpression::Index { .. }
         | GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => true,
-        GoExpression::Binary { left, right, .. } => reads_memory(left) || reads_memory(right),
+        GoExpression::Binary { left, right, .. } => {
+            reads_memory(left, strings) || reads_memory(right, strings)
+        }
         GoExpression::Unary { operand: value, .. }
         | GoExpression::Conversion { value, .. }
-        | GoExpression::Attributed { value, .. } => reads_memory(value),
+        | GoExpression::Attributed { value, .. } => reads_memory(value, strings),
         _ => false,
     }
 }
@@ -246,4 +271,97 @@ fn writes_memory(statement: &mut GoStatement) -> bool {
     let mut writes = Writes(false);
     writes.statement(statement);
     writes.0
+}
+
+fn implied(conjunct: &GoExpression, facts: &[GoExpression]) -> bool {
+    if let Some((text, shortest)) = longer_than(conjunct) {
+        return facts
+            .iter()
+            .filter_map(longer_than)
+            .any(|(known, longer)| known == text && longer >= shortest);
+    }
+    let Some((text, positions)) = ascii_bytes(conjunct) else { return false };
+    let known = facts.iter().filter_map(ascii_bytes).filter(|(known, _)| *known == text);
+    let known: Vec<i64> = known.flat_map(|(_, positions)| positions).collect();
+    positions.iter().all(|position| known.contains(position))
+}
+
+fn longer_than(condition: &GoExpression) -> Option<(&GoExpression, i64)> {
+    let GoExpression::Binary { operator: GoBinaryOperator::GreaterThan, left, right } = condition
+    else {
+        return None;
+    };
+    let GoExpression::Integer(shortest) = **right else { return None };
+    let GoExpression::Call { function, arguments } = &**left else { return None };
+    let [text] = arguments.as_slice() else { return None };
+    function.is_builtin(GoBuiltin::Len).then_some((text, shortest))
+}
+
+fn ascii_bytes(condition: &GoExpression) -> Option<(&GoExpression, Vec<i64>)> {
+    let GoExpression::Binary { operator: GoBinaryOperator::LessThan, left, right } = condition
+    else {
+        return None;
+    };
+    if **right != GoExpression::Integer(128) {
+        return None;
+    }
+    let mut text = None;
+    let mut positions = vec![];
+    bytes_of(left, &mut text, &mut positions).then_some(())?;
+    Some((text?, positions))
+}
+
+fn bytes_of<'e>(
+    value: &'e GoExpression,
+    text: &mut Option<&'e GoExpression>,
+    positions: &mut Vec<i64>,
+) -> bool {
+    match value {
+        GoExpression::Binary { operator: GoBinaryOperator::BitwiseOr, left, right } => {
+            bytes_of(left, text, positions) && bytes_of(right, text, positions)
+        }
+        GoExpression::Index { value, index } => {
+            let GoExpression::Integer(position) = **index else { return false };
+            if text.is_some_and(|text| text != &**value) {
+                return false;
+            }
+            *text = Some(value);
+            positions.push(position);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn is_stable(condition: &GoExpression) -> bool {
+    match condition {
+        GoExpression::Index { value, index } => is_stable(value) && is_stable(index),
+        GoExpression::Call { function, arguments } if function.is_builtin(GoBuiltin::Len) => {
+            arguments.iter().all(is_stable)
+        }
+        GoExpression::Binary { left, right, .. } => is_stable(left) && is_stable(right),
+        GoExpression::Unary { operand: value, .. }
+        | GoExpression::Field { value, .. }
+        | GoExpression::Conversion { value, .. } => is_stable(value),
+        condition => is_pure(condition),
+    }
+}
+
+pub(super) fn reads_only(condition: &GoExpression, strings: &FxHashSet<String>) -> bool {
+    match condition {
+        GoExpression::Index { value, index } => {
+            matches!(&**value, GoExpression::Identifier(name) if strings.contains(name))
+                && reads_only(index, strings)
+        }
+        GoExpression::Call { function, arguments } if function.is_builtin(GoBuiltin::Len) => {
+            arguments.iter().all(|argument| reads_only(argument, strings))
+        }
+        GoExpression::Binary { left, right, .. } => {
+            reads_only(left, strings) && reads_only(right, strings)
+        }
+        GoExpression::Unary { operand: value, .. }
+        | GoExpression::Field { value, .. }
+        | GoExpression::Conversion { value, .. } => reads_only(value, strings),
+        condition => is_pure(condition),
+    }
 }
