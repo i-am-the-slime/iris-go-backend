@@ -13,17 +13,10 @@ type Int struct {
 	Tag  uint8
 }
 
-func JustInt(just int) Int {
-	return Int{Tag: TagJust, Just: just}
-}
-
-var NoInt = Int{Tag: TagNothing}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/object"
 )
@@ -34,24 +27,16 @@ func main() {
 	accumulator := shared.Window{Start: 0, Seen: make(map[int]int)}
 	for _, x := range numbers {
 		window := accumulator
-		value, found := window.Seen[x]
-		var entry maybe.Int
-		if found {
-			entry = maybe.JustInt(value)
-		} else {
-			entry = maybe.NoInt
-		}
+		at, found := window.Seen[x]
 		var start int
-		switch entry.Tag {
-		case maybe.TagJust:
-			at := entry.Just
+		if found {
 			x2 := window.Start
 			if x2 < at {
 				start = at
 			} else {
 				start = x2
 			}
-		default: // maybe.TagNothing
+		} else {
 			start = window.Start
 		}
 		window.Seen[x] = start + 1

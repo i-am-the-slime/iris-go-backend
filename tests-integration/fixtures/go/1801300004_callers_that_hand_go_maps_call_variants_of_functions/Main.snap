@@ -308,19 +308,9 @@ func countFromHashed(keys []int, position int, seen int, tally shared.Tally) sha
 	for {
 		if position < len(keys) {
 			field := keys[position]
-			value, found := tally.ByKey[field]
-			var entry maybe.Int
-			if found {
-				entry = maybe.JustInt(value)
-			} else {
-				entry = maybe.NoInt
-			}
-			var before int
-			switch entry.Tag {
-			case maybe.TagNothing:
+			before, found := tally.ByKey[field]
+			if !found {
 				before = 0
-			default: // maybe.TagJust
-				before = entry.Just
 			}
 			updated := tally
 			updated.Total = tally.Total + 1

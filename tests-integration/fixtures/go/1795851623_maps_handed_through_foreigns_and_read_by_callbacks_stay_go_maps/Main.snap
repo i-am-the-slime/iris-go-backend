@@ -474,15 +474,15 @@ type Int struct {
 	Tag  uint8
 }
 
-func JustInt(just int) Int {
-	return Int{Tag: TagJust, Just: just}
+type Maybe struct {
+	Just any
+	Tag  uint8
 }
 
 var NoInt = Int{Tag: TagNothing}
 
-type Maybe struct {
-	Just any
-	Tag  uint8
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
 }
 
 // Data/Tuple/tuple.go
@@ -551,19 +551,9 @@ func main() {
 	found := mainffi.Twice(func(_ struct{}) int {
 		accumulator2 := 0
 		for key := 0; key < 26; key++ {
-			value, found2 := table2[key]
-			var entry maybe.Int
-			if found2 {
-				entry = maybe.JustInt(value)
-			} else {
-				entry = maybe.NoInt
-			}
-			var result int
-			switch entry.Tag {
-			case maybe.TagNothing:
+			result, found2 := table2[key]
+			if !found2 {
 				result = 0
-			default: // maybe.TagJust
-				result = entry.Just
 			}
 			accumulator2 += result
 		}
@@ -581,46 +571,25 @@ func main() {
 		}
 		return accumulator2
 	})
-	value2, found3 := bumped[1]
-	var entry2 maybe.Int
-	if found3 {
-		entry2 = maybe.JustInt(value2)
-	} else {
-		entry2 = maybe.NoInt
-	}
+	x, found3 := bumped[1]
 	var result2 string
-	switch entry2.Tag {
-	case maybe.TagJust:
-		result2 = "(Just " + strconv.Itoa(entry2.Just) + ")"
-	default: // maybe.TagNothing
+	if found3 {
+		result2 = "(Just " + strconv.Itoa(x) + ")"
+	} else {
 		result2 = "Nothing"
 	}
-	value3, found4 := bumped[2]
-	var entry3 maybe.Int
-	if found4 {
-		entry3 = maybe.JustInt(value3)
-	} else {
-		entry3 = maybe.NoInt
-	}
+	x2, found4 := bumped[2]
 	var result3 string
-	switch entry3.Tag {
-	case maybe.TagJust:
-		result3 = "(Just " + strconv.Itoa(entry3.Just) + ")"
-	default: // maybe.TagNothing
+	if found4 {
+		result3 = "(Just " + strconv.Itoa(x2) + ")"
+	} else {
 		result3 = "Nothing"
 	}
-	value4, found5 := table2[1]
-	var entry4 maybe.Int
-	if found5 {
-		entry4 = maybe.JustInt(value4)
-	} else {
-		entry4 = maybe.NoInt
-	}
+	x3, found5 := table2[1]
 	var result4 string
-	switch entry4.Tag {
-	case maybe.TagJust:
-		result4 = "(Just " + strconv.Itoa(entry4.Just) + ")"
-	default: // maybe.TagNothing
+	if found5 {
+		result4 = "(Just " + strconv.Itoa(x3) + ")"
+	} else {
 		result4 = "Nothing"
 	}
 	mainffi.Log(result2 + " " + result3 + " " + result4)

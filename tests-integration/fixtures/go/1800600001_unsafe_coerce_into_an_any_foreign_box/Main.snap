@@ -15,18 +15,11 @@ type Box struct {
 	Tag  uint8
 }
 
-func JustBox(just boxes.Box) Box {
-	return Box{Tag: TagJust, Just: just}
-}
-
-var NoBox = Box{Tag: TagNothing}
-
 // main.go
 package main
 
 import (
 	boxes "fixture/Boxes_ffi"
-	"fixture/Data/Maybe"
 	journal "fixture/Journal_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
@@ -42,33 +35,19 @@ func main() {
 	original2 := shared.Name{Name: "boxed"}
 	cell := direct.ForeignRecord([]string{"name"}, []any{original2.Name})
 	journal.Log((shared.Name{Name: direct.ForeignField(cell, "name").(string)}).Name)
-	value, found := table[1]
-	var entry maybe.Box
-	if found {
-		entry = maybe.JustBox(value)
-	} else {
-		entry = maybe.NoBox
-	}
+	a, found := table[1]
 	var result string
-	switch entry.Tag {
-	case maybe.TagNothing:
+	if found {
+		result = (shared.Name{Name: direct.ForeignField(a, "name").(string)}).Name
+	} else {
 		result = "missing"
-	default: // maybe.TagJust
-		result = (shared.Name{Name: direct.ForeignField(entry.Just, "name").(string)}).Name
 	}
 	journal.Log(result)
-	value2, found2 := table[2]
-	var entry2 maybe.Box
-	if found2 {
-		entry2 = maybe.JustBox(value2)
-	} else {
-		entry2 = maybe.NoBox
-	}
+	x, found2 := table[2]
 	var result2 int
-	switch entry2.Tag {
-	case maybe.TagJust:
-		result2 = foreignvalue.Int(entry2.Just)
-	default:
+	if found2 {
+		result2 = foreignvalue.Int(x)
+	} else {
 		result2 = 0
 	}
 	journal.Log(strconv.Itoa(result2))

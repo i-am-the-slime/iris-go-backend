@@ -20,6 +20,7 @@ use super::iteration::Found;
 use super::{Emitter, Mode, Sink, identifier_expression, lines, local_uses};
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Foreign, MaybeConstructors};
+use crate::maps::HashMapOperation;
 use crate::monomorphic::{Alternative, Expression, ExpressionKind, Guarded, Local, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::identifier;
@@ -103,17 +104,40 @@ where
         let ExpressionKind::Foreign { foreign, arguments } = &scrutinee.kind else {
             return Ok(false);
         };
-        let Foreign::Call { function, boundary, .. } = **foreign else { return Ok(false) };
-        if !boundary.found || boundary.iteration.is_some() || !self.is_maybe(scrutinee.monotype)? {
+        let found_call = match **foreign {
+            Foreign::Call { function, boundary, .. }
+                if boundary.found && boundary.iteration.is_none() =>
+            {
+                Some((function, boundary))
+            }
+            Foreign::HashMap(HashMapOperation::Lookup)
+                if matches!(self.monotypes.get(arguments[1].monotype), Monotype::HashMap(..)) =>
+            {
+                None
+            }
+            _ => return Ok(false),
+        };
+        if !self.is_maybe(scrutinee.monotype)? {
             return Ok(false);
         }
         let (_, just) = self.constructor_named(scrutinee.monotype, "Just")?;
         let Some([present, absent]) = branches(alternatives, just) else { return Ok(false) };
 
-        let values = self.boundary_arguments(arguments, boundary, scrutinee.monotype, true, out)?;
-        let function = self.boundary_function(function, boundary, scrutinee.monotype)?;
-        let called = super::call(function, values);
-        let record = self.found_record(boundary.record_result, scrutinee.monotype)?;
+        let (called, record) = match found_call {
+            Some((function, boundary)) => {
+                let monotype = scrutinee.monotype;
+                let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
+                let function = self.boundary_function(function, boundary, monotype)?;
+                let record = self.found_record(boundary.record_result, monotype)?;
+                (super::call(function, values), record)
+            }
+            None => {
+                let key = self.value(&arguments[0], out)?;
+                let table = self.value(&arguments[1], out)?;
+                let entry = GoExpression::Index { value: Box::new(table), index: Box::new(key) };
+                (entry, None)
+            }
+        };
         if let (Sink::Define(name), Mode::Value, Some(local)) = (&sink, mode, present.payload)
             && matches!(present.body.kind, ExpressionKind::Local(id) if id == local.id)
         {
