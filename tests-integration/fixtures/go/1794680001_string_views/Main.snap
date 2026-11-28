@@ -236,24 +236,18 @@ func codePointLoopViewsTheText(text string, i int, count int) int {
 			return count
 		}
 		var left maybe.Int
-		if i < 0 || i == 0 && text == "" {
-			left = maybe.NoInt
-		} else if i == 0 {
-			left = maybe.JustInt(direct.CodePointAt0(nil, text))
+		var codePointAt maybe.Int
+		if textIsASCII && uint(i) < uint(len(text)) {
+			codePointAt = maybe.JustInt(int(text[i]))
 		} else {
-			var codePointAt maybe.Int
-			if textIsASCII && uint(i) < uint(len(text)) {
-				codePointAt = maybe.JustInt(int(text[i]))
+			value, found := textPoints.CodePointAt(i)
+			if found {
+				codePointAt = maybe.JustInt(value)
 			} else {
-				value, found := textPoints.CodePointAt(i)
-				if found {
-					codePointAt = maybe.JustInt(value)
-				} else {
-					codePointAt = maybe.NoInt
-				}
+				codePointAt = maybe.NoInt
 			}
-			left = codePointAt
 		}
+		left = codePointAt
 		codePointTake := textPoints.Take(i + 1)
 		var result2 bool
 		if codePointTake == "" {

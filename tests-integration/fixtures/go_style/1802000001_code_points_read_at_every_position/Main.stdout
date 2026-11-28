@@ -1,0 +1,36 @@
+-- every position from before the start to past the end
+[Nothing,Nothing,Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0x61)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0xD83D)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0xDE00)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0x61)),(Just (CodePoint 0xD83D)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0xD83D)),(Just (CodePoint 0x2D)),(Just (CodePoint 0x62)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0x1F600)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0x78)),(Just (CodePoint 0x1F600)),(Just (CodePoint 0x79)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0xE9)),(Just (CodePoint 0x74)),(Just (CodePoint 0xE9)),(Just (CodePoint 0x20)),(Just (CodePoint 0x61)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0x61)),(Just (CodePoint 0x62)),(Just (CodePoint 0xDE00)),(Just (CodePoint 0xD83D)),Nothing,Nothing]
+[Nothing,Nothing,(Just (CodePoint 0xD83D)),(Just (CodePoint 0x1F600)),Nothing,Nothing]
+-- the first code point, read at a position that is not a literal
+Nothing
+(Just (CodePoint 0x61))
+(Just (CodePoint 0xD83D))
+(Just (CodePoint 0xDE00))
+(Just (CodePoint 0x61))
+(Just (CodePoint 0xD83D))
+(Just (CodePoint 0x1F600))
+(Just (CodePoint 0x78))
+(Just (CodePoint 0xE9))
+(Just (CodePoint 0x61))
+(Just (CodePoint 0xD83D))
+-- positions that hold an a
+[]
+[0]
+[]
+[]
+[0]
+[]
+[]
+[]
+[4]
+[0]
+[]

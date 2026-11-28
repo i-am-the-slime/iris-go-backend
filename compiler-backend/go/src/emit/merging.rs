@@ -171,7 +171,7 @@ fn compare_same_values(left: &GoExpression, right: &GoExpression) -> bool {
 }
 
 /// Whether two blocks are the same code apart from the PureScript lines they are attributed to.
-fn same_code(left: &[GoStatement], right: &[GoStatement]) -> bool {
+pub(super) fn same_code(left: &[GoStatement], right: &[GoStatement]) -> bool {
     without_lines(left) == without_lines(right)
 }
 

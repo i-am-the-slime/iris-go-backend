@@ -9,12 +9,12 @@ use super::packages::{GoSourceFile, Packaging};
 use super::reuse::Reused;
 use super::{
     Emitter, IMPORTED_PACKAGES, aliases, array_parameters, ascii_heads, blocks, branch_tests,
-    branches, builders, cells, chunks, closures, composites, conditions, confined, constant_fields,
-    deduplicate, diverging, divisions, equality, forwarders, fresh, groups, guards, hash_maps,
-    headers, immediate, index_arrays, inlining, intervals, invariants, joins, known, labelled,
-    lengths, lines, loads, maybe, merging, narrow_fields, prepends, presized_objects, probes,
-    ranges, references, reuse, scalars, scratch_keys, sharing, shorthands, singletons, swaps, text,
-    unpacked, unreferenced, updates, upsert, vector, wrappers,
+    branches, builders, cells, chunks, closures, code_points, composites, conditions, confined,
+    constant_fields, deduplicate, diverging, divisions, equality, forwarders, fresh, groups,
+    guards, hash_maps, headers, immediate, index_arrays, inlining, intervals, invariants, joins,
+    known, labelled, lengths, lines, loads, maybe, merging, narrow_fields, prepends,
+    presized_objects, probes, ranges, references, reuse, scalars, scratch_keys, sharing,
+    shorthands, singletons, swaps, text, unpacked, unreferenced, updates, upsert, vector, wrappers,
 };
 use crate::arity::Arities;
 use crate::error::GoResult;
@@ -237,6 +237,7 @@ where
     ) {
         let global_names = &self.global_names;
         let taken = |name: &str| global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
+        code_points::read_code_points_once(declarations);
         lengths::count_lengths_up_to_comparisons(declarations);
         let names = declarations.iter_mut().map(GoDeclaration::declared_names);
         let mut names: Vec<DeclarationNames> = names.collect();

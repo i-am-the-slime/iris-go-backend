@@ -20,6 +20,7 @@ mod cases;
 mod cells;
 mod chunks;
 mod closures;
+mod code_points;
 mod coerce;
 mod composites;
 mod conditions;
