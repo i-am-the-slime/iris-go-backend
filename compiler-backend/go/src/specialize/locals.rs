@@ -157,6 +157,17 @@ where
         };
         dictionaries.extend(trailing);
 
+        let local = matches!(
+            resolution,
+            tree::VariableResolution::Generated(_)
+                | tree::VariableResolution::Source(
+                    lowering::TermVariableResolution::Binder(_)
+                        | lowering::TermVariableResolution::RecordPun(_)
+                )
+        );
+        if local && dictionaries.is_empty() {
+            self.pass_whole_into_rank_n(scope, expected, &mut instantiations)?;
+        }
         match resolution {
             tree::VariableResolution::Generated(binder) => {
                 let source = self.checked_binder_source(scope, binder);
@@ -205,7 +216,34 @@ where
         }
     }
 
-    fn accessed_field_scheme(
+    /// A rank-N local checked against the specialized `forall` it has is instantiated by the
+    /// checker at that `forall`'s skolems, which no specialization binds; it is passed whole.
+    fn pass_whole_into_rank_n(
+        &mut self,
+        scope: &Scope,
+        expected: Option<TypeId>,
+        instantiations: &mut Substitution,
+    ) -> GoResult<()> {
+        let Some(expected) = expected else { return Ok(()) };
+        let Some(closed) = self.scheme_type(scope, expected)? else { return Ok(()) };
+        let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
+            return Ok(());
+        };
+        if !scheme.constraints.is_empty() {
+            return Ok(());
+        }
+        instantiations.retain(|_, argument| {
+            let argument = self.context.types.strip_annotations(*argument);
+            !matches!(
+                self.context.types.lookup(argument),
+                Type::Rigid(skolem, _, _) if !scope.substitution.contains_key(skolem)
+                    && self.context.types.name_erasure(*skolem).is_none()
+            )
+        });
+        Ok(())
+    }
+
+    pub(super) fn accessed_field_scheme(
         &mut self,
         scope: &Scope,
         access: tree::ExpressionId,
@@ -235,7 +273,7 @@ where
         Ok(Some((closed, instantiations)))
     }
 
-    fn record_field_type(&self, record: TypeId, label: &str) -> Option<TypeId> {
+    pub(super) fn record_field_type(&self, record: TypeId, label: &str) -> Option<TypeId> {
         let (_, arguments) = self.context.types.spine(record);
         let [row] = arguments[..] else {
             return None;

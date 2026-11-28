@@ -15,7 +15,7 @@ use crate::foreign::Foreign;
 use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Guarded, Literal, Local, RecordUpdate,
 };
-use crate::monotype::{Monotype, MonotypeId};
+use crate::monotype::{Monotype, MonotypeId, RecordField};
 use crate::types::Substitution;
 
 impl<'q, Q> Specializer<'q, Q>
@@ -66,6 +66,7 @@ where
         let type_id = scope.module.checked.tree[id].type_id;
         let closed = self.context.types.substitute(type_id, &scope.substitution);
         let closed = self.instantiate_inner_quantifiers(scope, id, closed);
+        let Some(closed) = self.scheme_type(scope, closed)? else { return Ok(None) };
         if !matches!(
             self.context.types.lookup(self.context.types.strip_annotations(closed)),
             Type::Forall(..)
@@ -83,6 +84,19 @@ where
             return Ok(None);
         }
         let monotype = self.closed_monotype(scope, closed)?;
+        let constructed = self.construct_instantiations(scope, id, &scheme, &scheme.names)?;
+        Ok(Some(Expression::new(ExpressionKind::Record(constructed), monotype)))
+    }
+
+    /// The value at `id` translated once per instantiation of `scheme`, with `bound`, the
+    /// variables its type spells the quantifiers with, standing for each instantiation's types.
+    fn construct_instantiations(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+        scheme: &crate::scheme::ConstrainedScheme,
+        bound: &[checking::core::Name],
+    ) -> GoResult<Vec<(SmolStr, Expression)>> {
         self.note_construction(&scheme.key);
         let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
         let mut fields = Vec::with_capacity(instantiations.len());
@@ -91,7 +105,7 @@ where
             let substitution = scope.substitution.clone();
             scope
                 .substitution
-                .extend(scheme.names.iter().copied().zip(instantiation.types.iter().copied()));
+                .extend(bound.iter().copied().zip(instantiation.types.iter().copied()));
             self.constructing.push((scheme.key.clone(), Arc::clone(&instantiation.types)));
             let value = self.translate_expression_at(scope, id);
             self.constructing.pop();
@@ -106,7 +120,7 @@ where
         }
         scope.rank_n_body = enclosing;
         fields.sort_by(|left, right| left.0.cmp(&right.0));
-        Ok(Some(Expression::new(ExpressionKind::Record(fields), monotype)))
+        Ok(fields)
     }
 
     /// A polymorphic reference checked against a `forall` has the type
@@ -201,20 +215,33 @@ where
                 }
                 ExpressionKind::Record(converted)
             }
-            tree::ExpressionKind::RecordAccess { record, labels } => {
-                let mut record = self.expression(scope, *record)?;
+            tree::ExpressionKind::RecordAccess { record: record_id, labels } => {
+                let mut record = self.expression(scope, *record_id)?;
                 for label in labels.iter() {
                     let monotype = self.field_monotype(scope, record.monotype, label)?;
                     let kind =
                         ExpressionKind::Access { record: Box::new(record), label: label.clone() };
                     record = Expression::new(kind, monotype);
                 }
-                return Ok(record);
+                return self.instantiated_field(scope, id, (*record_id, labels), record);
             }
-            tree::ExpressionKind::RecordUpdate { record, updates } => {
-                let record = self.expression(scope, *record)?;
-                let updates = self.record_updates(scope, updates)?;
-                ExpressionKind::Update { record: Box::new(record), updates }
+            tree::ExpressionKind::RecordUpdate { record: record_id, updates } => {
+                let record = self.expression(scope, *record_id)?;
+                let mut monotype = self.monotype(scope, node.type_id)?;
+                let mut converted = Vec::with_capacity(updates.len());
+                for update in updates.iter() {
+                    let rank_n = self.rank_n_update(scope, *record_id, update, monotype)?;
+                    match rank_n {
+                        Some((update, updated)) => {
+                            converted.push(update);
+                            monotype = updated;
+                        }
+                        None => converted
+                            .extend(self.record_updates(scope, std::slice::from_ref(update))?),
+                    }
+                }
+                let kind = ExpressionKind::Update { record: Box::new(record), updates: converted };
+                return Ok(Expression::new(kind, monotype));
             }
             tree::ExpressionKind::Constructor { .. }
             | tree::ExpressionKind::Variable { .. }
@@ -307,6 +334,25 @@ where
         Ok(Expression::new(kind, monotype))
     }
 
+    fn instantiated_field(
+        &mut self,
+        scope: &mut Scope,
+        access: tree::ExpressionId,
+        (record, labels): (tree::ExpressionId, &[SmolStr]),
+        field: Expression,
+    ) -> GoResult<Expression> {
+        let Some((closed, instantiations)) =
+            self.accessed_field_scheme(scope, access, record, labels)?
+        else {
+            return Ok(field);
+        };
+        let scheme = self.monotypes.scheme_for(&mut self.context, closed)?;
+        if !scheme.is_some_and(|scheme| scheme.constraints.is_empty()) {
+            return Ok(field);
+        }
+        self.instantiated_scheme_value(scope, field, Some(closed), &instantiations, vec![])
+    }
+
     pub(super) fn field_monotype(
         &mut self,
         scope: &Scope,
@@ -322,6 +368,93 @@ where
             scope,
             UnsupportedState::OpenType { rendered: format!("{{ {label} }}"), hint: "" },
         ))
+    }
+
+    /// An update of a field whose type in the updated record is a specialized rank-N `forall`
+    /// sets it to the record of the value's instantiations. The checker gives the value, and the
+    /// field of the result, the type at the skolems of that `forall`.
+    fn rank_n_update(
+        &mut self,
+        scope: &mut Scope,
+        record: tree::ExpressionId,
+        update: &tree::RecordExpressionUpdate,
+        result: MonotypeId,
+    ) -> GoResult<Option<(RecordUpdate, MonotypeId)>> {
+        let tree::RecordExpressionUpdate::Leaf { label, expression } = update else {
+            return Ok(None);
+        };
+        let record_type = scope.module.checked.tree[record].type_id;
+        let record_type = self.context.types.substitute(record_type, &scope.substitution);
+        let record_type = crate::monotype::expand_synonyms(&mut self.context, record_type)?;
+        let Some(field) = self.record_field_type(record_type, label) else { return Ok(None) };
+        let Some(closed) = self.scheme_type(scope, field)? else { return Ok(None) };
+        let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
+            return Ok(None);
+        };
+        if !scheme.constraints.is_empty() {
+            return Ok(None);
+        }
+        let Monotype::Record(fields) = self.monotypes.get(result).clone() else {
+            return Ok(None);
+        };
+        let field_monotype = self.closed_monotype(scope, closed)?;
+        let value_type = scope.module.checked.tree[*expression].type_id;
+        let value = match self.scheme_type(scope, value_type)? {
+            Some(_) => {
+                let value = match scope.module.checked.tree[*expression].kind {
+                    tree::ExpressionKind::Variable { .. } => {
+                        self.reference(scope, *expression, Substitution::default(), Some(closed))?
+                    }
+                    _ => self.expression(scope, *expression)?,
+                };
+                self.coerce(value, field_monotype)
+            }
+            None => {
+                let Some(skolems) = self.bound_skolems(scope, closed, value_type) else {
+                    return Ok(None);
+                };
+                let constructed =
+                    self.construct_instantiations(scope, *expression, &scheme, &skolems)?;
+                Expression::new(ExpressionKind::Record(constructed), field_monotype)
+            }
+        };
+        let fields: Vec<RecordField> = fields
+            .iter()
+            .map(|known| match known.label == *label {
+                true => RecordField { label: known.label.clone(), monotype: field_monotype },
+                false => known.clone(),
+            })
+            .collect();
+        let updated = self.monotypes.intern(Monotype::Record(Arc::from(fields)));
+        Ok(Some((RecordUpdate::Leaf { label: label.clone(), value }, updated)))
+    }
+
+    /// The skolems that the instantiated `value_type` spells the quantifiers of `closed` with,
+    /// in their order, when each is one.
+    fn bound_skolems(
+        &self,
+        scope: &Scope,
+        closed: TypeId,
+        value_type: TypeId,
+    ) -> Option<Vec<checking::core::Name>> {
+        let value_type = self.context.types.substitute(value_type, &scope.substitution);
+        let (names, body) = self.context.types.peel_quantifiers(closed);
+        let mut bindings = Substitution::default();
+        if !self.context.types.match_type(body, value_type, &names, &mut bindings) {
+            return None;
+        }
+        names
+            .iter()
+            .map(|name| {
+                let bound = self.context.types.strip_annotations(*bindings.get(name)?);
+                match self.context.types.lookup(bound) {
+                    Type::Rigid(skolem, _, _) if !scope.substitution.contains_key(skolem) => {
+                        Some(*skolem)
+                    }
+                    _ => None,
+                }
+            })
+            .collect()
     }
 
     fn record_updates(

@@ -63,6 +63,7 @@ impl Monotypes {
             if fields.iter().any(|known| known.label == field.label) {
                 continue;
             }
+            self.note_rank_n_field(context, field.id, &format!("{{ {} }}", field.label))?;
             let monotype = self.convert(context, field.id, expansions)?;
             fields.push(RecordField { label: field.label.clone(), monotype });
         }

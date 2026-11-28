@@ -710,7 +710,7 @@ impl Monotypes {
     where
         Q: checking::ExternalQueries,
     {
-        context.types.erased(Erasure::Runtime)
+        context.types.probe()
     }
 
     fn convert_scheme<Q>(

@@ -17,6 +17,7 @@ const ERASED_UNIQUE: u32 = u32::MAX - 4096;
 /// The phantom stand-in, below every erased one.
 const PHANTOM_UNIQUE: u32 = ERASED_UNIQUE - 1024;
 const CONS_LIST_UNIQUE: u32 = PHANTOM_UNIQUE - 1;
+const PROBE_UNIQUE: u32 = CONS_LIST_UNIQUE - 1;
 
 pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
@@ -26,6 +27,7 @@ pub struct TypeOperations<'q, Q> {
     without_causes: RefCell<FxHashMap<TypeId, TypeId>>,
     phantom: Cell<Option<TypeId>>,
     cons_list: Cell<Option<TypeId>>,
+    probe: Cell<Option<TypeId>>,
     placeholders: RefCell<Vec<TypeId>>,
 }
 
@@ -103,6 +105,7 @@ where
             without_causes: RefCell::default(),
             phantom: Cell::default(),
             cons_list: Cell::default(),
+            probe: Cell::default(),
             placeholders: RefCell::default(),
         }
     }
@@ -137,6 +140,19 @@ where
         let cons_list = self.stand_in(CONS_LIST_UNIQUE);
         self.cons_list.set(Some(cons_list));
         cons_list
+    }
+
+    pub fn probe(&self) -> TypeId {
+        if let Some(probe) = self.probe.get() {
+            return probe;
+        }
+        let probe = self.stand_in(PROBE_UNIQUE);
+        self.probe.set(Some(probe));
+        probe
+    }
+
+    pub fn is_probe(&self, type_id: TypeId) -> bool {
+        self.probe.get() == Some(self.strip_annotations(type_id))
     }
 
     pub fn is_cons_list(&self, type_id: TypeId) -> bool {
