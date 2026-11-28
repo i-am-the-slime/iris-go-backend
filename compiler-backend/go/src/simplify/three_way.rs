@@ -109,6 +109,13 @@ enum Native {
     Long(Signedness),
 }
 
+#[derive(Clone, Copy)]
+struct Comparands<'a> {
+    native: Native,
+    left: &'a Expression,
+    right: &'a Expression,
+}
+
 impl Simplifier<'_> {
     /// The case of a three-way comparison as choices by native comparisons,
     /// when every alternative tests only its outcome.
@@ -133,7 +140,8 @@ impl Simplifier<'_> {
         let left = self.shared_operand(left, "compared", &mut bindings);
         let right = self.shared_operand(right, "compared", &mut bindings);
         let boolean = self.monotypes.intern(Monotype::Boolean);
-        let chosen = self.choose(&branches, ALL, native, &left, &right, boolean, monotype);
+        let comparands = Comparands { native, left: &left, right: &right };
+        let chosen = self.choose(&branches, ALL, comparands, boolean, monotype);
         if bindings.is_empty() {
             return Some(chosen);
         }
@@ -207,8 +215,8 @@ impl Simplifier<'_> {
         let left = self.shared_operand(left.clone(), "compared", &mut bindings);
         let right = self.shared_operand(right.clone(), "compared", &mut bindings);
         let boolean = self.monotypes.intern(Monotype::Boolean);
-        let chosen =
-            self.choose(&branches, possible, Native::Operator, &left, &right, boolean, monotype);
+        let comparands = Comparands { native: Native::Operator, left: &left, right: &right };
+        let chosen = self.choose(&branches, possible, comparands, boolean, monotype);
         if bindings.is_empty() {
             return Some(chosen);
         }
@@ -274,7 +282,8 @@ impl Simplifier<'_> {
         }
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let (left, right) = (left.clone(), right.clone());
-        Some(self.choose(&branches, ALL, native, &left, &right, boolean, monotype))
+        let comparands = Comparands { native, left: &left, right: &right };
+        Some(self.choose(&branches, ALL, comparands, boolean, monotype))
     }
 
     /// A comparison of two values by Go's operators on a type they order as PureScript does.
@@ -309,17 +318,15 @@ impl Simplifier<'_> {
 
     /// `if <first branch's outcomes> then … else …` down the branches, each
     /// test telling its outcomes from those still `possible`.
-    #[allow(clippy::too_many_arguments)]
     fn choose(
         &mut self,
         branches: &[OutcomeBranch],
         possible: Outcomes,
-        native: Native,
-        left: &Expression,
-        right: &Expression,
+        comparands: Comparands<'_>,
         boolean: MonotypeId,
         monotype: MonotypeId,
     ) -> Expression {
+        let Comparands { native, left, right } = comparands;
         if let Some(outcome) = constant_outcome(native, left, right) {
             let chosen = branches.iter().find(|(outcomes, _, _)| outcomes.and(outcome) != NONE);
             let (_, body, _) =
@@ -343,7 +350,7 @@ impl Simplifier<'_> {
         let condition = ExpressionKind::Foreign { foreign: foreign.interned(), arguments };
         let condition = Expression::new(condition, boolean).located(*position);
         let possible = possible.without(*outcomes);
-        let otherwise = self.choose(rest, possible, native, left, right, boolean, monotype);
+        let otherwise = self.choose(rest, possible, comparands, boolean, monotype);
         self.plain_choice(condition, body.clone(), otherwise, monotype)
     }
 }

@@ -25,7 +25,6 @@ use crate::purity::{
     occurrences_up_to, only_called, runs_any_effect, runs_effect, size,
 };
 use crate::suspension::Suspension;
-use crate::timing::timed;
 use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
@@ -179,9 +178,8 @@ pub fn simplify(
     if coverage == Some(LineCoverage::Every) {
         crate::call_sites::attribute_inlined_code_to_call_sites(&mut program);
     }
-    let program =
-        timed("lift", || crate::lift::lift_local_functions(program, monotypes, next_local));
-    let program = timed("prune", || prune(program.functions, entry));
+    let program = crate::lift::lift_local_functions(program, monotypes, next_local);
+    let program = prune(program.functions, entry);
     tail_choices::branch_tail_calls(program)
 }
 

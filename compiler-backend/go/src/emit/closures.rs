@@ -37,12 +37,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::{SmolStr, format_smolstr};
 
 use super::packages::Spelling;
-use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout, uses_local};
+use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout};
 use crate::arity::Arities;
 use crate::context::Context;
 use crate::error::GoResult;
 use crate::foreign::Foreign;
-use crate::monomorphic::traversal::{collect_binders, for_each_child, for_each_child_mut};
+use crate::monomorphic::traversal::{
+    collect_binders, for_each_child, for_each_child_mut, mentions_local,
+};
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
@@ -616,7 +618,7 @@ where
                     if self.types.monotypes.function_parts(value.monotype).is_some()
                         && bindings[position..]
                             .iter()
-                            .any(|later| uses_local(value, later.local.id))
+                            .any(|later| mentions_local(value, later.local.id))
                     {
                         self.open(value.monotype, "captures a binding still being defined");
                     }
@@ -724,7 +726,7 @@ where
                     let monotypes = &self.types.monotypes;
                     if monotypes.same_without_causes(argument.monotype, parameter.monotype)
                         && self.creates(argument)
-                        && uses_local(argument, parameter.id)
+                        && mentions_local(argument, parameter.id)
                     {
                         let linked = self.types.canonical(parameter.monotype);
                         self.uses.linked.insert(linked);
@@ -838,7 +840,7 @@ impl Building {
         let mut names = self.tags.iter().filter_map(|shape| match &shape.body {
             Body::Lambda { parameters, body } => parameters
                 .get(position)
-                .filter(|parameter| uses_local(body, parameter.id))
+                .filter(|parameter| mentions_local(body, parameter.id))
                 .map(|parameter| &parameter.name),
             Body::Known { .. } => None,
         });

@@ -4,11 +4,10 @@ use super::foreign_values::updated_arrays;
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, appends_every_step, owned_snocs};
 use super::recycling::Recycled;
-use super::{
-    Emitter, Mode, Sink, binary, call, conjunction, identifier_expression, unit_value, uses_local,
-};
+use super::{Emitter, Mode, Sink, binary, call, conjunction, identifier_expression, unit_value};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, Iteration};
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Guarded, Local, LocalId, Pattern, PatternKind,
 };
@@ -29,7 +28,7 @@ impl Callback<'_> {
     /// Whether the callback reads its argument at `position`.
     pub(super) fn reads(&self, position: usize) -> bool {
         match self {
-            Callback::Inline { parameters, body } => uses_local(body, parameters[position].id),
+            Callback::Inline { parameters, body } => mentions_local(body, parameters[position].id),
             Callback::Direct { .. } => true,
         }
     }
@@ -38,7 +37,7 @@ impl Callback<'_> {
 impl Found<'_> {
     pub(super) fn reads(&self, position: usize) -> bool {
         match self {
-            Found::Inline { parameters, body } => uses_local(body, parameters[position].id),
+            Found::Inline { parameters, body } => mentions_local(body, parameters[position].id),
             Found::Direct { .. } => true,
         }
     }
@@ -139,7 +138,11 @@ where
         match callback {
             Callback::Inline { parameters, body } => {
                 let parameter = parameters[position];
-                if uses_local(body, parameter.id) { self.bind_local(parameter) } else { "_".into() }
+                if mentions_local(body, parameter.id) {
+                    self.bind_local(parameter)
+                } else {
+                    "_".into()
+                }
             }
             Callback::Direct { .. } => self.temporary(base),
         }
@@ -867,7 +870,7 @@ where
         let outcome = match self.callback(function, arity) {
             Some(Found::Inline { parameters: locals, body: lambda_body }) => {
                 for local in &locals {
-                    let name = if uses_local(lambda_body, local.id) {
+                    let name = if mentions_local(lambda_body, local.id) {
                         self.bind_local(local)
                     } else {
                         "_".to_string()

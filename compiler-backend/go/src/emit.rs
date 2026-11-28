@@ -46,7 +46,7 @@ mod fusion;
 mod groups;
 mod guards;
 mod hash_map_operations;
-mod hash_maps;
+pub(crate) mod hash_maps;
 mod headers;
 mod immediate;
 mod index_arrays;
@@ -78,6 +78,7 @@ mod ordered_map_operations;
 mod overwrite;
 mod ownership;
 mod packages;
+mod pipeline;
 mod prepends;
 mod presized_objects;
 mod printing;
@@ -119,16 +120,15 @@ use files::FileId;
 
 use self::application::Callable;
 use self::build::*;
-use self::declarations::{await_fibers, recursive_constants};
+use self::declarations::recursive_constants;
 use self::operators::{is_integer_constant, is_untyped_constant};
 use self::overwrite::with_unique_mask;
 use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::Context;
 use crate::error::{GoError, GoResult};
-use crate::foreign::{Constructed, ForeignPackages, GoFunction, GoPackage};
-use crate::modules::{ModuleIndex, Modules};
-use crate::monomorphic::traversal::visit;
+use crate::foreign::{Constructed, ForeignPackages, GoPackage};
+use crate::monomorphic::traversal::{mentions_local, visit};
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
     PatternKind, Program, RecordUpdate, Results, SourcePosition,
@@ -136,348 +136,13 @@ use crate::monomorphic::{
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::identifier;
 use crate::syntax::{
-    DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, Name, SourceLine,
-    statements_names,
+    GoDeclaration, GoExpression, GoStatement, GoType, Name, SourceLine, statements_names,
 };
-use crate::timing::timed;
 
 pub(crate) use self::closures::Eliminators;
 pub use self::packages::GoSourceFile;
+pub use self::pipeline::{EmissionInputs, emit_program};
 pub use self::vector::{KERNEL_FILE_SUFFIXES, is_kernel_file};
-
-/// The names of the map operations that some Go map does ([`crate::maps`]).
-pub(crate) fn hash_map_operations_used(
-    program: &Program,
-    monotypes: &Monotypes,
-    operations: &FxHashMap<FunctionId, crate::maps::MapOperation>,
-) -> FxHashSet<smol_str::SmolStr> {
-    hash_maps::operations_used(program, monotypes, operations)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn emit_program<Q>(
-    mut program: Program,
-    monotypes: &mut Monotypes,
-    eliminators: &Eliminators,
-    queries: &Q,
-    foreign_packages: &ForeignPackages,
-    modules: &Modules,
-    module_path: &str,
-    kept: &crate::maps::KeptOperations,
-) -> GoResult<(Vec<GoSourceFile>, Vec<String>)>
-where
-    Q: checking::ExternalQueries,
-{
-    let operations = kept.find(&program, modules);
-    timed("hash maps", || hash_maps::choose_hash_maps(&mut program, monotypes, &operations));
-    timed("prepends", || prepends::append_prepending_folds(&mut program, monotypes));
-    let arities = crate::arity::choose(&program, monotypes);
-    let closure_sets = timed("closures", || {
-        closures::defunctionalize(&mut program, monotypes, queries, &arities, eliminators)
-    })?;
-    let program = &program;
-    let reused = timed("reuse", || {
-        let mut probe =
-            Emitter::new(program, monotypes, queries, foreign_packages, arities.clone());
-        probe.copied_by_containers = probe.data_copied_by_containers()?;
-        let reused = reuse::reuse_cells(program, &mut probe);
-        GoResult::Ok((reused, probe.copied_by_containers))
-    });
-    let (reused, copied_by_containers) = reused?;
-    let program = &reused.program;
-    let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages, arities);
-    emitter.copied_by_containers = copied_by_containers;
-    emitter.materialized = reused.materialized;
-    emitter.candidates = reused.candidates;
-    emitter.closure_sets = closure_sets;
-    emitter.typed_slots = emitter.find_typed_slots(program)?;
-    emitter.vector_kernels = vector::Kernels::new(program);
-    emitter.assign_function_names();
-    let groups = timed("groups", || {
-        groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)
-    });
-    emitter.name_tail_groups(groups);
-    let entry_origin = program.function(program.entry).origin;
-    let declarations = timed("functions", || {
-        let mut declarations = vec![];
-        for index in 0..program.functions.len() {
-            let id = FunctionId(index as u32);
-            let emitted = emitter.function(id)?;
-            emitter.note_homes(&emitted, program.function(id).origin);
-            declarations.extend(emitted);
-        }
-        emitter.pending_variants(&mut declarations)?;
-        let main = emitter.main()?;
-        emitter.note_homes(main.as_slice(), entry_origin);
-        declarations.extend(main);
-        emitter.pending_variants(&mut declarations)?;
-        emitter.delegate_to_writers(&mut declarations);
-        // First, so that a top-level value that reads one finds it registered.
-        let registrations = emitter.foreign_data_registrations()?;
-        declarations.splice(0..0, registrations);
-        GoResult::Ok(declarations)
-    });
-    let mut declarations = declarations?;
-    let unused = emitter.unused_tail_group_entries();
-    if !unused.is_empty() {
-        declarations
-            .retain(|declaration| declaration.name().is_none_or(|name| !unused.contains(name)));
-    }
-    let every_line = emitter
-        .foreign_packages
-        .line_directives
-        .as_ref()
-        .is_some_and(|directives| directives.coverage == crate::foreign::LineCoverage::Every);
-    if emitter.imports.contains(GoPackage::Aff.path())
-        || emitter.foreign_packages.imports_event_loop(&emitter.imports)
-    {
-        let await_ = GoFunction { package: GoPackage::EventLoop, name: "Await" };
-        let await_ = emitter.performing(await_);
-        await_fibers(&mut declarations, await_, every_line);
-    }
-    let mut lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
-    timed("wrappers", || wrappers::inline_wrappers(&mut declarations));
-    let structs = scalars::structs_of(&emitter.type_declarations);
-    timed("equality", || equality::compare_structs_whole(&mut declarations, &structs));
-    timed("labelled", || labelled::unlabel_blocks(&mut declarations));
-    timed("known", || known::drop_known_tests(&mut declarations));
-    timed("merging", || merging::merge_identical_branches(&mut declarations));
-    timed("fresh", || fresh::drop_clips_of_fresh_slices(&mut declarations));
-    timed("presized objects", || presized_objects::presize_filled_objects(&mut declarations));
-    timed("references", || references::promote_references(&mut declarations));
-    timed("composites", || composites::take_composites_apart(&mut declarations));
-    timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
-    timed("conditions", || conditions::assign_conditions(&mut declarations));
-    timed("aliases", || aliases::substitute_aliases(&mut declarations));
-    timed("updates", || updates::update_in_place(&mut declarations));
-    timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
-    timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
-    timed("aliases", || aliases::substitute_aliases(&mut declarations));
-    timed("inlining", || {
-        inlining::inline_called_cell_loops(&mut declarations, &structs);
-        inlining::inline_cell_constructors(&mut declarations);
-    });
-    timed("forwarding", || {
-        cells::forward_constructed_fields(&mut declarations);
-        cells::substitute_cell_aliases(&mut declarations);
-    });
-    timed("aliases", || aliases::substitute_aliases(&mut declarations));
-    timed("references", || references::promote_references(&mut declarations));
-    let helpers: FxHashSet<String> = emitter.support_functions.values().cloned().collect();
-    let constructors =
-        emitter.type_declarations.iter().filter_map(|declaration| match declaration {
-            GoDeclaration::Function { name, .. } => Some(name.clone()),
-            _ => None,
-        });
-    let safe_callees: FxHashSet<String> = helpers.iter().cloned().chain(constructors).collect();
-    timed("array parameters", || {
-        array_parameters::promote_array_parameters(&mut declarations, &safe_callees)
-    });
-    let never_recovering = emitter.foreign_packages.packages_that_never_recover();
-    timed("cells", || {
-        cells::keep_parameter_cells_in_locals(
-            &mut declarations,
-            &helpers,
-            &emitter.effects,
-            &never_recovering,
-        )
-    });
-    timed("confined", || {
-        confined::keep_confined_cells_in_locals(
-            &mut declarations,
-            emitter.foreign_packages,
-            &helpers,
-            &emitter.effects,
-            &never_recovering,
-        )
-    });
-    timed("joins", || joins::join_shared_updates(&mut declarations));
-    timed("ranges", || ranges::read_elements_in_place(&mut declarations));
-    timed("swaps", || swaps::swap_crosswise_pokes(&mut declarations));
-    let effects = std::mem::take(&mut emitter.effects);
-    let pure_helpers = headers::keeping_helpers(&mut emitter.type_declarations, &effects);
-    timed("headers", || headers::read_headers_once(&mut declarations, &effects, &pure_helpers));
-    timed("bounds", || {
-        headers::drop_repeated_bounds_tests(&mut declarations, &effects, &pure_helpers)
-    });
-    timed("guards", || guards::guard_accesses_together(&mut declarations, &effects, &pure_helpers));
-    timed("intervals", || intervals::prove_bounds(&mut declarations, &effects, &pure_helpers));
-    timed("divisions", || divisions::reduce_constant_divisions(&mut declarations));
-    timed("shorthands", || shorthands::use_shorthands(&mut declarations));
-    let taken =
-        |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
-    timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
-    let mut names: Vec<DeclarationNames> = timed("names used", || {
-        declarations.iter_mut().map(GoDeclaration::declared_names).collect()
-    });
-    if emitter.imports.contains(GoPackage::Direct.path()) {
-        emitter.imports.insert(GoPackage::Prim.path().into());
-    }
-    timed("invariant lengths", || {
-        lengths::hoist_loop_invariant_lengths(&mut declarations, &mut names, &taken)
-    });
-    timed("invariants", || {
-        invariants::hoist_loop_invariants(&mut declarations, &mut names, &taken)
-    });
-    timed("ascii heads", || ascii_heads::read_ascii_heads(&mut declarations, &mut names, &taken));
-    let chunked = timed("chunks", || {
-        chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
-    });
-    let workers = timed("builders", || {
-        builders::allocate_built_cells_in_chunks(&mut declarations, &mut names, &taken)
-    });
-    if chunked || !workers.is_empty() {
-        emitter.imports.insert(GoPackage::Alloc.path().into());
-    }
-    timed("blocks", || {
-        blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
-    });
-    for worker in workers {
-        if let Some(aside) = &mut lines_aside {
-            aside.share(&worker.builder, &worker.name);
-        }
-        if let Some(&home) = emitter.homes.get(&worker.builder) {
-            emitter.homes.insert(worker.name.clone(), home);
-        }
-        emitter.global_names.insert(worker.name);
-    }
-    timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
-    timed("field reads", || loads::reuse_field_reads(&mut declarations));
-    timed("branches", || branches::simplify_branches(&mut declarations));
-    timed("aliases", || aliases::substitute_aliases(&mut declarations));
-    timed("constant fields", || constant_fields::read_constant_fields(&mut declarations));
-    timed("repeated tests", || merging::join_repeated_tests(&mut declarations));
-    timed("unpacked", || unpacked::read_found_answers(&mut declarations));
-    let global =
-        |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
-    timed("upserts", || upsert::look_up_and_write_once(&mut declarations, &global));
-    timed("probes", || probes::probe_once(&mut declarations, &global));
-    timed("index arrays", || index_arrays::count_instead_of_listing_indices(&mut declarations));
-    timed("scratch keys", || {
-        scratch_keys::build_looked_up_keys_in_scratch(&mut declarations, &global)
-    });
-    let mut record_value_name = |type_name: &str| {
-        let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
-        Some(emitter.value_base(monotype))
-    };
-    timed("sharing", || {
-        sharing::share_repeated_constructions(&mut declarations, &mut record_value_name)
-    });
-    let forwarders = forwarders::Forwarders::new(emitter.foreign_packages);
-    timed("forwarders", || forwarders.call_forwarded(&mut declarations));
-    timed("empty calls", || unreferenced::drop_calls_of_empty_functions(&mut declarations));
-    timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
-    timed("constant calls", || {
-        constant_fields::drop_calls_of_constant_functions(&mut declarations)
-    });
-    timed("fallible", || emitter.return_failures_apart(&mut declarations))?;
-    // Last, so that every pass before reads the constructions' fields in their literals.
-    timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
-    if let Some(aside) = lines_aside {
-        lines::restore(&mut declarations, aside);
-    }
-    let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
-        .into_iter()
-        .filter_map(|(name, file)| Some((name, modules.index(file)?)))
-        .collect();
-    // The homes of the declarations each declaration stands for.
-    let mut merged: FxHashMap<String, Vec<Option<ModuleIndex>>> = FxHashMap::default();
-    let mut declarations = timed("deduplicate", || {
-        deduplicate::merge_identical_declarations(declarations, &mut |from, into| {
-            let from_homes = merged.remove(from).unwrap_or_else(|| vec![homes.get(from).copied()]);
-            merged
-                .entry(into.to_string())
-                .or_insert_with(|| vec![homes.get(into).copied()])
-                .extend(from_homes);
-        })
-    });
-    for (name, merged_homes) in merged {
-        match modules.common_home(&merged_homes) {
-            Some(home) => homes.insert(name, home),
-            None => homes.remove(&name),
-        };
-    }
-    let spans = std::mem::take(&mut emitter.spans);
-    timed("spans", || lines::attribute_spans(&mut declarations, spans));
-    emitter.settle_array_boxes()?;
-    emitter.settle_round_trips();
-    emitter.spell_out_generic_alias_arguments();
-    let mut all = std::mem::take(&mut emitter.type_declarations);
-    all.extend(declarations);
-    timed("wrappers", || text::drop_unreached_functions(&mut all));
-    let data_structs: FxHashSet<String> = emitter
-        .data_layouts
-        .values()
-        .filter(|layout| layout.maybe.is_none())
-        .map(|layout| layout.name.clone())
-        .collect();
-    timed("narrow fields", || {
-        narrow_fields::narrow_int_fields(&mut all, &data_structs, &effects, &pure_helpers)
-    });
-    let declared: FxHashSet<String> = all
-        .iter()
-        .flat_map(|declaration| match declaration {
-            GoDeclaration::Constants { names, .. } => names.clone(),
-            declaration => declaration.name().map(str::to_string).into_iter().collect(),
-        })
-        .collect();
-    let record_homes = timed("names", || emitter.spell_pending(modules, &declared))?;
-    for (name, file) in record_homes {
-        if let Some(home) = modules.index(file) {
-            homes.entry(name).or_insert(home);
-        }
-    }
-    let home = |declaration: &GoDeclaration| {
-        let name = match declaration {
-            GoDeclaration::Constants { names, .. } => names.first().map(String::as_str),
-            declaration => declaration.name(),
-        };
-        name.and_then(|name| homes.get(name)).copied()
-    };
-    let all: Vec<(GoDeclaration, Option<ModuleIndex>)> = all
-        .into_iter()
-        .map(|declaration| {
-            let home = home(&declaration);
-            (declaration, home)
-        })
-        .collect();
-    let typed_records: Vec<Option<String>> = emitter
-        .typed_records
-        .iter()
-        .map(|monotype| emitter.record_names.get(monotype).cloned())
-        .collect();
-    let packaging = packages::Packaging {
-        modules,
-        module_path,
-        spellings: &emitter.spellings,
-        imports: &emitter.imports,
-        typed_records: &typed_records,
-    };
-    let mut files = timed("packages", || packaging.split(all))?;
-    vector::attach_kernels(&mut files, &emitter.vector_kernels);
-    if std::env::var_os("IRIS_GO_ANY_CENSUS").is_some() {
-        let mut census = crate::erasure::Census::default();
-        let mut textual = 0;
-        for file in &files {
-            let (source, file_census) = file.file.render_with_census();
-            census.absorb(file_census);
-            let identifier = |character: char| character.is_alphanumeric() || character == '_';
-            textual += source
-                .match_indices("any")
-                .filter(|&(at, _)| {
-                    !source[..at].chars().next_back().is_some_and(identifier)
-                        && !source[at + 3..].chars().next().is_some_and(identifier)
-                })
-                .count();
-        }
-        eprint!("{census}");
-        eprintln!("  ({textual} `any` in the source text)");
-        for (erasure, count) in census.rows() {
-            eprintln!("any-cause {} {count}", erasure.name());
-        }
-    }
-    Ok((files, emitter.notes))
-}
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -889,18 +554,6 @@ fn discard_definition(statements: &mut [GoStatement], name: &str) {
     *last = discarded(value);
 }
 
-fn uses_local(expression: &Expression, local: LocalId) -> bool {
-    let mut found = false;
-    visit(expression, &mut |node| {
-        if let ExpressionKind::Local(id) = node.kind
-            && id == local
-        {
-            found = true;
-        }
-    });
-    found
-}
-
 fn path_root(path: &GoExpression) -> Option<&String> {
     match path {
         GoExpression::Identifier(name) => Some(name),
@@ -1240,7 +893,7 @@ where
         match &expression.kind {
             ExpressionKind::EffectPure(value) => self.deliver_expression(value, sink, out),
             ExpressionKind::EffectBind { action, local, body } => {
-                if !uses_local(body, local.id) || self.is_unit(local.monotype) {
+                if !mentions_local(body, local.id) || self.is_unit(local.monotype) {
                     self.locals.insert(local.id, unit_value());
                     self.sink(action, Mode::Perform, Sink::Discard, out)?;
                     return self.sink(body, Mode::Perform, sink, out);
@@ -1269,7 +922,7 @@ where
             ExpressionKind::EffectEach { array, element, body, .. } => {
                 let array = self.value(array, out)?;
                 let saved = self.tail_loop.take();
-                let element_name = if uses_local(body, element.id) {
+                let element_name = if mentions_local(body, element.id) {
                     self.bind_local(element)
                 } else {
                     "_".to_string()
@@ -1767,9 +1420,9 @@ where
     }
 
     fn bindings(&mut self, bindings: &[Binding], out: &mut Vec<GoStatement>) -> GoResult<()> {
-        let recursive = bindings
-            .iter()
-            .any(|binding| bindings.iter().any(|other| uses_local(&binding.value, other.local.id)));
+        let recursive = bindings.iter().any(|binding| {
+            bindings.iter().any(|other| mentions_local(&binding.value, other.local.id))
+        });
         if recursive {
             let mut names = vec![];
             for binding in bindings {
@@ -2244,7 +1897,7 @@ where
                     && self.builds_eagerly(value) =>
             {
                 let value = self.value(value, out)?;
-                if uses_local(body, local.id) && !self.is_unit(local.monotype) {
+                if mentions_local(body, local.id) && !self.is_unit(local.monotype) {
                     let name = self.bind_local(local);
                     out.push(self.define(name, value, local.monotype)?);
                 } else {
@@ -2518,7 +2171,7 @@ fn captures_parameters(
     monotypes: &Monotypes,
 ) -> bool {
     let uses_parameter = |expression: &Expression| {
-        parameters.iter().any(|parameter| uses_local(expression, parameter.id))
+        parameters.iter().any(|parameter| mentions_local(expression, parameter.id))
     };
     let captures = |expression: &Expression, mode: Mode| {
         captures_parameters(expression, parameters, mode, monotypes)

@@ -38,13 +38,12 @@ use std::collections::VecDeque;
 
 use super::conditions::negated;
 use super::iteration::{Callback, Found};
-use super::{
-    Emitter, Mode, Sink, binary, call, identifier_expression, is_simple, length, lines, uses_local,
-};
+use super::{Emitter, Mode, Sink, binary, call, identifier_expression, is_simple, length, lines};
 use crate::error::GoResult;
 use crate::foreign::{
     ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, GoPackage, Iteration,
 };
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, Pattern, PatternKind,
 };
@@ -993,7 +992,7 @@ where
         let parameter = match callback {
             Callback::Inline { parameters, body: callback_body } => {
                 let parameter = parameters[position];
-                if !uses_local(callback_body, parameter.id) && once {
+                if !mentions_local(callback_body, parameter.id) && once {
                     return Ok(flow);
                 }
                 Some(parameter)
@@ -1024,7 +1023,7 @@ where
         let position = identifier_expression(index);
         match callback {
             Callback::Inline { parameters, body: callback_body } => {
-                if !uses_local(callback_body, parameters[0].id) {
+                if !mentions_local(callback_body, parameters[0].id) {
                     return identifier_expression("_");
                 }
                 let name = self.bind_local(parameters[0]);
@@ -1051,7 +1050,7 @@ where
                 return self.temporary("element");
             };
             let parameter = parameters[element_position(stage.kind)];
-            if uses_local(body, parameter.id) {
+            if mentions_local(body, parameter.id) {
                 return self.bind_local(parameter);
             }
             if stage.kind != StageKind::Filter {
@@ -1060,7 +1059,7 @@ where
         }
         match need {
             Need::Argument { callback: Callback::Inline { parameters, body }, position }
-                if uses_local(body, parameters[position].id) =>
+                if mentions_local(body, parameters[position].id) =>
             {
                 self.bind_local(parameters[position])
             }

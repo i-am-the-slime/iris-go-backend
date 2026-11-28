@@ -1,10 +1,11 @@
 use super::sorting::Placement;
 use super::{
     Emitter, Mode, Sink, call, field, field_name, identifier_expression, mutable, reference_type,
-    unit_value, uses_local,
+    unit_value,
 };
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Foreign, GoFunction, GoPackage};
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
@@ -476,8 +477,11 @@ where
         let allocation = GoExpression::Type(self.go_type(collected)?);
         let allocation = call(identifier_expression("make"), vec![allocation, length]);
         out.push(GoStatement::Define { names: vec![name.clone()], values: vec![allocation] });
-        let element_name =
-            if uses_local(body, element.id) { self.bind_local(element) } else { "_".to_string() };
+        let element_name = if mentions_local(body, element.id) {
+            self.bind_local(element)
+        } else {
+            "_".to_string()
+        };
         let saved = self.tail_loop.take();
         let mut statements = vec![];
         let index = if self.is_unit(value) {

@@ -31,8 +31,9 @@
 use rustc_hash::FxHashSet;
 
 use super::uniqueness::{TailLoop, next_iterations};
-use super::{Emitter, call, identifier_expression, uses_local};
+use super::{Emitter, call, identifier_expression};
 use crate::foreign::{Boundary, Foreign, Iteration};
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
@@ -71,7 +72,7 @@ where
             parameter: parameter.id,
         };
         let next = next_iterations(tail_loop, &function.body, &mut |value| {
-            uses_local(value, tail_loop.parameter)
+            mentions_local(value, tail_loop.parameter)
                 && self.holds_references(value.monotype, &mut FxHashSet::default())
         })?;
         let maps: Vec<*const Expression> = next

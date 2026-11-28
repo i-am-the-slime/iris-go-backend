@@ -6,8 +6,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use super::paths::{Event, Paths};
-use crate::emit::uses_local;
-use crate::monomorphic::traversal::{for_each_child, for_each_guarded_child};
+use crate::monomorphic::traversal::{for_each_child, for_each_guarded_child, mentions_local};
 use crate::monomorphic::{
     Expression, ExpressionKind, Guarded, LocalId, Pattern, PatternKind, RecordUpdate,
 };
@@ -282,7 +281,7 @@ impl<'f> Counter<'f> {
                     Some(path) if shapes.closures_keep_what_they_read() => {
                         uses_followed(expression, self.target, path)
                     }
-                    _ => uses_local(expression, self.target),
+                    _ => mentions_local(expression, self.target),
                 };
                 let only_reads = uses
                     && shapes.closures_only_read()
@@ -295,7 +294,11 @@ impl<'f> Counter<'f> {
                     Paths::event(Event::Peek)
                 } else if uses {
                     Paths::event(Event::Shared)
-                } else if self.relatives.iter().any(|&conflict| uses_local(expression, conflict)) {
+                } else if self
+                    .relatives
+                    .iter()
+                    .any(|&conflict| mentions_local(expression, conflict))
+                {
                     Paths::event(Event::Conflict)
                 } else {
                     Paths::empty()

@@ -1,7 +1,6 @@
 use super::reuse::{Cells, first_unused_local};
-use super::uses_local;
 use crate::foreign::{Foreign, Operator};
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, visit};
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, mentions_local, visit};
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Local, LocalId, Program,
 };
@@ -130,7 +129,7 @@ impl<C: Cells> Sequencer<'_, C> {
         for (position, argument) in arguments.iter().enumerate() {
             let later = &arguments[position + 1..];
             for local in self.inspected_locals(argument) {
-                if later.iter().any(|other| uses_local(other, local))
+                if later.iter().any(|other| mentions_local(other, local))
                     && self.only_inspects(argument, local)
                 {
                     last = Some(position);
@@ -167,7 +166,7 @@ impl<C: Cells> Sequencer<'_, C> {
             | ExpressionKind::Closure { .. }
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
-            | ExpressionKind::EffectEach { .. } => !uses_local(expression, local),
+            | ExpressionKind::EffectEach { .. } => !mentions_local(expression, local),
             ExpressionKind::Apply { function, arguments } => {
                 self.only_inspects(function, local)
                     && self.only_inspects_arguments(expression, arguments, local)

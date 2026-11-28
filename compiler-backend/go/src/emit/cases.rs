@@ -15,6 +15,13 @@ use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement, SourceLine};
 
 type Bindings = Vec<(Local, GoExpression)>;
 
+#[derive(Clone, Copy)]
+pub(super) struct CaseExpression<'a> {
+    expression: &'a Expression,
+    scrutinees: &'a [Expression],
+    alternatives: &'a [Alternative],
+}
+
 impl<Q> Emitter<'_, '_, '_, Q>
 where
     Q: checking::ExternalQueries,
@@ -61,7 +68,8 @@ where
                 return self.sink(body, mode, sink, out);
             }
         }
-        if self.try_switch(expression, &paths, scrutinees, alternatives, mode, sink.clone(), out)? {
+        let case = CaseExpression { expression, scrutinees, alternatives };
+        if self.try_switch(case, &paths, mode, sink.clone(), out)? {
             return Ok(());
         }
         if let Sink::Return = sink {
@@ -337,17 +345,15 @@ where
         Ok(false)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn try_switch(
         &mut self,
-        expression: &Expression,
+        case: CaseExpression<'_>,
         paths: &[GoExpression],
-        scrutinees: &[Expression],
-        alternatives: &[Alternative],
         mode: Mode,
         sink: Sink,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<bool> {
+        let CaseExpression { expression, scrutinees, alternatives } = case;
         let [path] = paths else { return Ok(false) };
         let [scrutinee] = scrutinees else { return Ok(false) };
         let switchable = alternatives.len() > 1

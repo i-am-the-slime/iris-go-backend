@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use super::{Emitter, call, identifier_expression, uses_local};
+use super::{Emitter, call, identifier_expression};
 use crate::error::GoResult;
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::MonotypeId;
 use crate::naming::UNNAMED_VALUE;
@@ -185,7 +186,7 @@ where
         }
         let function = self.same_representation(function)?;
         let captures_parameter =
-            parameters.iter().any(|parameter| uses_local(function, parameter.id));
+            parameters.iter().any(|parameter| mentions_local(function, parameter.id));
         if captures_parameter
             || !self.is_evaluated(function)
             || !self.same_go_type(function.monotype, monotype)?
@@ -238,7 +239,7 @@ where
         let (taken, rest) = parameters.split_at(taken);
         let mut go_parameters = Vec::with_capacity(arity);
         for parameter in taken {
-            let name = if super::uses_local(body, parameter.id) {
+            let name = if mentions_local(body, parameter.id) {
                 self.bind_local(parameter)
             } else {
                 "_".to_string()

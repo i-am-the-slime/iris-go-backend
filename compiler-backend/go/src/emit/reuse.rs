@@ -1,14 +1,14 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
+use super::Emitter;
 use super::field_reads::hoist_field_reads;
 use super::inspection::{inspecting_functions, inspects, sequence_inspections};
 use super::kept::mark_kept_fields;
 use super::uniqueness::{self, Branch, Forced, Scope, Shapes, guarded_expressions};
-use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration, Operator};
 use crate::monomorphic::traversal::{
-    all_locals, for_each_child, for_each_child_mut, prune_unreachable, visit,
+    all_locals, for_each_child, for_each_child_mut, mentions_local, prune_unreachable, visit,
 };
 use crate::monomorphic::{
     Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded,
@@ -16,7 +16,6 @@ use crate::monomorphic::{
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::purity::{can_fail, is_deferrable, is_trivial, is_within_size};
-use crate::timing::timed;
 
 /// What the name of a variant that reuses its arguments' cells adds to its
 /// function's name.
@@ -48,13 +47,13 @@ pub(super) struct Reused {
 }
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
-    let inspecting = timed("find inspecting functions", || inspecting_functions(program));
-    let hoisted = timed("hoist field reads", || hoist_field_reads(program, cells));
-    let sequenced = timed("sequence", || sequence_inspections(&hoisted, &inspecting, cells));
+    let inspecting = inspecting_functions(program);
+    let hoisted = hoist_field_reads(program, cells);
+    let sequenced = sequence_inspections(&hoisted, &inspecting, cells);
     let program = &sequenced;
     let mut facts = Facts::new(program, cells, inspecting);
-    timed("settle ownership", || facts.settle(program, cells));
-    timed("rewrite variants", || Emission::new(program, facts).finish(cells))
+    facts.settle(program, cells);
+    Emission::new(program, facts).finish(cells)
 }
 
 const MASK_LIMIT: usize = 64;
@@ -453,7 +452,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                 && !spare
                     .owners
                     .iter()
-                    .any(|&owner| after.iter().any(|expression| uses_local(expression, owner)))
+                    .any(|&owner| after.iter().any(|expression| mentions_local(expression, owner)))
         })?;
         let spare = stock.remove(position);
         let cell = self.used(&spare);
@@ -589,7 +588,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                     self.expression(child, false, &mut vec![], &mut vec![]);
                 });
                 stock.retain(|spare| {
-                    !spare.owners.iter().any(|&owner| uses_local(expression, owner))
+                    !spare.owners.iter().any(|&owner| mentions_local(expression, owner))
                 });
                 Held::Shared
             }
@@ -697,7 +696,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         after.extend([callback, initial]);
         self.expression(array, false, stock, after);
         after.truncate(mark);
-        stock.retain(|spare| !spare.owners.iter().any(|&owner| uses_local(callback, owner)));
+        stock.retain(|spare| !spare.owners.iter().any(|&owner| mentions_local(callback, owner)));
         let accumulator = match iteration {
             Iteration::FoldLeft => 0,
             _ => 1,
@@ -1124,7 +1123,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                             let value = guard.value();
                             self.expression(value, false, &mut vec![], &mut vec![]);
                             alternative_stock.retain(|spare| {
-                                !spare.owners.iter().any(|&owner| uses_local(value, owner))
+                                !spare.owners.iter().any(|&owner| mentions_local(value, owner))
                             });
                         }
                         let mut branch_stock = alternative_stock.clone();
@@ -1476,7 +1475,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                 })
         };
         let touches =
-            |expression: &Expression| family.iter().any(|&local| uses_local(expression, local));
+            |expression: &Expression| family.iter().any(|&local| mentions_local(expression, local));
         let branches: Vec<(Branch, bool)> = match &conditional.kind {
             ExpressionKind::If { condition, then, otherwise } if decidable(condition) => {
                 vec![(Branch::Then, touches(then)), (Branch::Otherwise, touches(otherwise))]
@@ -1653,7 +1652,7 @@ fn reads_cell_fields_once(
         | ExpressionKind::Closure { .. }
         | ExpressionKind::EffectPure(_)
         | ExpressionKind::EffectBind { .. }
-        | ExpressionKind::EffectEach { .. } => !uses_local(expression, record),
+        | ExpressionKind::EffectEach { .. } => !mentions_local(expression, record),
         _ => {
             let mut once = true;
             for_each_child(expression, &mut |child| {
@@ -1791,15 +1790,15 @@ fn is_spare_usable(body: &Guarded, owners: &[LocalId]) -> bool {
 
 fn unused_in_branch(spare: &Spare, branch: &GuardedBranch) -> bool {
     !spare.owners.iter().any(|&owner| {
-        uses_local(&branch.body, owner)
-            || branch.guards.iter().any(|guard| uses_local(guard.value(), owner))
+        mentions_local(&branch.body, owner)
+            || branch.guards.iter().any(|guard| mentions_local(guard.value(), owner))
     })
 }
 
 fn guarded_uses(guarded: &Guarded, local: LocalId) -> usize {
     guarded_expressions(guarded)
         .into_iter()
-        .filter(|expression| uses_local(expression, local))
+        .filter(|expression| mentions_local(expression, local))
         .count()
 }
 
@@ -2115,8 +2114,8 @@ fn untrack(expression: &mut Expression, candidates: &FxHashSet<DataType>) {
 fn bind_companions(body: &mut Expression, bindings: &[Binding]) {
     let mut kept: Vec<Binding> = vec![];
     for binding in bindings.iter().rev() {
-        let used = uses_local(body, binding.local.id)
-            || kept.iter().any(|later| uses_local(&later.value, binding.local.id));
+        let used = mentions_local(body, binding.local.id)
+            || kept.iter().any(|later| mentions_local(&later.value, binding.local.id));
         if used {
             kept.push(binding.clone());
         }

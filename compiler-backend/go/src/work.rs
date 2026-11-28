@@ -1,32 +1,5 @@
-//! Per-phase timings of the backend, reported on standard error when
-//! `IRIS_GO_TIMINGS` is set. Nested phases are indented under their parent and
-//! reported when they finish.
-
-use std::cell::Cell;
 use std::fmt;
-use std::sync::OnceLock;
-use std::time::{Duration, Instant};
-
-thread_local! {
-    static DEPTH: Cell<usize> = const { Cell::new(0) };
-}
-
-pub(crate) fn timed<T>(phase: &str, run: impl FnOnce() -> T) -> T {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    if !*ENABLED.get_or_init(|| std::env::var_os("IRIS_GO_TIMINGS").is_some()) {
-        return run();
-    }
-    let depth = DEPTH.get();
-    DEPTH.set(depth + 1);
-    let started = Instant::now();
-    let work_before = Work::so_far();
-    let result = run();
-    let elapsed = started.elapsed();
-    let work = Work::so_far().since(work_before);
-    DEPTH.set(depth);
-    eprintln!("go timing: {:indent$}{phase} {elapsed:.1?} {work}", "", indent = depth * 2);
-    result
-}
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Work {

@@ -316,13 +316,6 @@ impl Monotypes {
         collapsed
     }
 
-    /// Lists every interned monotype, for `IRIS_GO_DUMP`.
-    pub fn dump(&self) {
-        for (index, monotype) in self.interned.iter().enumerate() {
-            eprintln!("monotype {index}: {monotype:?}");
-        }
-    }
-
     /// Every monotype interned so far.
     pub fn ids(&self) -> impl Iterator<Item = MonotypeId> + use<> {
         (0..self.interned.len() as u32).map(MonotypeId)

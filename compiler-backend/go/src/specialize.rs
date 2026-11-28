@@ -27,7 +27,6 @@ use crate::monomorphic::{
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::primitives::Signedness;
 use crate::scheme::{Read, SchemeKey};
-use crate::timing::timed;
 use crate::types::{Substituted, Substitution};
 
 mod equations;
@@ -315,17 +314,12 @@ where
             signedness: None,
         };
         let entry = self.request(key, name)?;
-        let mut round = 0;
         loop {
             self.grown = false;
             let version = self.monotypes.schemes.version();
-            let specialized = timed(&format!("round {round}"), || {
-                self.specialize_requested()?;
-                self.note_reference_crossings();
-                self.adopt_rank_n_fields();
-                Ok::<_, GoError>(())
-            });
-            specialized?;
+            self.specialize_requested()?;
+            self.note_reference_crossings();
+            self.adopt_rank_n_fields();
             if self.monotypes.schemes.version() == version {
                 break;
             }
@@ -336,7 +330,6 @@ where
                 break;
             }
             self.stale.extend(stale);
-            round += 1;
         }
         Ok(entry)
     }

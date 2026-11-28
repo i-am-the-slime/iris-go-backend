@@ -93,7 +93,7 @@ mod tests {
     use smol_str::SmolStr;
 
     use super::{TailLoop, next_iterations};
-    use crate::emit::uses_local;
+    use crate::monomorphic::traversal::mentions_local;
     use crate::monomorphic::{Binding, Expression, ExpressionKind, FunctionId, Local, LocalId};
     use crate::monotype::MonotypeId;
 
@@ -130,7 +130,7 @@ mod tests {
     }
 
     fn next_of(body: &Expression) -> Option<usize> {
-        let mut holds = |value: &Expression| uses_local(value, LOOP.parameter);
+        let mut holds = |value: &Expression| mentions_local(value, LOOP.parameter);
         next_iterations(LOOP, body, &mut holds).map(|next| next.len())
     }
 
