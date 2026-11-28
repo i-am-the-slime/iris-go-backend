@@ -12,7 +12,7 @@ use crate::foreign::{GoFunction, GoPackage};
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -55,7 +55,7 @@ where
                 let value = self.value(&arguments[1], out)?;
                 let table = self.value(&arguments[2], out)?;
                 let table = self.named(table, out);
-                let sum = binary("+", entry(table.clone(), key.clone()), value);
+                let sum = binary(GoBinaryOperator::Add, entry(table.clone(), key.clone()), value);
                 out.push(store(table.clone(), key, sum));
                 table
             }
@@ -98,7 +98,7 @@ where
             HashMapOperation::Size => super::length(self.value(&arguments[0], out)?),
             HashMapOperation::IsEmpty => {
                 let size = super::length(self.value(&arguments[0], out)?);
-                binary("==", size, GoExpression::Integer(0))
+                binary(GoBinaryOperator::Equal, size, GoExpression::Integer(0))
             }
             HashMapOperation::Get => {
                 let key = self.value(&arguments[0], out)?;
@@ -287,7 +287,11 @@ where
             let order = if index == 0 { "order".to_string() } else { format!("order{index}") };
             body.push(GoStatement::Define { names: vec![order.clone()], values: vec![compared] });
             body.push(GoStatement::If {
-                condition: binary("!=", identifier_expression(&order), GoExpression::Integer(0)),
+                condition: binary(
+                    GoBinaryOperator::NotEqual,
+                    identifier_expression(&order),
+                    GoExpression::Integer(0),
+                ),
                 then: vec![GoStatement::Return(Some(identifier_expression(&order)))],
                 otherwise: vec![],
             });

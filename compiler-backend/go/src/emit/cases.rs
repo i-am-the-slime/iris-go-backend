@@ -11,7 +11,9 @@ use crate::monomorphic::{
 };
 use crate::monotype::Monotype;
 use crate::naming::is_vague;
-use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement, SourceLine};
+use crate::syntax::{
+    GoBinaryOperator, GoCase, GoDefault, GoExpression, GoStatement, GoUnaryOperator, SourceLine,
+};
 
 type Bindings = Vec<(Local, GoExpression)>;
 
@@ -466,16 +468,21 @@ where
                 self.pattern_tests(pattern, path, tests, bindings)?;
             }
             PatternKind::Literal(Literal::Boolean(true)) => tests.push(path),
-            PatternKind::Literal(Literal::Boolean(false)) => {
-                tests.push(GoExpression::Unary { operator: "!", operand: Box::new(path) })
-            }
+            PatternKind::Literal(Literal::Boolean(false)) => tests.push(GoExpression::Unary {
+                operator: GoUnaryOperator::Not,
+                operand: Box::new(path),
+            }),
             PatternKind::Literal(literal) => {
                 let literal = self.literal(literal, pattern.monotype);
-                tests.push(binary("==", path, literal));
+                tests.push(binary(GoBinaryOperator::Equal, path, literal));
             }
             PatternKind::Array(elements) => {
                 let length = call(identifier_expression("len"), vec![path.clone()]);
-                tests.push(binary("==", length, GoExpression::Integer(elements.len() as i64)));
+                tests.push(binary(
+                    GoBinaryOperator::Equal,
+                    length,
+                    GoExpression::Integer(elements.len() as i64),
+                ));
                 for (position, element) in elements.iter().enumerate() {
                     let element_path = GoExpression::Index {
                         value: Box::new(path.clone()),

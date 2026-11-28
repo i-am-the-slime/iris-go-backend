@@ -20,7 +20,10 @@ use crate::foreign::{GoPackage, JsonCodec};
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier, lower_camel};
-use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType,
+    GoUnaryOperator,
+};
 
 /// The decoder's or the encoder's parameter.
 const DECODER: &str = "d";
@@ -326,7 +329,7 @@ where
                 let missing = seen
                     .iter()
                     .map(|has| not(identifier_expression(has)))
-                    .reduce(|left, right| binary("||", left, right));
+                    .reduce(|left, right| binary(GoBinaryOperator::LogicalOr, left, right));
                 if let Some(missing) = missing {
                     out.push(GoStatement::If {
                         condition: missing,
@@ -570,7 +573,11 @@ where
                 let index = locals.fresh("index");
                 let item = locals.fresh("item");
                 let mut body = vec![GoStatement::If {
-                    condition: binary(">", identifier_expression(&index), GoExpression::Integer(0)),
+                    condition: binary(
+                        GoBinaryOperator::GreaterThan,
+                        identifier_expression(&index),
+                        GoExpression::Integer(0),
+                    ),
                     then: vec![raw_statement(",")],
                     otherwise: vec![],
                 }];
@@ -709,13 +716,13 @@ where
                 let name = held(value, locals, out);
                 let mut present = vec![];
                 let dereferenced = GoExpression::Unary {
-                    operator: "*",
+                    operator: GoUnaryOperator::Dereference,
                     operand: Box::new(identifier_expression(&name)),
                 };
                 self.json_encode(payload, dereferenced, locals, &mut present)?;
                 out.push(GoStatement::If {
                     condition: binary(
-                        "==",
+                        GoBinaryOperator::Equal,
                         identifier_expression(&name),
                         identifier_expression("nil"),
                     ),
@@ -919,7 +926,7 @@ fn json_string(text: &SmolStr) -> String {
 }
 
 fn not(operand: GoExpression) -> GoExpression {
-    GoExpression::Unary { operator: "!", operand: Box::new(operand) }
+    GoExpression::Unary { operator: GoUnaryOperator::Not, operand: Box::new(operand) }
 }
 
 /// The name of a local holding the value, defined unless the value is a local already.

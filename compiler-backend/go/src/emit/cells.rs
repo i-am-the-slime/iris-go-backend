@@ -8,7 +8,7 @@ use super::headers::{BUILTINS, Effects};
 use super::inlining::fresh;
 use super::scalars::Structs;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Cell {
@@ -41,7 +41,9 @@ impl Cell {
         let cell = Box::new(GoExpression::Identifier(cell.to_string()));
         match self {
             Cell::Reference => GoExpression::Field { value: cell, name: "Value".into() },
-            Cell::Array => GoExpression::Unary { operator: "*", operand: cell },
+            Cell::Array => {
+                GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand: cell }
+            }
         }
     }
 
@@ -50,7 +52,10 @@ impl Cell {
             (Cell::Reference, GoExpression::Field { value, name }) if name == "Value" => {
                 Some(value)
             }
-            (Cell::Array, GoExpression::Unary { operator: "*", operand }) => Some(operand),
+            (
+                Cell::Array,
+                GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand },
+            ) => Some(operand),
             _ => None,
         }
     }
@@ -380,10 +385,7 @@ impl Walk for FieldReads<'_> {
             GoExpression::Field { value: base, name }
                 if is_named(base, self.name)
                     && self.fields.iter().any(|(field, _)| field == name) => {}
-            GoExpression::Address(place)
-            | GoExpression::Unary { operator: "&", operand: place }
-                if target_root(place) == Some(self.name) =>
-            {
+            GoExpression::Address(place) if target_root(place) == Some(self.name) => {
                 self.only = false;
             }
             GoExpression::Identifier(name) if name == self.name => self.only = false,
@@ -432,8 +434,7 @@ fn fixed_names(declaration: &mut GoDeclaration) -> FxHashSet<String> {
                 GoExpression::Function { parameters, .. } => {
                     parameters.iter().for_each(|(name, _)| self.bind(name));
                 }
-                GoExpression::Address(place)
-                | GoExpression::Unary { operator: "&", operand: place } => {
+                GoExpression::Address(place) => {
                     if let GoExpression::Identifier(name) = place.as_ref() {
                         self.written.insert(name.clone());
                     }

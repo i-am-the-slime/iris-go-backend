@@ -37,7 +37,10 @@ use super::{DataKind, Emitter, binary, identifier_expression};
 use crate::error::GoResult;
 use crate::go_traversal::{self};
 use crate::monotype::DataType;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Reference, StructField};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator, Reference,
+    StructField,
+};
 use conventions::Conventions;
 use nested::NestedResults;
 use rewrite::Rewrite;
@@ -140,7 +143,7 @@ fn failure_test_of(failure: &str, failed: bool) -> GoExpression {
     };
     match failed {
         true => test,
-        false => GoExpression::Unary { operator: "!", operand: Box::new(test) },
+        false => GoExpression::Unary { operator: GoUnaryOperator::Not, operand: Box::new(test) },
     }
 }
 
@@ -154,7 +157,7 @@ fn tested_failure<'e>(
             GoExpression::Identifier(local) if failures.contains(local) => Some((local, true)),
             _ => None,
         },
-        GoExpression::Unary { operator: "!", operand } => {
+        GoExpression::Unary { operator: GoUnaryOperator::Not, operand } => {
             let (local, failed) = tested_failure(operand, failures)?;
             Some((local, !failed))
         }
@@ -380,7 +383,11 @@ where
                     value: Box::new(either_value.clone()),
                     name: field.to_string(),
                 };
-                let is_left = binary("==", side("Tag"), identifier_expression(&shape.left_tag));
+                let is_left = binary(
+                    GoBinaryOperator::Equal,
+                    side("Tag"),
+                    identifier_expression(&shape.left_tag),
+                );
                 GoDeclaration::Function {
                     name: name.clone(),
                     parameters: vec![(either_name, either)],
@@ -408,7 +415,11 @@ where
                     value: Box::new(either_value.clone()),
                     name: field.to_string(),
                 };
-                let is_left = binary("==", side("Tag"), identifier_expression(&shape.left_tag));
+                let is_left = binary(
+                    GoBinaryOperator::Equal,
+                    side("Tag"),
+                    identifier_expression(&shape.left_tag),
+                );
                 GoDeclaration::Function {
                     name: name.clone(),
                     parameters: vec![(either_name, either)],

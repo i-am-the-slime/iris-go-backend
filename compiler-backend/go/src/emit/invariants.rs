@@ -15,7 +15,8 @@ use super::lengths::written_by_literals;
 use crate::go_traversal::{self, Walk, each_expression_in_declaration};
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names,
+    DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator, Name,
+    statements_names,
 };
 
 /// `taken` tells which names a new local must not shadow.
@@ -236,7 +237,10 @@ fn is_built_without_calls(value: &GoExpression) -> bool {
             fields.iter().all(|(_, field)| is_built_without_calls(field))
         }
         GoExpression::Unary { operator, operand } => {
-            matches!(*operator, "-" | "!" | "^") && is_built_without_calls(operand)
+            matches!(
+                *operator,
+                GoUnaryOperator::Negate | GoUnaryOperator::Not | GoUnaryOperator::Complement
+            ) && is_built_without_calls(operand)
         }
         GoExpression::Field { value, .. } | GoExpression::Conversion { value, .. } => {
             is_built_without_calls(value)

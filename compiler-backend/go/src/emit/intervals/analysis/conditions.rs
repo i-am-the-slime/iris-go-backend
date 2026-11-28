@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use super::{Analysis, BoundTest};
 use crate::emit::intervals::constraints::{State, Symbol};
 use crate::emit::intervals::syntax::each_subexpression;
-use crate::syntax::GoExpression;
+use crate::syntax::{GoBinaryOperator, GoExpression, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn condition(&mut self, test: &GoExpression, state: &mut State) -> BoundTest {
@@ -43,7 +43,9 @@ impl Analysis<'_, '_, '_> {
                     }
                 }
             }
-            GoExpression::Unary { operator: "*", .. } => through_pointer = true,
+            GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => {
+                through_pointer = true
+            }
             _ => {}
         });
         let heap = through_pointer.then_some(state.heap);
@@ -114,20 +116,28 @@ impl Analysis<'_, '_, '_> {
                     *state = State::unreachable();
                 }
             }
-            GoExpression::Unary { operator: "!", operand } => {
+            GoExpression::Unary { operator: GoUnaryOperator::Not, operand } => {
                 self.assume_into(state, operand, !truth, blank)
             }
-            GoExpression::Binary { operator: "&&", left, right } if truth => {
+            GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right }
+                if truth =>
+            {
                 self.assume_into(state, left, true, blank);
                 self.assume_into(state, right, true, blank);
             }
-            GoExpression::Binary { operator: "||", left, right } if !truth => {
+            GoExpression::Binary { operator: GoBinaryOperator::LogicalOr, left, right }
+                if !truth =>
+            {
                 self.assume_into(state, left, false, blank);
                 self.assume_into(state, right, false, blank);
             }
-            GoExpression::Binary { operator: operator @ ("&&" | "||"), left, right } => {
+            GoExpression::Binary {
+                operator: operator @ (GoBinaryOperator::LogicalAnd | GoBinaryOperator::LogicalOr),
+                left,
+                right,
+            } => {
                 // `a && b` false: `a` false, or `a` true and `b` false; `a || b` true dually.
-                let first = *operator == "||";
+                let first = *operator == GoBinaryOperator::LogicalOr;
                 let mut one = state.clone();
                 self.assume_into(&mut one, left, first, blank);
                 let mut other = state.clone();
@@ -135,19 +145,18 @@ impl Analysis<'_, '_, '_> {
                 self.assume_into(&mut other, right, first, blank);
                 *state = one.join(&other);
             }
-            GoExpression::Binary { operator, left, right }
-                if matches!(*operator, "<" | "<=" | ">" | ">=" | "==" | "!=") =>
-            {
-                let operator = if truth { *operator } else { negated(operator) };
+            GoExpression::Binary { operator, left, right } if operator.is_comparison() => {
+                let operator = if truth { Some(*operator) } else { operator.negated_comparison() };
+                let Some(operator) = operator else { return };
                 let left = self.value_with(left, state, blank);
                 let right = self.value_with(right, state, blank);
                 let (Some(left), Some(right)) = (left, right) else { return };
                 match operator {
-                    "<" => state.assume_at_most(left, right, -1),
-                    "<=" => state.assume_at_most(left, right, 0),
-                    ">" => state.assume_at_most(right, left, -1),
-                    ">=" => state.assume_at_most(right, left, 0),
-                    "==" => {
+                    GoBinaryOperator::LessThan => state.assume_at_most(left, right, -1),
+                    GoBinaryOperator::LessThanOrEqual => state.assume_at_most(left, right, 0),
+                    GoBinaryOperator::GreaterThan => state.assume_at_most(right, left, -1),
+                    GoBinaryOperator::GreaterThanOrEqual => state.assume_at_most(right, left, 0),
+                    GoBinaryOperator::Equal => {
                         state.assume_at_most(left, right, 0);
                         state.assume_at_most(right, left, 0);
                     }
@@ -180,16 +189,5 @@ impl Analysis<'_, '_, '_> {
         } else {
             None
         }
-    }
-}
-
-fn negated(operator: &str) -> &'static str {
-    match operator {
-        "<" => ">=",
-        "<=" => ">",
-        ">" => "<=",
-        ">=" => "<",
-        "==" => "!=",
-        _ => "==",
     }
 }

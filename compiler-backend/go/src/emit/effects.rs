@@ -8,7 +8,7 @@ use crate::foreign::{Foreign, GoFunction, GoPackage};
 use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -87,7 +87,10 @@ where
                 let array = self.value(&arguments[0], out)?;
                 let associated = self.associated_elements(result)?;
                 let map = GoFunction { package: GoPackage::Direct, name: "MapWithIndex" };
-                let elements = GoExpression::Unary { operator: "*", operand: Box::new(array) };
+                let elements = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(array),
+                };
                 let associated = call(self.go_function(map), vec![associated, elements]);
                 return self.deliver(associated, result, sink, out);
             }
@@ -407,7 +410,7 @@ where
         let condition = identifier_expression(&condition);
         let stop = match foreign {
             Foreign::EffectWhile => {
-                GoExpression::Unary { operator: "!", operand: Box::new(condition) }
+                GoExpression::Unary { operator: GoUnaryOperator::Not, operand: Box::new(condition) }
             }
             _ => condition,
         };

@@ -105,7 +105,7 @@ fn renamed(value: &GoExpression, after: &impl Fn(&str) -> Option<String>) -> Opt
         GoExpression::Identifier(name) => GoExpression::Identifier(after(name)?),
         GoExpression::Integer(constant) => GoExpression::Integer(*constant),
         GoExpression::Binary { operator, left, right } => GoExpression::Binary {
-            operator,
+            operator: *operator,
             left: Box::new(renamed(left, after)?),
             right: Box::new(renamed(right, after)?),
         },

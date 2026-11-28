@@ -1,7 +1,7 @@
 use super::{Emitter, binary, call, identifier_expression, negated};
 use crate::foreign::{Comparison, GoPackage, Operator};
 use crate::numeric::fold_bitwise;
-use crate::syntax::{GoExpression, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoType, GoUnaryOperator};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -72,9 +72,8 @@ where
         operator: Operator,
         mut values: Vec<GoExpression>,
     ) -> GoExpression {
-        let unary = |operator: &'static str, values: &mut Vec<GoExpression>| GoExpression::Unary {
-            operator,
-            operand: Box::new(values.remove(0)),
+        let unary = |operator: GoUnaryOperator, values: &mut Vec<GoExpression>| {
+            GoExpression::Unary { operator, operand: Box::new(values.remove(0)) }
         };
         if operator.arity() == 1 {
             return match operator {
@@ -86,13 +85,13 @@ where
                     Some(value) => GoExpression::Integer(value.wrapping_neg()),
                     None => negated(values.remove(0)),
                 },
-                Operator::BooleanNot => unary("!", &mut values),
+                Operator::BooleanNot => unary(GoUnaryOperator::Not, &mut values),
                 Operator::ArrayLength => call(identifier_expression("len"), values),
                 Operator::IntToNumber => GoExpression::Conversion {
                     type_: GoType::Float64,
                     value: Box::new(values.remove(0)),
                 },
-                Operator::IntComplement => unary("^", &mut values),
+                Operator::IntComplement => unary(GoUnaryOperator::Complement, &mut values),
                 Operator::IntPopulationCount => match int_constant(&values[0]) {
                     Some(value) => GoExpression::Integer(i64::from(value.count_ones())),
                     None => self.ones_count(values.remove(0)),
@@ -116,7 +115,7 @@ where
             if let (Some(x), Some(y)) = (int_constant(&left), int_constant(&right)) {
                 return GoExpression::Integer(x.wrapping_mul(y));
             }
-            return binary("*", left, right);
+            return binary(GoBinaryOperator::Multiply, left, right);
         }
         let wrapping: Option<fn(i64, i64) -> i64> = match operator {
             Operator::IntAdd => Some(i64::wrapping_add),
@@ -137,7 +136,7 @@ where
             && is_untyped_constant(&right)
         {
             let left = GoExpression::Conversion { type_: GoType::Float64, value: Box::new(left) };
-            return binary("/", left, right);
+            return binary(GoBinaryOperator::Divide, left, right);
         }
         // Go folds untyped constants exactly; JavaScript rounds every step.
         let left = match operator {
@@ -149,35 +148,44 @@ where
             _ => left,
         };
         let negated_opposite = match operator {
-            Operator::Compare(Comparison::GreaterThanOrUnordered) => Some("<="),
-            Operator::Compare(Comparison::GreaterThanOrEqualOrUnordered) => Some("<"),
+            Operator::Compare(Comparison::GreaterThanOrUnordered) => {
+                Some(GoBinaryOperator::LessThanOrEqual)
+            }
+            Operator::Compare(Comparison::GreaterThanOrEqualOrUnordered) => {
+                Some(GoBinaryOperator::LessThan)
+            }
             _ => None,
         };
         if let Some(opposite) = negated_opposite {
             let opposite = binary(opposite, left, right);
-            return GoExpression::Unary { operator: "!", operand: Box::new(opposite) };
+            return GoExpression::Unary {
+                operator: GoUnaryOperator::Not,
+                operand: Box::new(opposite),
+            };
         }
-        let symbol = match operator {
-            Operator::IntAdd | Operator::NumberAdd | Operator::StringAppend => "+",
-            Operator::IntSubtract | Operator::NumberSubtract => "-",
-            Operator::NumberMultiply => "*",
-            Operator::NumberDivide => "/",
-            Operator::BooleanAnd => "&&",
-            Operator::BooleanOr => "||",
+        let go_operator = match operator {
+            Operator::IntAdd | Operator::NumberAdd | Operator::StringAppend => {
+                GoBinaryOperator::Add
+            }
+            Operator::IntSubtract | Operator::NumberSubtract => GoBinaryOperator::Subtract,
+            Operator::NumberMultiply => GoBinaryOperator::Multiply,
+            Operator::NumberDivide => GoBinaryOperator::Divide,
+            Operator::BooleanAnd => GoBinaryOperator::LogicalAnd,
+            Operator::BooleanOr => GoBinaryOperator::LogicalOr,
             Operator::Compare(comparison) => match comparison {
-                Comparison::Equal => "==",
-                Comparison::NotEqual => "!=",
-                Comparison::LessThan => "<",
-                Comparison::LessThanOrEqual => "<=",
-                Comparison::GreaterThan => ">",
-                Comparison::GreaterThanOrEqual => ">=",
+                Comparison::Equal => GoBinaryOperator::Equal,
+                Comparison::NotEqual => GoBinaryOperator::NotEqual,
+                Comparison::LessThan => GoBinaryOperator::LessThan,
+                Comparison::LessThanOrEqual => GoBinaryOperator::LessThanOrEqual,
+                Comparison::GreaterThan => GoBinaryOperator::GreaterThan,
+                Comparison::GreaterThanOrEqual => GoBinaryOperator::GreaterThanOrEqual,
                 Comparison::GreaterThanOrUnordered | Comparison::GreaterThanOrEqualOrUnordered => {
                     unreachable!()
                 }
             },
             _ => unreachable!(),
         };
-        binary(symbol, left, right)
+        binary(go_operator, left, right)
     }
 }
 
@@ -185,12 +193,12 @@ where
 /// JavaScript takes them modulo 32, and `zshr` shifts the unsigned bits. Constant operands are
 /// folded at 64 bits.
 fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Option<GoExpression> {
-    let symbol = match operator {
-        Operator::IntAnd => "&",
-        Operator::IntOr => "|",
-        Operator::IntXor => "^",
-        Operator::IntShiftLeft => "<<",
-        Operator::IntShiftRight | Operator::IntZeroFillShiftRight => ">>",
+    let go_operator = match operator {
+        Operator::IntAnd => GoBinaryOperator::BitwiseAnd,
+        Operator::IntOr => GoBinaryOperator::BitwiseOr,
+        Operator::IntXor => GoBinaryOperator::BitwiseXor,
+        Operator::IntShiftLeft => GoBinaryOperator::ShiftLeft,
+        Operator::IntShiftRight | Operator::IntZeroFillShiftRight => GoBinaryOperator::ShiftRight,
         _ => return None,
     };
     if let (Some(x), Some(y)) = (int_constant(&left), int_constant(&right)) {
@@ -198,11 +206,11 @@ fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Optio
     }
     let shifts = !matches!(operator, Operator::IntAnd | Operator::IntOr | Operator::IntXor);
     if !shifts {
-        return Some(binary(symbol, left, right));
+        return Some(binary(go_operator, left, right));
     }
     let count = match int_constant(&right) {
         Some(count) => GoExpression::Integer(count & 63),
-        None => binary("&", right, GoExpression::Integer(63)),
+        None => binary(GoBinaryOperator::BitwiseAnd, right, GoExpression::Integer(63)),
     };
     if let Operator::IntZeroFillShiftRight = operator {
         // Go rejects `uint(c)` for a negative constant `c`, so its bits are spelled as a `uint`.
@@ -217,21 +225,21 @@ fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Optio
         };
         return Some(GoExpression::Conversion {
             type_: GoType::Int,
-            value: Box::new(binary(symbol, unsigned, count)),
+            value: Box::new(binary(go_operator, unsigned, count)),
         });
     }
     let left = match is_untyped_constant(&left) {
         true => GoExpression::Conversion { type_: GoType::Int, value: Box::new(left) },
         false => left,
     };
-    Some(binary(symbol, left, count))
+    Some(binary(go_operator, left, count))
 }
 
 pub(super) fn float_constant(expression: &GoExpression) -> Option<f64> {
     match expression {
         GoExpression::Integer(value) => Some(*value as f64),
         GoExpression::Float(value) => value.parse().ok(),
-        GoExpression::Unary { operator: "-", operand } => {
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => {
             float_constant(operand).map(|value| -value)
         }
         _ => None,
@@ -241,10 +249,12 @@ pub(super) fn float_constant(expression: &GoExpression) -> Option<f64> {
 fn int_constant(expression: &GoExpression) -> Option<i64> {
     match expression {
         GoExpression::Integer(value) => Some(*value),
-        GoExpression::Unary { operator: "-", operand } => match operand.as_ref() {
-            GoExpression::Integer(value) => value.checked_neg(),
-            _ => None,
-        },
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => {
+            match operand.as_ref() {
+                GoExpression::Integer(value) => value.checked_neg(),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -265,7 +275,7 @@ pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {
 pub(super) fn is_integer_constant(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Integer(_) => true,
-        GoExpression::Unary { operator: "-", operand } => {
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => {
             matches!(operand.as_ref(), GoExpression::Integer(_))
         }
         _ => false,

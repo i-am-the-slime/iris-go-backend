@@ -1,6 +1,6 @@
 use super::Analysis;
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO, kind_of_type};
-use crate::syntax::{GoExpression, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoType, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn typing(&self, value: &GoExpression) -> Option<Typing> {
@@ -15,9 +15,22 @@ impl Analysis<'_, '_, '_> {
                 self.bindings.get(&symbol)?.kind.map(Typing::Typed)
             }
             GoExpression::Conversion { type_, .. } => kind_of_type(type_).map(Typing::Typed),
-            GoExpression::Unary { operator: "-" | "^", operand } => self.typing(operand),
+            GoExpression::Unary {
+                operator: GoUnaryOperator::Negate | GoUnaryOperator::Complement,
+                operand,
+            } => self.typing(operand),
             GoExpression::Binary { operator, left, right }
-                if matches!(*operator, "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "&^") =>
+                if matches!(
+                    *operator,
+                    GoBinaryOperator::Add
+                        | GoBinaryOperator::Subtract
+                        | GoBinaryOperator::Multiply
+                        | GoBinaryOperator::Divide
+                        | GoBinaryOperator::Remainder
+                        | GoBinaryOperator::BitwiseAnd
+                        | GoBinaryOperator::BitwiseOr
+                        | GoBinaryOperator::BitwiseXor
+                ) =>
             {
                 match (self.typing(left)?, self.typing(right)?) {
                     (Typing::Typed(left), Typing::Typed(right)) if left == right => {
@@ -177,19 +190,23 @@ impl Analysis<'_, '_, '_> {
                 }
                 _ => None,
             },
-            GoExpression::Binary { operator: operator @ ("+" | "-"), left, right } => {
+            GoExpression::Binary {
+                operator: operator @ (GoBinaryOperator::Add | GoBinaryOperator::Subtract),
+                left,
+                right,
+            } => {
                 let kind = kind?;
                 let left_value = self.value_with(left, state, blank);
                 let right_value = self.value_with(right, state, blank);
-                self.sum(operator, left_value, right_value, kind, state)
+                self.sum(*operator, left_value, right_value, kind, state)
             }
-            GoExpression::Binary { operator: "%", left, right } => {
+            GoExpression::Binary { operator: GoBinaryOperator::Remainder, left, right } => {
                 self.remainder(left, right, state, blank, false)
             }
-            GoExpression::Binary { operator: "/", left, right } => {
+            GoExpression::Binary { operator: GoBinaryOperator::Divide, left, right } => {
                 self.quotient(left, right, state, blank)
             }
-            GoExpression::Binary { operator: "&", left, right } => {
+            GoExpression::Binary { operator: GoBinaryOperator::BitwiseAnd, left, right } => {
                 let mask = [left, right].into_iter().find_map(|side| match &**side {
                     GoExpression::Integer(mask) if *mask >= 0 => Some(*mask),
                     _ => None,
@@ -199,7 +216,7 @@ impl Analysis<'_, '_, '_> {
                 state.add(temporary, ZERO, mask as i128);
                 Some(Value::of(temporary))
             }
-            GoExpression::Binary { operator: "*", left, right } => {
+            GoExpression::Binary { operator: GoBinaryOperator::Multiply, left, right } => {
                 let kind = kind?;
                 let left = self.value_with(left, state, blank)?;
                 let right = self.value_with(right, state, blank)?;
@@ -264,14 +281,14 @@ impl Analysis<'_, '_, '_> {
     /// `left ± right` of the kind, when it cannot wrap.
     fn sum(
         &mut self,
-        operator: &str,
+        operator: GoBinaryOperator,
         left: Option<Value>,
         right: Option<Value>,
         kind: Kind,
         state: &mut State,
     ) -> Option<Value> {
         let (left, right) = (left?, right?);
-        let sign: i128 = if operator == "+" { 1 } else { -1 };
+        let sign: i128 = if operator == GoBinaryOperator::Add { 1 } else { -1 };
         let (least, most) = kind.range();
         if right.symbol == ZERO || (left.symbol == ZERO && sign == 1) {
             let (base, constant) = if right.symbol == ZERO {
@@ -367,10 +384,12 @@ impl Analysis<'_, '_, '_> {
     pub(super) fn length(&mut self, array: &GoExpression, _state: &mut State) -> Option<Value> {
         let (name, through_pointer) = match array {
             GoExpression::Identifier(name) => (name, false),
-            GoExpression::Unary { operator: "*", operand } => match &**operand {
-                GoExpression::Identifier(name) => (name, true),
-                _ => return None,
-            },
+            GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } => {
+                match &**operand {
+                    GoExpression::Identifier(name) => (name, true),
+                    _ => return None,
+                }
+            }
             GoExpression::String(text) => return Some(Value::constant(text.len() as i64)),
             _ => return None,
         };
@@ -381,7 +400,8 @@ impl Analysis<'_, '_, '_> {
     /// The length of a slice-valued expression.
     fn length_of(&mut self, value: &GoExpression, state: &mut State) -> Option<Value> {
         match value {
-            GoExpression::Identifier(_) | GoExpression::Unary { operator: "*", .. } => {
+            GoExpression::Identifier(_)
+            | GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => {
                 self.length(value, state)
             }
             GoExpression::Address(inner) => self.length_of(inner, state),
@@ -423,7 +443,9 @@ pub(super) struct Computed {
 }
 
 fn zero_filling_shift(value: &GoExpression) -> Option<i64> {
-    let GoExpression::Binary { operator: ">>", left, right } = value else { return None };
+    let GoExpression::Binary { operator: GoBinaryOperator::ShiftRight, left, right } = value else {
+        return None;
+    };
     let GoExpression::Conversion { type_: GoType::Named(source), .. } = left.as_ref() else {
         return None;
     };

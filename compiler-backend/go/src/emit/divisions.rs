@@ -11,7 +11,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement};
 
 pub(super) fn reduce_constant_divisions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -87,8 +87,8 @@ impl ConstantDivisions {
             _ => None,
         };
         match *operator {
-            "==" => (None, tested),
-            "!=" => (tested, None),
+            GoBinaryOperator::Equal => (None, tested),
+            GoBinaryOperator::NotEqual => (tested, None),
             _ => (None, None),
         }
     }
@@ -103,8 +103,8 @@ impl ConstantDivisions {
         let GoExpression::Call { function, arguments } = value else { return None };
         let GoExpression::Qualified { package, name } = &**function else { return None };
         let operator = match (package.as_str(), name.as_str()) {
-            ("prim", "IntDiv") => "/",
-            ("prim", "IntMod") => "%",
+            ("prim", "IntDiv") => GoBinaryOperator::Divide,
+            ("prim", "IntMod") => GoBinaryOperator::Remainder,
             _ => return None,
         };
         let [GoExpression::Integer(dividend), GoExpression::Identifier(divisor)] =
@@ -123,7 +123,12 @@ impl ConstantDivisions {
 
 /// `prim.IntMod(x, c) == 0` is `x % c == 0` for a constant `c` other than zero.
 fn remainder_test(value: &mut GoExpression) -> Option<GoExpression> {
-    let GoExpression::Binary { operator: operator @ ("==" | "!="), left, right } = value else {
+    let GoExpression::Binary {
+        operator: operator @ (GoBinaryOperator::Equal | GoBinaryOperator::NotEqual),
+        left,
+        right,
+    } = value
+    else {
         return None;
     };
     let operator = *operator;
@@ -139,8 +144,11 @@ fn remainder_test(value: &mut GoExpression) -> Option<GoExpression> {
     }
     let mut arguments = std::mem::take(arguments).into_iter();
     let (dividend, divisor) = (arguments.next()?, arguments.next()?);
-    let truncated =
-        GoExpression::Binary { operator: "%", left: Box::new(dividend), right: Box::new(divisor) };
+    let truncated = GoExpression::Binary {
+        operator: GoBinaryOperator::Remainder,
+        left: Box::new(dividend),
+        right: Box::new(divisor),
+    };
     Some(GoExpression::Binary {
         operator,
         left: Box::new(truncated),
@@ -259,8 +267,10 @@ impl Division {
         let dividend = std::mem::take(arguments).into_iter().next().expect("a dividend");
         if self.divisor.count_ones() == 1 {
             let (operator, right) = match self.operation {
-                Operation::Quotient => (">>", i64::from(self.divisor.trailing_zeros())),
-                Operation::Modulo => ("&", self.divisor - 1),
+                Operation::Quotient => {
+                    (GoBinaryOperator::ShiftRight, i64::from(self.divisor.trailing_zeros()))
+                }
+                Operation::Modulo => (GoBinaryOperator::BitwiseAnd, self.divisor - 1),
             };
             return GoExpression::Binary {
                 operator,

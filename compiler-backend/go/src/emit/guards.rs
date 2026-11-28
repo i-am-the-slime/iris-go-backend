@@ -34,7 +34,7 @@ use rustc_hash::FxHashSet;
 use super::headers::{Effects, Keeping, assigned_root, fresh, is_bounds_test, reads};
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement};
 
 /// The statements one combined test may guard, counted with the statements of their blocks:
 /// every one of them is copied.
@@ -190,7 +190,7 @@ impl Together<'_, '_, '_> {
             .into_iter()
             .flat_map(conjuncts)
             .reduce(|left, right| GoExpression::Binary {
-                operator: "&&",
+                operator: GoBinaryOperator::LogicalAnd,
                 left: Box::new(left),
                 right: Box::new(right),
             })
@@ -270,7 +270,7 @@ fn all_used(block: &[GoStatement]) -> bool {
 /// The tests a condition joins with `&&`, in order.
 fn conjuncts(condition: GoExpression) -> Vec<GoExpression> {
     match condition {
-        GoExpression::Binary { operator: "&&", left, right } => {
+        GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {
             let mut all = conjuncts(*left);
             all.extend(conjuncts(*right));
             all

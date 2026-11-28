@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use super::conditions::is_pure;
 use super::inlining::Rename;
 use crate::go_traversal::{self, Walk, each_block_in_declaration};
-use crate::syntax::{GoCase, GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoCase, GoDeclaration, GoExpression, GoStatement};
 
 pub(super) fn merge_identical_branches(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -111,7 +111,7 @@ fn merged(chain: &GoStatement) -> Option<Vec<GoStatement>> {
                 *previous = match left {
                     GoExpression::Boolean(false) => condition,
                     left => GoExpression::Binary {
-                        operator: "||",
+                        operator: GoBinaryOperator::LogicalOr,
                         left: Box::new(left),
                         right: Box::new(condition),
                     },
@@ -151,9 +151,17 @@ fn assigns_boolean(body: &[GoStatement]) -> bool {
 /// Whether both conditions compare the same two values, which says more as one comparison.
 fn compare_same_values(left: &GoExpression, right: &GoExpression) -> bool {
     let operands = |condition: &GoExpression| match condition {
-        GoExpression::Binary { operator: "<" | "<=" | ">" | ">=" | "==" | "!=", left, right } => {
-            Some((left.clone(), right.clone()))
-        }
+        GoExpression::Binary {
+            operator:
+                GoBinaryOperator::LessThan
+                | GoBinaryOperator::LessThanOrEqual
+                | GoBinaryOperator::GreaterThan
+                | GoBinaryOperator::GreaterThanOrEqual
+                | GoBinaryOperator::Equal
+                | GoBinaryOperator::NotEqual,
+            left,
+            right,
+        } => Some((left.clone(), right.clone())),
         _ => None,
     };
     match (operands(left), operands(right)) {

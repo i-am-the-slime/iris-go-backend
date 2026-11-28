@@ -10,7 +10,7 @@ use rustc_hash::FxHashSet;
 
 use super::discarded;
 use crate::go_traversal::{self, Walk, each_block_in_declaration};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoUnaryOperator};
 
 pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -192,9 +192,11 @@ fn is_inert(value: &GoExpression) -> bool {
         GoExpression::Results(values) => values.iter().all(is_inert),
         // Integer division by zero panics, and so does dereferencing nil.
         GoExpression::Binary { operator, left, right } => {
-            !matches!(*operator, "/" | "%") && is_inert(left) && is_inert(right)
+            !operator.is_division() && is_inert(left) && is_inert(right)
         }
-        GoExpression::Unary { operator, operand } => *operator != "*" && is_inert(operand),
+        GoExpression::Unary { operator, operand } => {
+            *operator != GoUnaryOperator::Dereference && is_inert(operand)
+        }
         GoExpression::Call { .. }
         | GoExpression::Index { .. }
         | GoExpression::Slice { .. }

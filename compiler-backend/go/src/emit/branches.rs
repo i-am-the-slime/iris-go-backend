@@ -1,6 +1,8 @@
 use super::conditions::{is_pure, negated};
 use crate::go_traversal::{self, Walk, each_expression_in_statement};
-use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement};
+use crate::syntax::{
+    GoBinaryOperator, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoUnaryOperator,
+};
 
 pub(super) fn simplify_branches(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -29,8 +31,11 @@ impl Walk for Branches {
 
     fn expression(&mut self, value: &mut GoExpression) {
         go_traversal::expression(self, value);
-        if let GoExpression::Unary { operator: "!", operand } = value
-            && let GoExpression::Binary { operator: "==" | "!=", .. } = operand.unattributed()
+        if let GoExpression::Unary { operator: GoUnaryOperator::Not, operand } = value
+            && let GoExpression::Binary {
+                operator: GoBinaryOperator::Equal | GoBinaryOperator::NotEqual,
+                ..
+            } = operand.unattributed()
         {
             *value = negated(operand.unattributed());
         }
@@ -235,7 +240,9 @@ fn switch_of_chain(statement: &GoStatement) -> Option<GoStatement> {
 }
 
 fn compared(condition: &GoExpression) -> Option<(&GoExpression, &GoExpression)> {
-    let GoExpression::Binary { operator: "==", left, right } = condition.unattributed() else {
+    let GoExpression::Binary { operator: GoBinaryOperator::Equal, left, right } =
+        condition.unattributed()
+    else {
         return None;
     };
     Some((left.unattributed(), right.unattributed()))

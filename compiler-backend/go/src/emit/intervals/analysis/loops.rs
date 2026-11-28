@@ -1,6 +1,6 @@
 use super::{Analysis, Frame};
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn looping(
@@ -51,7 +51,7 @@ impl Analysis<'_, '_, '_> {
                 let mut visited = head.clone();
                 self.visit(&mut end, &mut visited);
                 let test = GoExpression::Binary {
-                    operator: "<",
+                    operator: GoBinaryOperator::LessThan,
                     left: Box::new(GoExpression::Identifier(String::new())),
                     right: Box::new(end),
                 };

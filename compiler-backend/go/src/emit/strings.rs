@@ -9,7 +9,7 @@
 
 use super::{Emitter, binary, call, identifier_expression};
 use crate::foreign::{GoFunction, GoPackage};
-use crate::syntax::GoExpression;
+use crate::syntax::{GoBinaryOperator, GoExpression};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -32,7 +32,7 @@ where
         if operands.windows(2).all(|join| has_whole_ends(&join[0]) || has_whole_ends(&join[1])) {
             return operands
                 .into_iter()
-                .reduce(|left, right| binary("+", left, right))
+                .reduce(|left, right| binary(GoBinaryOperator::Add, left, right))
                 .expect("invariant violated: an append has two operands");
         }
         let name = if operands.len() == 2 { "Append" } else { "Concat" };
@@ -65,7 +65,7 @@ where
 /// `prim.Append` and `prim.Concat`.
 fn flatten(expression: GoExpression, operands: &mut Vec<GoExpression>) {
     match expression {
-        GoExpression::Binary { operator: "+", left, right } => {
+        GoExpression::Binary { operator: GoBinaryOperator::Add, left, right } => {
             flatten(*left, operands);
             flatten(*right, operands);
         }

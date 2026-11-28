@@ -6,7 +6,7 @@
 use super::{Emitter, binary, call, identifier_expression, length};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -70,8 +70,8 @@ where
         self.imports.insert("strings".into());
         let join = GoExpression::Qualified { package: "strings".into(), name: "Join".into() };
         let joined = call(join, vec![texts, GoExpression::String(" ".into())]);
-        let open = binary("+", GoExpression::String("[".into()), joined);
-        Some(binary("+", open, GoExpression::String("]".into())))
+        let open = binary(GoBinaryOperator::Add, GoExpression::String("[".into()), joined);
+        Some(binary(GoBinaryOperator::Add, open, GoExpression::String("]".into())))
     }
 
     /// The name of a slice of the texts of `array`'s elements, which the loop pushed onto `out`

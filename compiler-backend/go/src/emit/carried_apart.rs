@@ -4,7 +4,7 @@ use super::{Emitter, conjunction, field, identifier_expression};
 use crate::error::GoResult;
 use crate::go_traversal::{self, Walk};
 use crate::monomorphic::{Pattern, PatternKind};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -254,7 +254,11 @@ impl Leaving<'_> {
         statement: &'s GoStatement,
         copies: &[String],
     ) -> Option<&'s Vec<GoStatement>> {
-        let GoExpression::Binary { operator: "==", left: tag, right: absorbed_tag } = self.absorbed
+        let GoExpression::Binary {
+            operator: GoBinaryOperator::Equal,
+            left: tag,
+            right: absorbed_tag,
+        } = self.absorbed
         else {
             return None;
         };
@@ -365,13 +369,13 @@ fn switch_as_branches(statement: &GoStatement) -> Option<GoStatement> {
         return None;
     }
     let tests = case.values.iter().map(|tested| GoExpression::Binary {
-        operator: "==",
+        operator: GoBinaryOperator::Equal,
         left: Box::new(value.clone()),
         right: Box::new(tested.clone()),
     });
     let condition = tests
         .reduce(|left, right| GoExpression::Binary {
-            operator: "||",
+            operator: GoBinaryOperator::LogicalOr,
             left: Box::new(left),
             right: Box::new(right),
         })

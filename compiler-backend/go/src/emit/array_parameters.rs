@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet;
 use super::aliases::is_named;
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 const BUILTINS: &[&str] = &["len", "cap", "append", "min", "max", "copy", "make"];
 const RUNTIME_PACKAGES: &[&str] = &["prim", "array", "math", "slices"];
@@ -73,13 +73,13 @@ fn is_scalar(type_: &GoType) -> bool {
 
 fn dereference(array: &str) -> GoExpression {
     GoExpression::Unary {
-        operator: "*",
+        operator: GoUnaryOperator::Dereference,
         operand: Box::new(GoExpression::Identifier(array.to_string())),
     }
 }
 
 fn is_dereference(expression: &GoExpression, array: &str) -> bool {
-    matches!(expression, GoExpression::Unary { operator: "*", operand } if is_named(operand, array))
+    matches!(expression, GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } if is_named(operand, array))
 }
 
 fn fresh(array: &str, names: &mut FxHashSet<String>) -> String {

@@ -3,7 +3,7 @@ use super::{Emitter, Mode, Sink, binary, call, identifier_expression, unit_value
 use crate::error::GoResult;
 use crate::monomorphic::Expression;
 use crate::monotype::MonotypeId;
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 pub(super) const ACCESSES: &[&str] = &[
     "Peek",
@@ -194,7 +194,11 @@ where
         let type_ = self.go_type(result)?;
         out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
         let position = match end {
-            End::Last => binary("-", call_length(elements.clone()), GoExpression::Integer(1)),
+            End::Last => binary(
+                GoBinaryOperator::Subtract,
+                call_length(elements.clone()),
+                GoExpression::Integer(1),
+            ),
             End::First => GoExpression::Integer(0),
         };
         let (data, just) = self.constructor_named(result, "Just")?;
@@ -253,7 +257,7 @@ where
     ) -> GoResult<GoExpression> {
         let array = self.value(array, out)?;
         let array = self.hoist(array, "array", out);
-        Ok(GoExpression::Unary { operator: "*", operand: Box::new(array) })
+        Ok(GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand: Box::new(array) })
     }
 }
 
@@ -263,7 +267,7 @@ fn call_length(elements: GoExpression) -> GoExpression {
 }
 
 fn non_empty(elements: GoExpression) -> GoExpression {
-    binary(">", call_length(elements), GoExpression::Integer(0))
+    binary(GoBinaryOperator::GreaterThan, call_length(elements), GoExpression::Integer(0))
 }
 
 fn shortened(without: &GoExpression, elements: GoExpression) -> GoStatement {
@@ -277,9 +281,13 @@ fn indexed(elements: GoExpression, index: GoExpression) -> GoExpression {
 
 pub(super) fn in_bounds(index: &GoExpression, elements: GoExpression) -> GoExpression {
     let length = call(identifier_expression("len"), vec![elements]);
-    let below = binary("<", index.clone(), length);
+    let below = binary(GoBinaryOperator::LessThan, index.clone(), length);
     match index {
         GoExpression::Integer(constant) if *constant >= 0 => below,
-        _ => binary("&&", binary(">=", index.clone(), GoExpression::Integer(0)), below),
+        _ => binary(
+            GoBinaryOperator::LogicalAnd,
+            binary(GoBinaryOperator::GreaterThanOrEqual, index.clone(), GoExpression::Integer(0)),
+            below,
+        ),
     }
 }

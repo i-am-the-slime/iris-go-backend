@@ -7,7 +7,7 @@
 //!   variable given one, `var n int = 0`, is `n := 0`.
 
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType};
 
 pub(super) fn use_shorthands(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -76,7 +76,7 @@ impl Walk for Shorthands {
     fn expression(&mut self, value: &mut GoExpression) {
         go_traversal::expression(self, value);
         if let GoExpression::Binary { operator, left, right } = value
-            && let Some(flipped) = flipped_comparison(operator)
+            && let Some(flipped) = operator.swapped_comparison()
             && is_length(right)
             && matches!(**left, GoExpression::Integer(_))
         {
@@ -95,8 +95,8 @@ fn extremum(declared: &GoStatement, chosen: &GoStatement) -> Option<GoStatement>
     let GoStatement::If { condition, then, otherwise } = chosen else { return None };
     let GoExpression::Binary { operator, left, right } = condition else { return None };
     let less = match *operator {
-        "<" | "<=" => true,
-        ">" | ">=" => false,
+        GoBinaryOperator::LessThan | GoBinaryOperator::LessThanOrEqual => true,
+        GoBinaryOperator::GreaterThan | GoBinaryOperator::GreaterThanOrEqual => false,
         _ => return None,
     };
     let (then, otherwise) = (assigned(then, name)?, assigned(otherwise, name)?);
@@ -166,17 +166,4 @@ fn is_float_constant(value: &GoExpression) -> bool {
 fn is_length(value: &GoExpression) -> bool {
     let GoExpression::Call { function, arguments } = value else { return false };
     matches!(&**function, GoExpression::Identifier(name) if name == "len") && arguments.len() == 1
-}
-
-/// The comparison with its operands swapped.
-fn flipped_comparison(operator: &str) -> Option<&'static str> {
-    Some(match operator {
-        "<" => ">",
-        "<=" => ">=",
-        ">" => "<",
-        ">=" => "<=",
-        "==" => "==",
-        "!=" => "!=",
-        _ => return None,
-    })
 }

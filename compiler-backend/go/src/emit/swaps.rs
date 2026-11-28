@@ -10,7 +10,7 @@
 //! rather than two optional values built, tested and taken apart again.
 
 use crate::go_traversal;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement};
 
 use super::aliases::mentions;
 
@@ -63,7 +63,7 @@ fn swap_at(block: &mut [GoStatement], code: &[usize], end: usize) -> Option<GoSt
         return None;
     }
     let condition = GoExpression::Binary {
-        operator: "&&",
+        operator: GoBinaryOperator::LogicalAnd,
         left: Box::new(first.in_bounds),
         right: Box::new(second.in_bounds),
     };
@@ -106,12 +106,18 @@ fn assigned(body: &[GoStatement], name: &str) -> Option<GoExpression> {
 }
 
 fn tests_both_found(condition: &GoExpression, first: &Peek, second: &Peek) -> bool {
-    let GoExpression::Binary { operator: "&&", left, right } = condition else { return false };
+    let GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } = condition
+    else {
+        return false;
+    };
     is_found(left, first) && is_found(right, second)
 }
 
 fn is_found(condition: &GoExpression, peek: &Peek) -> bool {
-    let GoExpression::Binary { operator: "!=", left, right } = condition else { return false };
+    let GoExpression::Binary { operator: GoBinaryOperator::NotEqual, left, right } = condition
+    else {
+        return false;
+    };
     matches!(&**left, GoExpression::Identifier(name) if *name == peek.name)
         && **right == peek.nothing
 }

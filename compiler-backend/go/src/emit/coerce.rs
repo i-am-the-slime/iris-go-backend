@@ -11,7 +11,10 @@ use crate::foreign::{GoFunction, GoPackage};
 use crate::go_traversal::each_block;
 use crate::monomorphic::{Expression, ExpressionKind, SourcePosition};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
-use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType,
+    GoUnaryOperator,
+};
 use smol_str::SmolStr;
 
 /// The construct a coercion between types of different shapes reports.
@@ -312,7 +315,10 @@ where
             (Monotype::Unit, _) => {
                 let type_ = self.go_type(to)?;
                 let allocated = call(identifier_expression("new"), vec![GoExpression::Type(type_)]);
-                Ok(GoExpression::Unary { operator: "*", operand: Box::new(allocated) })
+                Ok(GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(allocated),
+                })
             }
             _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
@@ -720,13 +726,17 @@ where
                 body.push(GoStatement::Return(Some(call(map, vec![value, convert]))));
             }
             (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
-                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                let absent =
+                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
                 body.push(GoStatement::If {
                     condition: absent,
                     then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
                     otherwise: vec![],
                 });
-                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let present = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(value),
+                };
                 let element = self.coerce(present, from_element, to_element, &mut body)?;
                 let type_ = self.go_type(to_element)?;
                 body.push(GoStatement::Variable {
@@ -738,18 +748,23 @@ where
                 body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Nullable(from_element), Monotype::Opaque) => {
-                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                let absent =
+                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
                 body.push(GoStatement::If {
                     condition: absent,
                     then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
                     otherwise: vec![],
                 });
-                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let present = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(value),
+                };
                 let element = self.coerce(present, from_element, to, &mut body)?;
                 body.push(GoStatement::Return(Some(element)));
             }
             (Monotype::Opaque, Monotype::Nullable(to_element)) => {
-                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                let absent =
+                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
                 body.push(GoStatement::If {
                     condition: absent,
                     then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
@@ -766,7 +781,8 @@ where
                 body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Nullable(from_element), _) => {
-                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                let absent =
+                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
                 let type_ = self.go_type(to)?;
                 body.push(GoStatement::If {
                     condition: absent,
@@ -776,7 +792,10 @@ where
                     ],
                     otherwise: vec![],
                 });
-                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let present = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(value),
+                };
                 let element = self.coerce(present, from_element, to, &mut body)?;
                 body.push(GoStatement::Return(Some(element)));
             }
@@ -928,7 +947,8 @@ where
             return Ok(None);
         }
         if from_layout.boxed && to_layout.boxed {
-            let absent = binary("==", value.clone(), identifier_expression("nil"));
+            let absent =
+                binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
             body.push(GoStatement::If {
                 condition: absent,
                 then: vec![GoStatement::Return(Some(identifier_expression("nil")))],

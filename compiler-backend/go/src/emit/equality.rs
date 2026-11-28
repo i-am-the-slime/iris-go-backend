@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 
 use super::scalars::Structs;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoType};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoType};
 
 pub(super) fn compare_structs_whole(declarations: &mut [GoDeclaration], structs: &Structs) {
     for declaration in declarations {
@@ -45,7 +45,9 @@ impl Walk for Whole<'_> {
 
 impl Whole<'_> {
     fn whole_comparison(&self, value: &GoExpression) -> Option<GoExpression> {
-        let GoExpression::Binary { operator: "&&", .. } = value else { return None };
+        let GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, .. } = value else {
+            return None;
+        };
         let mut conjuncts = vec![];
         conjunction(value, &mut conjuncts);
         let mut compared: Option<(&str, &str)> = None;
@@ -66,7 +68,7 @@ impl Whole<'_> {
         let covered = fields.len() == declared.len()
             && declared.iter().all(|(name, _)| fields.contains(&name.as_str()));
         covered.then(|| GoExpression::Binary {
-            operator: "==",
+            operator: GoBinaryOperator::Equal,
             left: Box::new(GoExpression::Identifier(left.to_string())),
             right: Box::new(GoExpression::Identifier(right.to_string())),
         })
@@ -75,7 +77,7 @@ impl Whole<'_> {
 
 fn conjunction<'e>(value: &'e GoExpression, conjuncts: &mut Vec<&'e GoExpression>) {
     match value {
-        GoExpression::Binary { operator: "&&", left, right } => {
+        GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {
             conjunction(left, conjuncts);
             conjunction(right, conjuncts);
         }
@@ -85,7 +87,9 @@ fn conjunction<'e>(value: &'e GoExpression, conjuncts: &mut Vec<&'e GoExpression
 
 /// `a.F == b.F`, as the names of `a` and `b` and the field.
 fn field_equality(value: &GoExpression) -> Option<(&str, &str, &str)> {
-    let GoExpression::Binary { operator: "==", left, right } = value else { return None };
+    let GoExpression::Binary { operator: GoBinaryOperator::Equal, left, right } = value else {
+        return None;
+    };
     let (
         GoExpression::Field { value: left, name: left_field },
         GoExpression::Field { value: right, name: right_field },

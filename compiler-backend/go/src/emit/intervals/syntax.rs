@@ -1,13 +1,23 @@
-use crate::syntax::GoExpression;
+use crate::syntax::{GoBinaryOperator, GoExpression, GoUnaryOperator};
 
 /// A comparison, a combination of comparisons, or a constant.
 pub(super) fn is_test(value: &GoExpression) -> bool {
     match value {
         GoExpression::Boolean(_) => true,
         GoExpression::Binary { operator, .. } => {
-            matches!(*operator, "&&" | "||" | "<" | "<=" | ">" | ">=" | "==" | "!=")
+            matches!(
+                *operator,
+                GoBinaryOperator::LogicalAnd
+                    | GoBinaryOperator::LogicalOr
+                    | GoBinaryOperator::LessThan
+                    | GoBinaryOperator::LessThanOrEqual
+                    | GoBinaryOperator::GreaterThan
+                    | GoBinaryOperator::GreaterThanOrEqual
+                    | GoBinaryOperator::Equal
+                    | GoBinaryOperator::NotEqual
+            )
         }
-        GoExpression::Unary { operator: "!", operand } => is_test(operand),
+        GoExpression::Unary { operator: GoUnaryOperator::Not, operand } => is_test(operand),
         _ => false,
     }
 }
@@ -27,7 +37,7 @@ pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
     }
     fn conjuncts<'a>(test: &'a GoExpression, into: &mut Vec<&'a GoExpression>) {
         match test {
-            GoExpression::Binary { operator: "&&", left, right } => {
+            GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {
                 conjuncts(left, into);
                 conjuncts(right, into);
             }
@@ -39,9 +49,9 @@ pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
     }
     let mut parts = vec![];
     conjuncts(test, &mut parts);
-    let below_length = |conjunct: &GoExpression| matches!(conjunct, GoExpression::Binary { operator: "<", right, .. } if is_length(right));
+    let below_length = |conjunct: &GoExpression| matches!(conjunct, GoExpression::Binary { operator: GoBinaryOperator::LessThan, right, .. } if is_length(right));
     let natural = |conjunct: &GoExpression| {
-        matches!(conjunct, GoExpression::Binary { operator: ">=", right, .. }
+        matches!(conjunct, GoExpression::Binary { operator: GoBinaryOperator::GreaterThanOrEqual, right, .. }
             if matches!(**right, GoExpression::Integer(0)))
     };
     parts.iter().any(|part| below_length(part))

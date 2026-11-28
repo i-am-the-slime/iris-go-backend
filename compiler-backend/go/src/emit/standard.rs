@@ -7,7 +7,7 @@ use super::{Emitter, call, is_simple};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monomorphic::Expression;
 use crate::monotype::Monotype;
-use crate::syntax::GoExpression;
+use crate::syntax::{GoExpression, GoUnaryOperator};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -73,10 +73,12 @@ where
 fn integer(expression: &GoExpression) -> Option<i64> {
     match expression {
         GoExpression::Integer(value) => Some(*value),
-        GoExpression::Unary { operator: "-", operand } => match operand.as_ref() {
-            GoExpression::Integer(value) => Some(-value),
-            _ => None,
-        },
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => {
+            match operand.as_ref() {
+                GoExpression::Integer(value) => Some(-value),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }

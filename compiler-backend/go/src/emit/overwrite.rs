@@ -28,7 +28,7 @@ use crate::error::GoResult;
 use crate::go_traversal::{self, Walk};
 use crate::monomorphic::{Edge, Expression, ExpressionKind, Kept, Literal};
 use crate::monotype::DataType;
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -67,7 +67,10 @@ where
         }
         let composite = self.composite(&layout, constructor, values);
         let composite = with_unique_mask(composite, mask);
-        let target = GoExpression::Unary { operator: "*", operand: Box::new(cell.clone()) };
+        let target = GoExpression::Unary {
+            operator: GoUnaryOperator::Dereference,
+            operand: Box::new(cell.clone()),
+        };
         out.push(GoStatement::Assign { targets: vec![target], values: vec![composite] });
         Ok(cell)
     }
@@ -87,12 +90,12 @@ where
         let cell = self.value(cell, out)?;
         let unique = GoExpression::Field { value: Box::new(cell), name: "Unique".into() };
         let set = GoExpression::Binary {
-            operator: "&",
+            operator: GoBinaryOperator::BitwiseAnd,
             left: Box::new(unique),
             right: Box::new(GoExpression::Integer(i64::from(bit))),
         };
         let edge = GoExpression::Binary {
-            operator: "!=",
+            operator: GoBinaryOperator::NotEqual,
             left: Box::new(set),
             right: Box::new(GoExpression::Integer(0)),
         };
@@ -100,7 +103,11 @@ where
             return Ok(edge);
         }
         let owned = self.value(owned, out)?;
-        Ok(GoExpression::Binary { operator: "&&", left: Box::new(owned), right: Box::new(edge) })
+        Ok(GoExpression::Binary {
+            operator: GoBinaryOperator::LogicalAnd,
+            left: Box::new(owned),
+            right: Box::new(edge),
+        })
     }
 
     pub(super) fn unique_mask(
@@ -135,7 +142,7 @@ where
         let constant =
             (constant != 0 || terms.is_empty()).then(|| GoExpression::Integer(i64::from(constant)));
         let mask = constant.into_iter().chain(terms).reduce(|left, right| GoExpression::Binary {
-            operator: "|",
+            operator: GoBinaryOperator::BitwiseOr,
             left: Box::new(left),
             right: Box::new(right),
         });

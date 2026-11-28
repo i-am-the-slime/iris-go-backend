@@ -1,6 +1,6 @@
 use super::aliases::is_named;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Cell {
@@ -91,7 +91,9 @@ fn local_array(statement: GoStatement) -> GoStatement {
     };
     let elements = match values.remove(0) {
         GoExpression::Address(elements) => *elements,
-        fresh => GoExpression::Unary { operator: "*", operand: Box::new(fresh) },
+        fresh => {
+            GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand: Box::new(fresh) }
+        }
     };
     GoStatement::Define { names, values: vec![elements] }
 }
@@ -101,7 +103,9 @@ fn is_cell_value(expression: &GoExpression, cell: &str, kind: Cell) -> bool {
         (GoExpression::Field { value, name }, Cell::Reference) => {
             name == "Value" && is_named(value, cell)
         }
-        (GoExpression::Unary { operator: "*", operand }, Cell::Array) => is_named(operand, cell),
+        (GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand }, Cell::Array) => {
+            is_named(operand, cell)
+        }
         _ => false,
     }
 }

@@ -24,7 +24,7 @@ use super::is_untyped_constant;
 use super::locals::NUMBERED;
 use super::strings::only_writes_text;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 /// The fields of each named struct type, in declaration order.
 pub(super) type Structs = FxHashMap<String, Vec<(String, GoType)>>;
@@ -542,11 +542,6 @@ impl Walk for Census<'_> {
             GoExpression::Address(inner) if target_root(inner) == Some(self.local) => {
                 self.refused = true;
             }
-            GoExpression::Unary { operator: "&", operand }
-                if target_root(operand) == Some(self.local) =>
-            {
-                self.refused = true;
-            }
             GoExpression::Function { parameters, body, .. } => {
                 parameters.iter().for_each(|(name, _)| self.refused |= name == self.local);
                 let outside = std::mem::replace(&mut self.in_literal, true);
@@ -715,10 +710,13 @@ fn is_pure(value: &GoExpression) -> bool {
             only_writes_text(function) && arguments.iter().all(is_pure)
         }
         GoExpression::Binary { operator, left, right } => {
-            !matches!(*operator, "/" | "%") && is_pure(left) && is_pure(right)
+            !operator.is_division() && is_pure(left) && is_pure(right)
         }
         GoExpression::Unary { operator, operand } => {
-            matches!(*operator, "-" | "!" | "^" | "+") && is_pure(operand)
+            matches!(
+                *operator,
+                GoUnaryOperator::Negate | GoUnaryOperator::Not | GoUnaryOperator::Complement
+            ) && is_pure(operand)
         }
         _ => false,
     }

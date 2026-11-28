@@ -12,7 +12,7 @@ use crate::monomorphic::{
 };
 use crate::monotype::Monotype;
 use crate::purity::is_trivial;
-use crate::syntax::{GoCase, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 const INLINING_DEPTH: usize = 4;
 
@@ -98,8 +98,10 @@ where
             }
             Placement::InPlace => {
                 let array = self.hoist(array, "array", out);
-                let elements =
-                    GoExpression::Unary { operator: "*", operand: Box::new(array.clone()) };
+                let elements = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(array.clone()),
+                };
                 (array, elements)
             }
         };
@@ -155,8 +157,10 @@ where
             Placement::Copied => Ok(call(sort, vec![array, key])),
             Placement::InPlace => {
                 let array = self.hoist(array, "array", out);
-                let elements =
-                    GoExpression::Unary { operator: "*", operand: Box::new(array.clone()) };
+                let elements = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(array.clone()),
+                };
                 let sorted = call(sort, vec![elements.clone(), key]);
                 let copied = call(identifier_expression("copy"), vec![elements, sorted]);
                 out.push(GoStatement::Expression(copied));
@@ -318,8 +322,8 @@ where
             then: vec![GoStatement::Return(Some(GoExpression::Integer(sign)))],
             otherwise: vec![],
         };
-        body.push(decided("<", -1));
-        body.push(decided(">", 1));
+        body.push(decided(GoBinaryOperator::LessThan, -1));
+        body.push(decided(GoBinaryOperator::GreaterThan, 1));
         body.push(GoStatement::Return(Some(GoExpression::Integer(0))));
         Ok(())
     }

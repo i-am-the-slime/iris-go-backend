@@ -4,7 +4,7 @@ use super::Analysis;
 use crate::emit::intervals::constraints::{State, kind_of_type};
 use crate::emit::intervals::syntax::is_bounds_test;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     /// Rewrites the statement at `position` by what the state proves. True when the block
@@ -73,7 +73,8 @@ impl Analysis<'_, '_, '_> {
     /// Drops each inert conjunct of `a && b && ...` that the state and the conjuncts before
     /// it prove.
     fn drop_proven_conjuncts(&mut self, condition: &mut GoExpression, state: &State) {
-        if !matches!(condition, GoExpression::Binary { operator: "&&", .. }) {
+        if !matches!(condition, GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, .. })
+        {
             return;
         }
         let original = condition.clone();
@@ -100,7 +101,7 @@ impl Analysis<'_, '_, '_> {
         *condition = kept
             .into_iter()
             .reduce(|left, right| GoExpression::Binary {
-                operator: "&&",
+                operator: GoBinaryOperator::LogicalAnd,
                 left: Box::new(left),
                 right: Box::new(right),
             })
@@ -125,23 +126,27 @@ impl Analysis<'_, '_, '_> {
             GoExpression::Identifier(_) | GoExpression::Integer(_) | GoExpression::Boolean(_) => {
                 true
             }
-            GoExpression::Unary { operator: "!" | "-", operand } => self.is_inert(operand, state),
+            GoExpression::Unary {
+                operator: GoUnaryOperator::Not | GoUnaryOperator::Negate,
+                operand,
+            } => self.is_inert(operand, state),
             GoExpression::Binary { operator, left, right } => {
                 matches!(
                     *operator,
-                    "&&" | "||"
-                        | "<"
-                        | "<="
-                        | ">"
-                        | ">="
-                        | "=="
-                        | "!="
-                        | "+"
-                        | "-"
-                        | "*"
-                        | "&"
-                        | "|"
-                        | "^"
+                    GoBinaryOperator::LogicalAnd
+                        | GoBinaryOperator::LogicalOr
+                        | GoBinaryOperator::LessThan
+                        | GoBinaryOperator::LessThanOrEqual
+                        | GoBinaryOperator::GreaterThan
+                        | GoBinaryOperator::GreaterThanOrEqual
+                        | GoBinaryOperator::Equal
+                        | GoBinaryOperator::NotEqual
+                        | GoBinaryOperator::Add
+                        | GoBinaryOperator::Subtract
+                        | GoBinaryOperator::Multiply
+                        | GoBinaryOperator::BitwiseAnd
+                        | GoBinaryOperator::BitwiseOr
+                        | GoBinaryOperator::BitwiseXor
                 ) && self.is_inert(left, state)
                     && self.is_inert(right, state)
             }
@@ -153,16 +158,18 @@ impl Analysis<'_, '_, '_> {
                     && arguments.len() == 1
                     && match &arguments[0] {
                         GoExpression::Identifier(_) | GoExpression::String(_) => true,
-                        GoExpression::Unary { operator: "*", operand } => match &**operand {
-                            GoExpression::Identifier(name) => {
-                                self.lookup(name).is_some_and(|symbol| {
-                                    self.bindings[&symbol]
-                                        .length
-                                        .is_some_and(|length| state.mentions(length))
-                                })
+                        GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } => {
+                            match &**operand {
+                                GoExpression::Identifier(name) => {
+                                    self.lookup(name).is_some_and(|symbol| {
+                                        self.bindings[&symbol]
+                                            .length
+                                            .is_some_and(|length| state.mentions(length))
+                                    })
+                                }
+                                _ => false,
                             }
-                            _ => false,
-                        },
+                        }
                         _ => false,
                     }
             }
@@ -173,7 +180,7 @@ impl Analysis<'_, '_, '_> {
 
 fn flatten_conjuncts(condition: GoExpression, into: &mut Vec<GoExpression>) {
     match condition {
-        GoExpression::Binary { operator: "&&", left, right } => {
+        GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {
             flatten_conjuncts(*left, into);
             flatten_conjuncts(*right, into);
         }

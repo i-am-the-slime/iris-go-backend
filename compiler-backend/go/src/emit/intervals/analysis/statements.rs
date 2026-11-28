@@ -6,7 +6,7 @@ use super::{Analysis, Frame};
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO, kind_of_type};
 use crate::emit::intervals::names::shape_of_type;
 use crate::emit::intervals::syntax::{is_bounds_test, is_test};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoExpression, GoStatement, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn block(&mut self, body: &mut Vec<GoStatement>, state: &mut State) {
@@ -251,7 +251,8 @@ impl Analysis<'_, '_, '_> {
             return true;
         }
         if let GoStatement::Assign { targets, values } = statement
-            && let [GoExpression::Unary { operator: "*", .. }] = targets.as_slice()
+            && let [GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. }] =
+                targets.as_slice()
         {
             // A store of the slice itself is interpreted by `assign`; its value may still call.
             let mut values: Vec<GoStatement> =
@@ -333,7 +334,7 @@ impl Analysis<'_, '_, '_> {
                         stored.push((symbol, computed));
                     }
                 }
-                GoExpression::Unary { operator: "*", operand } => {
+                GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } => {
                     let pointer = match &**operand {
                         GoExpression::Identifier(name) => self.lookup(name),
                         _ => None,

@@ -15,7 +15,7 @@ use crate::foreign::{GoFunction, GoPackage};
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType};
 use smol_str::SmolStr;
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -141,7 +141,11 @@ where
             }
             HashMapOperation::IsEmpty => {
                 let table = self.value(&arguments[0], out)?;
-                binary("==", method(table, "Len", vec![]), GoExpression::Integer(0))
+                binary(
+                    GoBinaryOperator::Equal,
+                    method(table, "Len", vec![]),
+                    GoExpression::Integer(0),
+                )
             }
             HashMapOperation::SortedEntries => {
                 let table = self.value(&arguments[0], out)?;

@@ -11,7 +11,7 @@ use crate::foreign::{Foreign, GoFunction, GoPackage, Operator};
 use crate::go_traversal;
 use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Literal};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -171,7 +171,11 @@ where
     ) {
         let index = self.temporary("index");
         let mut body = vec![GoStatement::If {
-            condition: binary(">", identifier_expression(&index), GoExpression::Integer(0)),
+            condition: binary(
+                GoBinaryOperator::GreaterThan,
+                identifier_expression(&index),
+                GoExpression::Integer(0),
+            ),
             then: vec![self.constant_append(buffer, ",")],
             otherwise: vec![],
         }];

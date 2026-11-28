@@ -6,7 +6,7 @@ use crate::error::GoResult;
 use crate::foreign::{Boundary, GoFunction, GoPackage, Spelled};
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -157,7 +157,10 @@ where
                 let value = self.shared(value, "nullable", out);
                 let converted = self.temporary("converted");
                 let mut present = vec![];
-                let inner = GoExpression::Unary { operator: "*", operand: Box::new(value.clone()) };
+                let inner = GoExpression::Unary {
+                    operator: GoUnaryOperator::Dereference,
+                    operand: Box::new(value.clone()),
+                };
                 let inner =
                     self.convert_convention(inner, element, direction, crossing, &mut present)?;
                 let inner = self.shared(inner, "present", &mut present);
@@ -171,7 +174,11 @@ where
                     value: None,
                 });
                 out.push(GoStatement::If {
-                    condition: binary("!=", value, identifier_expression("nil")),
+                    condition: binary(
+                        GoBinaryOperator::NotEqual,
+                        value,
+                        identifier_expression("nil"),
+                    ),
                     then: present,
                     otherwise: vec![],
                 });

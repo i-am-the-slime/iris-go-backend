@@ -3,7 +3,7 @@ use crate::emit::fallible::survey::read_side;
 use crate::emit::fallible::{Conversion, LEFT, converter, failure_test_of, nil, values};
 use crate::emit::{call, identifier_expression};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement};
 
 impl Rewrite<'_> {
     /// The split local whose tag the scrutinee reads.
@@ -162,7 +162,7 @@ impl Rewrite<'_> {
                 }
                 GoExpression::Field { value: Box::new(self.expression(*value)), name }
             }
-            GoExpression::Binary { operator, left, right } if matches!(operator, "==" | "!=") => {
+            GoExpression::Binary { operator, left, right } if operator.is_equality() => {
                 if let Some(test) = self.failure_test(operator, &left, &right) {
                     return test;
                 }
@@ -222,7 +222,7 @@ impl Rewrite<'_> {
     /// `local.Tag == tag` of a split local, as a test of its failure.
     fn failure_test(
         &self,
-        operator: &str,
+        operator: GoBinaryOperator,
         left: &GoExpression,
         right: &GoExpression,
     ) -> Option<GoExpression> {
@@ -232,7 +232,7 @@ impl Rewrite<'_> {
         };
         let shape = &self.shapes[&field.shape];
         let is_left = shape.is_left_tag(tag)?;
-        let failed = (operator == "==") == is_left;
+        let failed = (operator == GoBinaryOperator::Equal) == is_left;
         Some(failure_test_of(&field.failure, failed))
     }
 }

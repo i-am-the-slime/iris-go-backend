@@ -401,13 +401,9 @@ fn written_names(
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
-            match value {
-                GoExpression::Address(place)
-                | GoExpression::Unary { operator: "&", operand: place } => {
-                    let place = place.as_ref().clone();
-                    self.place(&place, false);
-                }
-                _ => {}
+            if let GoExpression::Address(place) = value {
+                let place = place.as_ref().clone();
+                self.place(&place, false);
             }
             go_traversal::expression(self, value);
         }

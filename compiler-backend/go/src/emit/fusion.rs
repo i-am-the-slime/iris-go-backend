@@ -49,7 +49,7 @@ use crate::monomorphic::{
 };
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
-use crate::syntax::{GoExpression, GoStatement, SourceLine};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoUnaryOperator, SourceLine};
 
 /// The most elements of a literal prefix stored in one assignment.
 const PREFIX_ON_ONE_LINE: usize = 4;
@@ -943,7 +943,8 @@ where
                             GoStatement::Define { names: vec![element], values: vec![indexed] },
                         );
                     }
-                    let last = binary("-", length(array), GoExpression::Integer(1));
+                    let last =
+                        binary(GoBinaryOperator::Subtract, length(array), GoExpression::Integer(1));
                     GoStatement::CountingDown { variable: index, start: last, body }
                 }
                 Header::Stepping { index, element, steps, order } => {
@@ -957,7 +958,11 @@ where
                         (Order::Backward, Some(variable)) => {
                             let start = match steps.count {
                                 GoExpression::Integer(count) => GoExpression::Integer(count - 1),
-                                count => binary("-", count, GoExpression::Integer(1)),
+                                count => binary(
+                                    GoBinaryOperator::Subtract,
+                                    count,
+                                    GoExpression::Integer(1),
+                                ),
                             };
                             GoStatement::CountingDown { variable, start, body }
                         }
@@ -1167,7 +1172,9 @@ where
         let plus = |count: &GoExpression, more: usize| match (more, count) {
             (0, count) => count.clone(),
             (more, GoExpression::Integer(count)) => GoExpression::Integer(count + more as i64),
-            (more, count) => binary("+", count.clone(), GoExpression::Integer(more as i64)),
+            (more, count) => {
+                binary(GoBinaryOperator::Add, count.clone(), GoExpression::Integer(more as i64))
+            }
         };
         let allocation = match &known {
             Some(count) => {
@@ -1208,7 +1215,7 @@ where
                 let slot = match offset {
                     0 => identifier_expression(index),
                     offset => binary(
-                        "+",
+                        GoBinaryOperator::Add,
                         identifier_expression(index),
                         GoExpression::Integer(offset as i64),
                     ),
@@ -1284,7 +1291,11 @@ where
         let mut opened = opened?;
         opened.body.body().push(GoStatement::Assign {
             targets: vec![identifier_expression(&count)],
-            values: vec![binary("+", identifier_expression(&count), GoExpression::Integer(1))],
+            values: vec![binary(
+                GoBinaryOperator::Add,
+                identifier_expression(&count),
+                GoExpression::Integer(1),
+            )],
         });
         let statement = self.close(opened.body);
         out.push(statement);
@@ -1351,12 +1362,14 @@ fn stepped_value(steps: &Steps, index: &str) -> GoExpression {
     let position = identifier_expression(index);
     let offset = match steps.step {
         GoExpression::Integer(1) => position,
-        GoExpression::Integer(-1) => return binary("-", steps.first.clone(), position),
-        _ => binary("*", position, steps.step.clone()),
+        GoExpression::Integer(-1) => {
+            return binary(GoBinaryOperator::Subtract, steps.first.clone(), position);
+        }
+        _ => binary(GoBinaryOperator::Multiply, position, steps.step.clone()),
     };
     match steps.first {
         GoExpression::Integer(0) => offset,
-        _ => binary("+", steps.first.clone(), offset),
+        _ => binary(GoBinaryOperator::Add, steps.first.clone(), offset),
     }
 }
 
@@ -1382,7 +1395,7 @@ fn is_settled(value: &GoExpression) -> bool {
         | GoExpression::String(_)
         | GoExpression::Rune(_)
         | GoExpression::Boolean(_) => true,
-        GoExpression::Unary { operator: "-", operand } => is_settled(operand),
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => is_settled(operand),
         GoExpression::Composite { fields, .. } => fields.iter().all(|(_, field)| is_settled(field)),
         _ => false,
     }

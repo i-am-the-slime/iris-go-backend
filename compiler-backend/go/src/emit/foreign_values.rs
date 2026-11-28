@@ -8,7 +8,7 @@ use crate::error::{GoError, GoResult};
 use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, GoPackage, Operator};
 use crate::monomorphic::{Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoCase, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -248,7 +248,7 @@ where
                     vec![single, slice_of(&elements, Some(index), None)]
                 }
                 None => {
-                    let next = binary("+", index, GoExpression::Integer(1));
+                    let next = binary(GoBinaryOperator::Add, index, GoExpression::Integer(1));
                     vec![slice_of(&elements, Some(next), None)]
                 }
             };
@@ -267,7 +267,10 @@ where
             let flag = identifier_expression(&copied);
             self.copied_flags.insert(copied);
             out.push(GoStatement::If {
-                condition: GoExpression::Unary { operator: "!", operand: Box::new(flag.clone()) },
+                condition: GoExpression::Unary {
+                    operator: GoUnaryOperator::Not,
+                    operand: Box::new(flag.clone()),
+                },
                 then: vec![
                     GoStatement::Assign { targets: vec![target.clone()], values: vec![fresh] },
                     GoStatement::Assign {
@@ -281,7 +284,7 @@ where
         let written = match value {
             Some(value) => self.slices("Insert", vec![target.clone(), index, value]),
             None => {
-                let next = binary("+", index.clone(), GoExpression::Integer(1));
+                let next = binary(GoBinaryOperator::Add, index.clone(), GoExpression::Integer(1));
                 self.slices("Delete", vec![target.clone(), index, next])
             }
         };
@@ -300,7 +303,7 @@ where
         let elements = self.value(array, out)?;
         let elements = self.hoist(elements, "elements", out);
         let length = call(identifier_expression("len"), vec![elements.clone()]);
-        let shortened = binary("-", length, GoExpression::Integer(dropped));
+        let shortened = binary(GoBinaryOperator::Subtract, length, GoExpression::Integer(dropped));
         let end = call(identifier_expression("max"), vec![shortened, GoExpression::Integer(0)]);
         Ok(self.slices("Clip", vec![slice_of(&elements, None, Some(end))]))
     }
@@ -310,7 +313,10 @@ where
         let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
         let flag = identifier_expression(copied);
         GoStatement::If {
-            condition: GoExpression::Unary { operator: "!", operand: Box::new(flag.clone()) },
+            condition: GoExpression::Unary {
+                operator: GoUnaryOperator::Not,
+                operand: Box::new(flag.clone()),
+            },
             then: vec![
                 GoStatement::Assign {
                     targets: vec![target.clone()],
@@ -399,18 +405,25 @@ where
         self.imports.insert("math".into());
         let math =
             |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
-        let whole = binary("==", call(math("Trunc"), vec![number.clone()]), number.clone());
+        let whole = binary(
+            GoBinaryOperator::Equal,
+            call(math("Trunc"), vec![number.clone()]),
+            number.clone(),
+        );
         let condition = binary(
-            "&&",
+            GoBinaryOperator::LogicalAnd,
             whole,
             binary(
-                "&&",
-                binary(">=", number.clone(), math("MinInt")),
+                GoBinaryOperator::LogicalAnd,
+                binary(GoBinaryOperator::GreaterThanOrEqual, number.clone(), math("MinInt")),
                 // `-math.MinInt`, 2^63, is a float64 exactly, where math.MaxInt rounds up to it.
                 binary(
-                    "<",
+                    GoBinaryOperator::LessThan,
                     number,
-                    GoExpression::Unary { operator: "-", operand: Box::new(math("MinInt")) },
+                    GoExpression::Unary {
+                        operator: GoUnaryOperator::Negate,
+                        operand: Box::new(math("MinInt")),
+                    },
                 ),
             ),
         );

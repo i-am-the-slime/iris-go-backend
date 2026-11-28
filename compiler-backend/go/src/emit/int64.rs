@@ -8,7 +8,7 @@
 use super::{Emitter, binary, negated};
 use crate::foreign::{Comparison, GoFunction, GoPackage};
 use crate::primitives::{Int64Operation, Int64Value, Signedness};
-use crate::syntax::{GoExpression, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoType, GoUnaryOperator};
 
 impl<'p, Q> Emitter<'p, '_, '_, Q>
 where
@@ -40,33 +40,40 @@ where
         }
         let count = |amount: GoExpression| match long_constant(&amount) {
             Some(amount) => GoExpression::Integer(amount & 63),
-            None => binary("&", amount, GoExpression::Integer(63)),
+            None => binary(GoBinaryOperator::BitwiseAnd, amount, GoExpression::Integer(63)),
         };
         match operation {
             Operation::Constant(bits) => long_literal(bits, signedness),
             Operation::FromInt | Operation::Convert => typed(long, values.remove(0)),
             Operation::IsUnsigned => GoExpression::Boolean(signedness == Signedness::Unsigned),
-            Operation::Add => arithmetic("+", values),
-            Operation::Subtract => arithmetic("-", values),
-            Operation::Multiply => arithmetic("*", values),
+            Operation::Add => arithmetic(GoBinaryOperator::Add, values),
+            Operation::Subtract => arithmetic(GoBinaryOperator::Subtract, values),
+            Operation::Multiply => arithmetic(GoBinaryOperator::Multiply, values),
             Operation::Quotient | Operation::Remainder => self.division(operation, values),
-            Operation::And => arithmetic("&", values),
-            Operation::Or => arithmetic("|", values),
-            Operation::Xor => arithmetic("^", values),
+            Operation::And => arithmetic(GoBinaryOperator::BitwiseAnd, values),
+            Operation::Or => arithmetic(GoBinaryOperator::BitwiseOr, values),
+            Operation::Xor => arithmetic(GoBinaryOperator::BitwiseXor, values),
             Operation::Negate => negated(values.remove(0)),
-            Operation::Not => {
-                GoExpression::Unary { operator: "^", operand: Box::new(values.remove(0)) }
-            }
+            Operation::Not => GoExpression::Unary {
+                operator: GoUnaryOperator::Complement,
+                operand: Box::new(values.remove(0)),
+            },
             Operation::ShiftLeft => {
                 let amount = count(values.remove(1));
-                binary("<<", values.remove(0), amount)
+                binary(GoBinaryOperator::ShiftLeft, values.remove(0), amount)
             }
             Operation::ShiftRight => {
                 let amount = count(values.remove(1));
                 match signedness {
-                    Signedness::Signed => binary(">>", values.remove(0), amount),
+                    Signedness::Signed => {
+                        binary(GoBinaryOperator::ShiftRight, values.remove(0), amount)
+                    }
                     Signedness::Unsigned => {
-                        let shifted = binary(">>", typed("int64", values.remove(0)), amount);
+                        let shifted = binary(
+                            GoBinaryOperator::ShiftRight,
+                            typed("int64", values.remove(0)),
+                            amount,
+                        );
                         typed("uint64", shifted)
                     }
                 }
@@ -75,25 +82,43 @@ where
                 let amount = count(values.remove(1));
                 match signedness {
                     Signedness::Signed => {
-                        let shifted = binary(">>", typed("uint64", values.remove(0)), amount);
+                        let shifted = binary(
+                            GoBinaryOperator::ShiftRight,
+                            typed("uint64", values.remove(0)),
+                            amount,
+                        );
                         typed("int64", shifted)
                     }
-                    Signedness::Unsigned => binary(">>", values.remove(0), amount),
+                    Signedness::Unsigned => {
+                        binary(GoBinaryOperator::ShiftRight, values.remove(0), amount)
+                    }
                 }
             }
-            Operation::Compare(comparison) => arithmetic(comparison_symbol(comparison), values),
-            Operation::IsZero => binary("==", values.remove(0), GoExpression::Integer(0)),
+            Operation::Compare(comparison) => arithmetic(comparison_operator(comparison), values),
+            Operation::IsZero => {
+                binary(GoBinaryOperator::Equal, values.remove(0), GoExpression::Integer(0))
+            }
             Operation::IsEven | Operation::IsOdd => {
-                let low = binary("&", values.remove(0), GoExpression::Integer(1));
+                let low = binary(
+                    GoBinaryOperator::BitwiseAnd,
+                    values.remove(0),
+                    GoExpression::Integer(1),
+                );
                 let parity = i64::from(operation == Operation::IsOdd);
-                binary("==", low, GoExpression::Integer(parity))
+                binary(GoBinaryOperator::Equal, low, GoExpression::Integer(parity))
             }
             Operation::IsNegative => match signedness {
-                Signedness::Signed => binary("<", values.remove(0), GoExpression::Integer(0)),
+                Signedness::Signed => {
+                    binary(GoBinaryOperator::LessThan, values.remove(0), GoExpression::Integer(0))
+                }
                 Signedness::Unsigned => GoExpression::Boolean(false),
             },
             Operation::IsPositive => match signedness {
-                Signedness::Signed => binary(">=", values.remove(0), GoExpression::Integer(0)),
+                Signedness::Signed => binary(
+                    GoBinaryOperator::GreaterThanOrEqual,
+                    values.remove(0),
+                    GoExpression::Integer(0),
+                ),
                 Signedness::Unsigned => GoExpression::Boolean(true),
             },
             // long.js's toInt is the low 32 bits, sign and all.
@@ -106,7 +131,11 @@ where
                 value: Box::new(values.remove(0)),
             },
             Operation::HighBits { unsigned } => {
-                let high = binary(">>", values.remove(0), GoExpression::Integer(32));
+                let high = binary(
+                    GoBinaryOperator::ShiftRight,
+                    values.remove(0),
+                    GoExpression::Integer(32),
+                );
                 let half = typed(if unsigned { "uint32" } else { "int32" }, high);
                 GoExpression::Conversion { type_: GoType::Float64, value: Box::new(half) }
             }
@@ -138,8 +167,8 @@ where
     /// for zero as long.js does.
     fn division(&mut self, operation: Int64Operation, values: Vec<GoExpression>) -> GoExpression {
         let (operator, runtime) = match operation {
-            Int64Operation::Quotient => ("/", "Divide_"),
-            _ => ("%", "Modulo_"),
+            Int64Operation::Quotient => (GoBinaryOperator::Divide, "Divide_"),
+            _ => (GoBinaryOperator::Remainder, "Modulo_"),
         };
         if long_constant(&values[1]).is_some_and(|divisor| divisor != 0) {
             return arithmetic(operator, values);
@@ -151,7 +180,7 @@ where
 
 /// A binary operator on a Long and a Long, or a Long and a constant, whose
 /// constant Go gives the other operand's type.
-fn arithmetic(operator: &'static str, mut values: Vec<GoExpression>) -> GoExpression {
+fn arithmetic(operator: GoBinaryOperator, mut values: Vec<GoExpression>) -> GoExpression {
     let right = values.pop().expect("invariant violated: binary operator arity");
     let left = values.pop().expect("invariant violated: binary operator arity");
     let (left, right) = match (long_constant(&left).is_some(), long_constant(&right).is_some()) {
@@ -162,14 +191,18 @@ fn arithmetic(operator: &'static str, mut values: Vec<GoExpression>) -> GoExpres
     binary(operator, left, right)
 }
 
-fn comparison_symbol(comparison: Comparison) -> &'static str {
+fn comparison_operator(comparison: Comparison) -> GoBinaryOperator {
     match comparison {
-        Comparison::Equal => "==",
-        Comparison::NotEqual => "!=",
-        Comparison::LessThan => "<",
-        Comparison::LessThanOrEqual => "<=",
-        Comparison::GreaterThan | Comparison::GreaterThanOrUnordered => ">",
-        Comparison::GreaterThanOrEqual | Comparison::GreaterThanOrEqualOrUnordered => ">=",
+        Comparison::Equal => GoBinaryOperator::Equal,
+        Comparison::NotEqual => GoBinaryOperator::NotEqual,
+        Comparison::LessThan => GoBinaryOperator::LessThan,
+        Comparison::LessThanOrEqual => GoBinaryOperator::LessThanOrEqual,
+        Comparison::GreaterThan | Comparison::GreaterThanOrUnordered => {
+            GoBinaryOperator::GreaterThan
+        }
+        Comparison::GreaterThanOrEqual | Comparison::GreaterThanOrEqualOrUnordered => {
+            GoBinaryOperator::GreaterThanOrEqual
+        }
     }
 }
 
@@ -218,10 +251,12 @@ fn untyped(expression: GoExpression) -> GoExpression {
 fn int_value(expression: &GoExpression) -> Option<i64> {
     match expression {
         GoExpression::Integer(value) => Some(*value),
-        GoExpression::Unary { operator: "-", operand } => match operand.as_ref() {
-            GoExpression::Integer(value) => value.checked_neg(),
-            _ => None,
-        },
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => {
+            match operand.as_ref() {
+                GoExpression::Integer(value) => value.checked_neg(),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }

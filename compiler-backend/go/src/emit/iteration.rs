@@ -12,7 +12,7 @@ use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Guarded, Local, LocalId, Pattern, PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType};
 
 pub(super) enum Callback<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
@@ -1051,7 +1051,9 @@ fn bound_capacity(callback: &Callback<'_>, pipeline: &Pipeline<'_>) -> Option<Go
     Some(match (most, known) {
         (most, GoExpression::Integer(count)) => GoExpression::Integer(count * most as i64),
         (1, known) => known,
-        (most, known) => binary("*", GoExpression::Integer(most as i64), known),
+        (most, known) => {
+            binary(GoBinaryOperator::Multiply, GoExpression::Integer(most as i64), known)
+        }
     })
 }
 

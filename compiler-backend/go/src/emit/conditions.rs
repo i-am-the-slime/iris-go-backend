@@ -1,5 +1,7 @@
 use crate::go_traversal;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 pub(super) fn assign_conditions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -67,8 +69,8 @@ fn defined_condition(variable: &GoStatement, chain: &GoStatement) -> Option<GoSt
             // The test is pure, so a branch that gives what the rest gives can go.
             (true, GoExpression::Boolean(true)) => GoExpression::Boolean(true),
             (false, GoExpression::Boolean(false)) => GoExpression::Boolean(false),
-            (true, rest) => chained("||", condition.clone(), rest),
-            (false, rest) => chained("&&", negated(condition), rest),
+            (true, rest) => chained(GoBinaryOperator::LogicalOr, condition.clone(), rest),
+            (false, rest) => chained(GoBinaryOperator::LogicalAnd, negated(condition), rest),
         };
     }
     Some(GoStatement::Define { names: vec![name.clone()], values: vec![value] })
@@ -101,18 +103,29 @@ pub(super) fn is_pure(expression: &GoExpression) -> bool {
 
 pub(super) fn negated(condition: &GoExpression) -> GoExpression {
     match condition {
-        GoExpression::Binary { operator: "==", left, right } => {
-            GoExpression::Binary { operator: "!=", left: left.clone(), right: right.clone() }
+        GoExpression::Binary { operator: GoBinaryOperator::Equal, left, right } => {
+            GoExpression::Binary {
+                operator: GoBinaryOperator::NotEqual,
+                left: left.clone(),
+                right: right.clone(),
+            }
         }
-        GoExpression::Binary { operator: "!=", left, right } => {
-            GoExpression::Binary { operator: "==", left: left.clone(), right: right.clone() }
+        GoExpression::Binary { operator: GoBinaryOperator::NotEqual, left, right } => {
+            GoExpression::Binary {
+                operator: GoBinaryOperator::Equal,
+                left: left.clone(),
+                right: right.clone(),
+            }
         }
-        GoExpression::Unary { operator: "!", operand } => (**operand).clone(),
-        _ => GoExpression::Unary { operator: "!", operand: Box::new(condition.clone()) },
+        GoExpression::Unary { operator: GoUnaryOperator::Not, operand } => (**operand).clone(),
+        _ => GoExpression::Unary {
+            operator: GoUnaryOperator::Not,
+            operand: Box::new(condition.clone()),
+        },
     }
 }
 
-fn chained(operator: &'static str, first: GoExpression, rest: GoExpression) -> GoExpression {
+fn chained(operator: GoBinaryOperator, first: GoExpression, rest: GoExpression) -> GoExpression {
     match rest {
         GoExpression::Binary { operator: inner, left, right } if inner == operator => {
             binary(operator, chained(operator, first, *left), *right)
@@ -121,6 +134,6 @@ fn chained(operator: &'static str, first: GoExpression, rest: GoExpression) -> G
     }
 }
 
-fn binary(operator: &'static str, left: GoExpression, right: GoExpression) -> GoExpression {
+fn binary(operator: GoBinaryOperator, left: GoExpression, right: GoExpression) -> GoExpression {
     GoExpression::Binary { operator, left: Box::new(left), right: Box::new(right) }
 }

@@ -5,7 +5,7 @@ use super::syntax::{each_subexpression, is_bounds_test, is_test};
 use super::written_field;
 use crate::emit::{aliases, headers};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Shape {
@@ -130,7 +130,10 @@ fn relevant_names(body: &mut Vec<GoStatement>, fields: &FxHashSet<String>) -> Fx
                 GoStatement::Assign { targets, values } => {
                     for (target, value) in targets.iter().zip(values.iter()) {
                         let target = match target {
-                            GoExpression::Unary { operator: "*", operand } => &**operand,
+                            GoExpression::Unary {
+                                operator: GoUnaryOperator::Dereference,
+                                operand,
+                            } => &**operand,
                             target => target,
                         };
                         if let GoExpression::Identifier(name) = target {
@@ -222,7 +225,8 @@ fn shape_of_expression(
 ) -> Option<Shape> {
     match value {
         GoExpression::Identifier(name) => shapes.get(name).copied(),
-        GoExpression::Unary { operator: "*", operand } => match &**operand {
+        GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } => match &**operand
+        {
             GoExpression::Identifier(name) if shapes.get(name) == Some(&Shape::Pointer) => {
                 Some(Shape::Fixed)
             }
@@ -294,7 +298,10 @@ impl Walk for Collect<'_> {
                             self.copies.push((name.clone(), source.clone(), false));
                             None
                         }
-                        Some(GoExpression::Unary { operator: "*", operand }) => {
+                        Some(GoExpression::Unary {
+                            operator: GoUnaryOperator::Dereference,
+                            operand,
+                        }) => {
                             if let GoExpression::Identifier(source) = &**operand {
                                 self.copies.push((name.clone(), source.clone(), true));
                             }
@@ -357,7 +364,10 @@ impl Walk for Collect<'_> {
                         let evidence = match (argument, shape_of_type(type_)) {
                             (GoExpression::Identifier(name), Some(shape)) => Some((name, shape)),
                             (
-                                GoExpression::Unary { operator: "*", operand },
+                                GoExpression::Unary {
+                                    operator: GoUnaryOperator::Dereference,
+                                    operand,
+                                },
                                 Some(Shape::Fixed),
                             ) => match &**operand {
                                 GoExpression::Identifier(name) => Some((name, Shape::Pointer)),
@@ -370,8 +380,9 @@ impl Walk for Collect<'_> {
                         }
                     }
                     if callee == "len"
-                        && let [GoExpression::Unary { operator: "*", operand }] =
-                            arguments.as_slice()
+                        && let [
+                            GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand },
+                        ] = arguments.as_slice()
                         && let GoExpression::Identifier(pointer) = &**operand
                     {
                         self.measured_through_pointers.insert(pointer.clone());
@@ -379,7 +390,8 @@ impl Walk for Collect<'_> {
                 }
             }
             GoExpression::Index { value: indexed, .. } => {
-                if let GoExpression::Unary { operator: "*", operand } = &**indexed
+                if let GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } =
+                    &**indexed
                     && let GoExpression::Identifier(pointer) = &**operand
                 {
                     self.measured_through_pointers.insert(pointer.clone());

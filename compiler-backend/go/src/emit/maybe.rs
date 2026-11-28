@@ -11,7 +11,9 @@ use crate::monomorphic::{Literal, Pattern, PatternKind};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::identifier;
 use crate::primitives::{KnownType, known_type};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, StructField};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, StructField,
+};
 use files::FileId;
 
 #[derive(Clone, Debug)]
@@ -133,7 +135,7 @@ where
             return None;
         };
         let constant = if *value { true_ } else { false_ };
-        Some(binary("==", path, identifier_expression(constant)))
+        Some(binary(GoBinaryOperator::Equal, path, identifier_expression(constant)))
     }
 
     pub(super) fn maybe_layout(
@@ -179,8 +181,11 @@ where
                     line: None,
                     member_lines: vec![],
                 });
-                let outside_runes =
-                    binary("<<", GoExpression::Integer(1), GoExpression::Integer(32));
+                let outside_runes = binary(
+                    GoBinaryOperator::ShiftLeft,
+                    GoExpression::Integer(1),
+                    GoExpression::Integer(32),
+                );
                 self.type_declarations.push(GoDeclaration::Constant {
                     name: nothing.clone(),
                     type_: Some(GoType::Named(name.clone())),
@@ -463,8 +468,10 @@ where
             None | Some(MaybeLayout::Struct { .. }) => {
                 let tag = identifier_expression(&layout.constructors[constructor].tag);
                 return match layout.kind {
-                    DataKind::Enumeration => Some(binary("==", path, tag)),
-                    DataKind::Tagged => Some(binary("==", field(path, "Tag"), tag)),
+                    DataKind::Enumeration => Some(binary(GoBinaryOperator::Equal, path, tag)),
+                    DataKind::Tagged => {
+                        Some(binary(GoBinaryOperator::Equal, field(path, "Tag"), tag))
+                    }
                     DataKind::Product => None,
                     DataKind::Sentinel => Some(self.sentinel_test(layout, constructor, path)),
                 };
@@ -474,7 +481,11 @@ where
             }
             Some(MaybeLayout::Pointer { .. }) => identifier_expression("nil"),
         };
-        Some(binary(if is_just { "!=" } else { "==" }, path, absent))
+        Some(binary(
+            if is_just { GoBinaryOperator::NotEqual } else { GoBinaryOperator::Equal },
+            path,
+            absent,
+        ))
     }
 
     /// A nullary constructor of a `Sentinel` type is its shared cell; the constructor with fields
@@ -493,14 +504,14 @@ where
         };
         let this = &layout.constructors[constructor];
         if this.fields.is_empty() {
-            return binary("==", path, shared(&this.tag));
+            return binary(GoBinaryOperator::Equal, path, shared(&this.tag));
         }
         layout
             .constructors
             .iter()
             .filter(|other| other.fields.is_empty())
-            .map(|other| binary("!=", path.clone(), shared(&other.tag)))
-            .reduce(|left, right| binary("&&", left, right))
+            .map(|other| binary(GoBinaryOperator::NotEqual, path.clone(), shared(&other.tag)))
+            .reduce(|left, right| binary(GoBinaryOperator::LogicalAnd, left, right))
             .unwrap_or(GoExpression::Boolean(true))
     }
 
@@ -519,7 +530,7 @@ where
                 GoExpression::Conversion { type_: GoType::Rune, value: Box::new(path) }
             }
             Some(MaybeLayout::Boolean { true_, .. }) => {
-                binary("==", path, identifier_expression(true_))
+                binary(GoBinaryOperator::Equal, path, identifier_expression(true_))
             }
             Some(MaybeLayout::Pointer { .. }) => path,
         }

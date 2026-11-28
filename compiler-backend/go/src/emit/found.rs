@@ -23,7 +23,7 @@ use crate::foreign::{Foreign, MaybeConstructors};
 use crate::monomorphic::{Alternative, Expression, ExpressionKind, Guarded, Local, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::identifier;
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoExpression, GoStatement, GoUnaryOperator};
 
 /// The alternative a case over a found call takes for `Just` or for `Nothing`, with the local it
 /// binds the `Just`'s field to.
@@ -123,7 +123,7 @@ where
             self.sink(absent.body, mode, Sink::Assign(name.clone()), &mut fallback)?;
             lines::attribute_branch(line.as_ref(), 0, &mut fallback);
             let missing = GoExpression::Unary {
-                operator: "!",
+                operator: GoUnaryOperator::Not,
                 operand: Box::new(identifier_expression(&found)),
             };
             out.push(GoStatement::If { condition: missing, then: fallback, otherwise: vec![] });
@@ -148,7 +148,10 @@ where
         let found = identifier_expression(&found);
         out.push(match then.iter().all(|statement| matches!(statement, GoStatement::Line(_))) {
             true => GoStatement::If {
-                condition: GoExpression::Unary { operator: "!", operand: Box::new(found) },
+                condition: GoExpression::Unary {
+                    operator: GoUnaryOperator::Not,
+                    operand: Box::new(found),
+                },
                 then: otherwise,
                 otherwise: vec![],
             },

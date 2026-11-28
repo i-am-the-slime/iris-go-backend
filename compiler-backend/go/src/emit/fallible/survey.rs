@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::syntax::{joined_results, terminates};
 use super::{EitherShape, values};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoExpression, GoStatement, GoType, Name};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, Name};
 
 /// What the survey of a declaration learns about a local holding an `Either`.
 pub(super) struct Candidate {
@@ -186,7 +186,9 @@ impl<'s> Survey<'s> {
     /// whole condition does.
     fn leading_tag_test(&self, condition: &GoExpression) -> Option<(String, bool)> {
         match condition.unattributed() {
-            GoExpression::Binary { operator: "&&", left, .. } => self.leading_tag_test(left),
+            GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, .. } => {
+                self.leading_tag_test(left)
+            }
             condition => self.tag_test(condition),
         }
     }
@@ -485,7 +487,7 @@ impl<'s> Survey<'s> {
         let GoExpression::Binary { operator, left, right } = condition.unattributed() else {
             return None;
         };
-        if !matches!(*operator, "==" | "!=") {
+        if !operator.is_equality() {
             return None;
         }
         let (local, tag) = match self.tagged(left) {
@@ -493,7 +495,7 @@ impl<'s> Survey<'s> {
             None => (self.tagged(right)?, left),
         };
         let is_left = self.shapes[&self.candidates[&local].shape].is_left_tag(tag)?;
-        Some((local, (*operator == "==") == is_left))
+        Some((local, (*operator == GoBinaryOperator::Equal) == is_left))
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -560,7 +562,7 @@ impl<'s> Survey<'s> {
                     }
                 }
             }
-            GoExpression::Binary { operator: "&&", left, right }
+            GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right }
                 if let Some((local, side)) = self.leading_tag_test(left) =>
             {
                 self.expression(left);

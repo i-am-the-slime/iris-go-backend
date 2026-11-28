@@ -12,7 +12,9 @@
 //! nothing may change the two answers after; the Maybe then goes.
 
 use crate::go_traversal::{self, each_block_in_declaration};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 use super::aliases::{mentions, writes};
 
@@ -105,14 +107,14 @@ fn answer_read(expression: &GoExpression, packed: &Packed) -> Option<GoExpressio
     let is_maybe = |value: &GoExpression| matches!(value, GoExpression::Identifier(name) if *name == packed.maybe);
     match expression {
         GoExpression::Binary { operator, left, right }
-            if (*operator == "!=" || *operator == "==")
-                && is_maybe(left)
-                && **right == packed.nothing =>
+            if operator.is_equality() && is_maybe(left) && **right == packed.nothing =>
         {
             let found = GoExpression::Identifier(packed.found.clone());
             Some(match *operator {
-                "!=" => found,
-                _ => GoExpression::Unary { operator: "!", operand: Box::new(found) },
+                GoBinaryOperator::NotEqual => found,
+                _ => {
+                    GoExpression::Unary { operator: GoUnaryOperator::Not, operand: Box::new(found) }
+                }
             })
         }
         GoExpression::Conversion { type_, value }

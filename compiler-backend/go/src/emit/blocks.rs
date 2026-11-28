@@ -33,7 +33,9 @@ use rustc_hash::FxHashSet;
 
 use crate::go_traversal::{self, Walk};
 use crate::naming::{lower_first, numbered};
-use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    DeclarationNames, GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType,
+};
 
 /// The fewest cells of one type in one expression that are allocated together.
 const MINIMUM_CELLS: usize = 3;
@@ -107,7 +109,11 @@ impl Walk for Function<'_> {
             return self.allocate_together(value, type_);
         }
         match value {
-            GoExpression::Binary { operator: "&&" | "||", left, right } => {
+            GoExpression::Binary {
+                operator: GoBinaryOperator::LogicalAnd | GoBinaryOperator::LogicalOr,
+                left,
+                right,
+            } => {
                 self.expression(left);
                 let always = std::mem::replace(&mut self.always, false);
                 self.expression(right);

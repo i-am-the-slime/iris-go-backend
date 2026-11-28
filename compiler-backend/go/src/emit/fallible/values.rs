@@ -18,7 +18,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::EitherShape;
 use super::variants::Variants;
 use crate::foreign::{ForeignPackages, ForeignShape};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 /// The head of `§call:E(f, x)`, a call of a function value that returns two results.
 pub(super) const CALL_MARK: &str = "§call:";
@@ -925,7 +925,9 @@ impl<'t> Typer<'t> {
             GoExpression::Unary { operator, operand } => {
                 let operand = self.expression(operand, false);
                 match (*operator, operand) {
-                    ("*", Ty::Known(GoType::Pointer(inner))) => Ty::Known(*inner),
+                    (GoUnaryOperator::Dereference, Ty::Known(GoType::Pointer(inner))) => {
+                        Ty::Known(*inner)
+                    }
                     _ => Ty::unknown(),
                 }
             }

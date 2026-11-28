@@ -15,7 +15,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{is_simple, is_untyped_constant, path_root};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 pub(super) fn reduce_immediate_calls(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -167,9 +167,11 @@ fn evaluated(expression: &GoExpression) -> (Vec<&GoExpression>, bool) {
             (std::iter::once(function.as_ref()).chain(arguments).collect(), true)
         }
         GoExpression::Binary { operator, left, right } => {
-            (vec![left, right], matches!(*operator, "/" | "%"))
+            (vec![left, right], operator.is_division())
         }
-        GoExpression::Unary { operator, operand } => (vec![operand], *operator == "*"),
+        GoExpression::Unary { operator, operand } => {
+            (vec![operand], *operator == GoUnaryOperator::Dereference)
+        }
         GoExpression::Index { value, index } => (vec![value, index], true),
         GoExpression::TypeAssertion { value, .. } => (vec![value], true),
         GoExpression::Field { value, .. }

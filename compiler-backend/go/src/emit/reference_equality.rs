@@ -17,7 +17,9 @@ use crate::blocker::{Blocker, Blockers};
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monomorphic::Expression;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, StructField};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, StructField,
+};
 
 /// Go's predeclared comparable types that the backend names.
 pub(super) const BASIC_TYPES: &[&str] = &[
@@ -80,7 +82,7 @@ where
             | GoType::Rune
             | GoType::String
             | GoType::EmptyStruct
-            | GoType::Pointer(_) => binary("==", left, right),
+            | GoType::Pointer(_) => binary(GoBinaryOperator::Equal, left, right),
             GoType::Function { .. } => self.support("SameFunc", left, right),
             GoType::Slice(_) => self.support("SameSlice", left, right),
             GoType::Any
@@ -90,7 +92,7 @@ where
             | GoType::Results(_) => self.support("SameAny", left, right),
             GoType::Struct(fields) => self.same_fields(fields, left, right, out),
             GoType::Named(name) if BASIC_TYPES.contains(&name.as_str()) => {
-                binary("==", left, right)
+                binary(GoBinaryOperator::Equal, left, right)
             }
             GoType::Named(name) => match self.declared_type(name) {
                 Some(GoType::Struct(fields)) => self.same_fields(&fields, left, right, out),
@@ -110,7 +112,7 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoExpression {
         if fields.iter().all(|struct_field| self.comparable(&struct_field.type_)) {
-            return binary("==", left, right);
+            return binary(GoBinaryOperator::Equal, left, right);
         }
         let left = self.shared(left, "left", out);
         let right = self.shared(right, "right", out);
@@ -125,7 +127,7 @@ where
         let mut conjunction = self.same(&type_, first_left, first_right, out);
         for (type_, field_left, field_right) in rest {
             let comparison = self.same(&type_, field_left, field_right, out);
-            conjunction = binary("&&", conjunction, comparison);
+            conjunction = binary(GoBinaryOperator::LogicalAnd, conjunction, comparison);
         }
         conjunction
     }

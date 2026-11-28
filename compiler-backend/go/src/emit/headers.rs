@@ -30,7 +30,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::aliases::target_root;
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 /// The Go functions, as `(package, name)`, that the emitted code calls to run
 /// an effect: those of performed foreigns and of effectful constructs.
@@ -413,7 +415,7 @@ fn each_nested_block(statement: &mut GoStatement, mut visit: impl FnMut(&mut Vec
 fn dereferenced(statement: &mut GoStatement) -> Vec<String> {
     let mut found = vec![];
     go_traversal::each_expression_in_statement(statement, |expression| {
-        if let GoExpression::Unary { operator: "*", operand } = expression
+        if let GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } = expression
             && let GoExpression::Identifier(name) = &**operand
             && !found.contains(name)
         {
@@ -535,13 +537,16 @@ impl Test<'_, '_> {
 /// `index >= 0 && int(index) < len(elements)`, or its upper half alone.
 pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
     let below = |value: &GoExpression| {
-        matches!(value, GoExpression::Binary { operator: "<", right, .. }
+        matches!(value, GoExpression::Binary { operator: GoBinaryOperator::LessThan, right, .. }
             if matches!(&**right, GoExpression::Call { function, .. }
                 if matches!(&**function, GoExpression::Identifier(name) if name == "len")))
     };
     match test {
-        GoExpression::Binary { operator: "&&", left, right } => {
-            matches!(&**left, GoExpression::Binary { operator: ">=", .. }) && below(right)
+        GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {
+            matches!(
+                &**left,
+                GoExpression::Binary { operator: GoBinaryOperator::GreaterThanOrEqual, .. }
+            ) && below(right)
         }
         test => below(test),
     }
@@ -652,7 +657,10 @@ fn has_dereference(value: &GoExpression) -> bool {
     go_traversal::each_expression_in_statement(
         &mut GoStatement::Expression(value.clone()),
         |expression| {
-            found |= matches!(expression, GoExpression::Unary { operator: "*", .. });
+            found |= matches!(
+                expression,
+                GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. }
+            );
         },
     );
     found
@@ -664,9 +672,12 @@ fn writes_through_pointer(body: &mut [GoStatement]) -> bool {
     impl Walk for Writes {
         fn statement(&mut self, statement: &mut GoStatement) {
             if let GoStatement::Assign { targets, .. } = statement {
-                self.0 |= targets
-                    .iter()
-                    .any(|target| matches!(target, GoExpression::Unary { operator: "*", .. }));
+                self.0 |= targets.iter().any(|target| {
+                    matches!(
+                        target,
+                        GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. }
+                    )
+                });
             }
             go_traversal::statement(self, statement);
         }
@@ -718,12 +729,12 @@ fn replace_dereferences(body: &mut [GoStatement], array: &str, elements: &str) {
 }
 
 fn is_dereference(value: &GoExpression, array: &str) -> bool {
-    matches!(value, GoExpression::Unary { operator: "*", operand }
+    matches!(value, GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand }
         if matches!(&**operand, GoExpression::Identifier(name) if name == array))
 }
 
 fn dereference(value: GoExpression) -> GoExpression {
-    GoExpression::Unary { operator: "*", operand: Box::new(value) }
+    GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand: Box::new(value) }
 }
 
 pub(super) fn fresh(base: &str, names: &mut FxHashSet<String>) -> String {

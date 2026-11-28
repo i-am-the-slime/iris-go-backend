@@ -5,7 +5,7 @@ use crate::emit::intervals::constraints::{Kind, State, Typing, Value, kind_of_ty
 use crate::emit::intervals::names::{Shape, shape_of_type};
 use crate::emit::intervals::program::{Entry, Place};
 use crate::emit::intervals::{site_of, written_field};
-use crate::syntax::GoExpression;
+use crate::syntax::{GoBinaryOperator, GoExpression, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn visit(&mut self, value: &mut GoExpression, state: &mut State) {
@@ -49,7 +49,11 @@ impl Analysis<'_, '_, '_> {
                 && arguments.len() == 2
                 && self.natural_division(&arguments[0], &arguments[1], state)
             {
-                let operator = if name == "IntMod" { "%" } else { "/" };
+                let operator = if name == "IntMod" {
+                    GoBinaryOperator::Remainder
+                } else {
+                    GoBinaryOperator::Divide
+                };
                 let mut arguments = std::mem::take(arguments);
                 let right = arguments.pop().expect("a divisor");
                 let left = arguments.pop().expect("a dividend");
@@ -62,7 +66,9 @@ impl Analysis<'_, '_, '_> {
     pub(super) fn visit_target(&mut self, target: &mut GoExpression, state: &mut State) {
         match target {
             GoExpression::Identifier(_) => {}
-            GoExpression::Unary { operator: "*", operand } => self.visit_target(operand, state),
+            GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand } => {
+                self.visit_target(operand, state)
+            }
             _ => self.visit(target, state),
         }
     }
@@ -155,7 +161,7 @@ impl Analysis<'_, '_, '_> {
                 Some(Shape::Pointer) => match argument {
                     GoExpression::Identifier(_) => {
                         let dereferenced = GoExpression::Unary {
-                            operator: "*",
+                            operator: GoUnaryOperator::Dereference,
                             operand: Box::new(argument.clone()),
                         };
                         self.length(&dereferenced, &mut scratch)

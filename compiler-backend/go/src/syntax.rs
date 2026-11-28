@@ -2,10 +2,12 @@
 
 mod directives;
 mod names;
+mod operators;
 mod printer;
 pub mod tokens;
 
 pub use names::{DeclarationNames, Name, Reference, statements_names};
+pub use operators::{GoBinaryOperator, GoUnaryOperator};
 pub use printer::{GoFile, GoImport};
 
 use std::sync::Arc;
@@ -100,12 +102,12 @@ pub enum GoExpression {
         arguments: Vec<GoExpression>,
     },
     Binary {
-        operator: &'static str,
+        operator: GoBinaryOperator,
         left: Box<GoExpression>,
         right: Box<GoExpression>,
     },
     Unary {
-        operator: &'static str,
+        operator: GoUnaryOperator,
         operand: Box<GoExpression>,
     },
     Field {

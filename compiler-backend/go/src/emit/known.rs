@@ -9,7 +9,10 @@ use rustc_hash::FxHashSet;
 
 use super::conditions::{is_pure, negated};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, Name, statements_names};
+use crate::syntax::{
+    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoUnaryOperator, Name,
+    statements_names,
+};
 
 pub(super) fn drop_known_tests(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -75,7 +78,7 @@ fn decided(condition: &mut GoExpression, facts: &[GoExpression]) -> Decision {
         *condition = open
             .into_iter()
             .reduce(|left, right| GoExpression::Binary {
-                operator: "&&",
+                operator: GoBinaryOperator::LogicalAnd,
                 left: Box::new(left),
                 right: Box::new(right),
             })
@@ -166,14 +169,14 @@ fn leaves(block: &[GoStatement]) -> bool {
 }
 
 fn conjuncts(condition: &GoExpression) -> Vec<GoExpression> {
-    split(condition, "&&")
+    split(condition, GoBinaryOperator::LogicalAnd)
 }
 
 fn disjuncts(condition: &GoExpression) -> Vec<GoExpression> {
-    split(condition, "||")
+    split(condition, GoBinaryOperator::LogicalOr)
 }
 
-fn split(condition: &GoExpression, operator: &str) -> Vec<GoExpression> {
+fn split(condition: &GoExpression, operator: GoBinaryOperator) -> Vec<GoExpression> {
     match condition {
         GoExpression::Binary { operator: found, left, right } if *found == operator => {
             let mut parts = split(left, operator);
@@ -207,7 +210,7 @@ fn mentions_any(fact: &GoExpression, names: &FxHashSet<String>) -> bool {
 fn reads_memory(fact: &GoExpression) -> bool {
     match fact {
         GoExpression::Field { .. } | GoExpression::Index { .. } => true,
-        GoExpression::Unary { operator: "*", .. } => true,
+        GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => true,
         GoExpression::Binary { left, right, .. } => reads_memory(left) || reads_memory(right),
         GoExpression::Unary { operand: value, .. }
         | GoExpression::Conversion { value, .. }

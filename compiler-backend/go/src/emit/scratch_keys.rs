@@ -2,7 +2,7 @@ use rustc_hash::FxHashSet;
 
 use super::aliases::mentions;
 use super::{call, identifier_expression};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 const SCRATCH: &str = "scratch";
 
@@ -132,7 +132,7 @@ fn lookup_of(statement: &mut GoStatement, key: &str) -> Option<String> {
 fn tests(statement: &GoStatement, found: &str) -> bool {
     let GoStatement::If { condition, .. } = statement else { return false };
     let condition = match condition.unattributed() {
-        GoExpression::Unary { operator: "!", operand } => operand.unattributed(),
+        GoExpression::Unary { operator: GoUnaryOperator::Not, operand } => operand.unattributed(),
         condition => condition,
     };
     matches!(condition, GoExpression::Identifier(name) if name == found)

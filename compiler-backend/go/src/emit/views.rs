@@ -18,7 +18,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::mutable::in_bounds;
 use super::{binary, call, identifier_expression};
-use crate::syntax::{GoExpression, GoStatement, GoType, Name, statements_names};
+use crate::syntax::{
+    GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator, Name, statements_names,
+};
 
 use crate::go_traversal::{each_block, each_expression_in_statement};
 
@@ -259,7 +261,9 @@ impl ByteReads {
     fn condition(&self, index: &GoExpression) -> GoExpression {
         let within = in_bounds(index, GoExpression::Identifier(self.text.clone()));
         match &self.test {
-            Some(test) => binary("&&", GoExpression::Identifier(test.clone()), within),
+            Some(test) => {
+                binary(GoBinaryOperator::LogicalAnd, GoExpression::Identifier(test.clone()), within)
+            }
             None => within,
         }
     }
@@ -338,7 +342,10 @@ impl ByteReads {
         let found = GoExpression::Identifier(found);
         rewritten.push(match then.is_empty() {
             true => GoStatement::If {
-                condition: GoExpression::Unary { operator: "!", operand: Box::new(found) },
+                condition: GoExpression::Unary {
+                    operator: GoUnaryOperator::Not,
+                    operand: Box::new(found),
+                },
                 then: asked,
                 otherwise: vec![],
             },
@@ -379,11 +386,12 @@ impl Cut {
         let length = || call(identifier_expression("len"), vec![*text()]);
         let (condition, sliced) = match self.kind {
             CutKind::Take(count) => {
-                let positive = binary(">", count.clone(), GoExpression::Integer(0));
-                let within = binary("<=", count.clone(), length());
+                let positive =
+                    binary(GoBinaryOperator::GreaterThan, count.clone(), GoExpression::Integer(0));
+                let within = binary(GoBinaryOperator::LessThanOrEqual, count.clone(), length());
                 let high = Some(Box::new(count));
                 let sliced = GoExpression::Slice { value: text(), low: None, high };
-                (binary("&&", positive, within), sliced)
+                (binary(GoBinaryOperator::LogicalAnd, positive, within), sliced)
             }
             CutKind::Drop(count) => {
                 let condition = in_bounds(&count, *text());
@@ -392,10 +400,18 @@ impl Cut {
                 (condition, sliced)
             }
             CutKind::Slice(begin, end) => {
-                let natural = binary(">=", begin.clone(), GoExpression::Integer(0));
-                let ordered = binary("<=", begin.clone(), end.clone());
-                let within = binary("<=", end.clone(), length());
-                let condition = binary("&&", binary("&&", natural, ordered), within);
+                let natural = binary(
+                    GoBinaryOperator::GreaterThanOrEqual,
+                    begin.clone(),
+                    GoExpression::Integer(0),
+                );
+                let ordered = binary(GoBinaryOperator::LessThanOrEqual, begin.clone(), end.clone());
+                let within = binary(GoBinaryOperator::LessThanOrEqual, end.clone(), length());
+                let condition = binary(
+                    GoBinaryOperator::LogicalAnd,
+                    binary(GoBinaryOperator::LogicalAnd, natural, ordered),
+                    within,
+                );
                 let (low, high) = (Some(Box::new(begin)), Some(Box::new(end)));
                 (condition, GoExpression::Slice { value: text(), low, high })
             }
@@ -455,7 +471,7 @@ fn cut_ascii_text(
             cut_ascii_text(function, view, replace);
             arguments.iter_mut().for_each(|argument| cut_ascii_text(argument, view, replace));
         }
-        GoExpression::Binary { operator, left, .. } if matches!(*operator, "&&" | "||") => {
+        GoExpression::Binary { operator, left, .. } if operator.is_logical() => {
             cut_ascii_text(left, view, replace);
         }
         GoExpression::Binary { left, right, .. } => {
@@ -491,9 +507,12 @@ fn cut_of(value: &GoExpression, view: &str) -> Option<Cut> {
 
 fn is_repeatable_count(value: &GoExpression) -> bool {
     match value {
-        GoExpression::Binary { operator: "+" | "-" | "*", left, right } => {
-            is_repeatable_count(left) && is_repeatable_count(right)
-        }
+        GoExpression::Binary {
+            operator:
+                GoBinaryOperator::Add | GoBinaryOperator::Subtract | GoBinaryOperator::Multiply,
+            left,
+            right,
+        } => is_repeatable_count(left) && is_repeatable_count(right),
         value => is_repeatable(value),
     }
 }

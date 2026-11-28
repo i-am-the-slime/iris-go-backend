@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 
 use super::nil;
 use crate::emit::{call, identifier_expression};
-use crate::syntax::{GoDeclaration, GoExpression, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoType, GoUnaryOperator};
 
 /// The zero values of Go types, for the value a function returns beside a failure.
 pub(super) struct Zeros {
@@ -24,7 +24,7 @@ impl Zeros {
 
     pub(super) fn zero(&self, type_: &GoType) -> GoExpression {
         self.literal(type_, type_, 0).unwrap_or_else(|| GoExpression::Unary {
-            operator: "*",
+            operator: GoUnaryOperator::Dereference,
             operand: Box::new(call(
                 identifier_expression("new"),
                 vec![GoExpression::Type(type_.clone())],

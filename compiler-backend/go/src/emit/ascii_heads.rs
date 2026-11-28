@@ -5,7 +5,9 @@ use super::views::evaluated_first;
 use super::{binary, call, identifier_expression};
 use crate::go_traversal::{self, Walk};
 use crate::naming::numbered;
-use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    DeclarationNames, GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType,
+};
 
 pub fn read_ascii_heads(
     declarations: &mut [GoDeclaration],
@@ -119,7 +121,7 @@ impl Function<'_> {
                 self.replace_heads(function, heads);
                 arguments.iter_mut().for_each(|argument| self.replace_heads(argument, heads));
             }
-            GoExpression::Binary { operator, left, .. } if matches!(*operator, "&&" | "||") => {
+            GoExpression::Binary { operator, left, .. } if operator.is_logical() => {
                 self.replace_heads(left, heads);
             }
             GoExpression::Binary { left, right, .. } => {
@@ -311,12 +313,12 @@ fn ascii_through(text: &str, last: i64) -> GoExpression {
     };
     let bytes = match last {
         0 => byte(0),
-        last => binary("|", byte(0), byte(last)),
+        last => binary(GoBinaryOperator::BitwiseOr, byte(0), byte(last)),
     };
     let length = call(identifier_expression("len"), vec![identifier_expression(text)]);
     binary(
-        "&&",
-        binary(">", length, GoExpression::Integer(last)),
-        binary("<", bytes, GoExpression::Integer(0x80)),
+        GoBinaryOperator::LogicalAnd,
+        binary(GoBinaryOperator::GreaterThan, length, GoExpression::Integer(last)),
+        binary(GoBinaryOperator::LessThan, bytes, GoExpression::Integer(0x80)),
     )
 }

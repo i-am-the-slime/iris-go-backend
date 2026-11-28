@@ -3,7 +3,7 @@ use super::{Emitter, call, identifier_expression, length};
 use crate::error::GoResult;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -31,7 +31,8 @@ where
         let values = self.hoist(values, "values", out);
         let units = self.temporary("units");
         let array_type = self.go_type(monotype)?;
-        let count = binary("*", length(functions.clone()), length(values.clone()));
+        let count =
+            binary(GoBinaryOperator::Multiply, length(functions.clone()), length(values.clone()));
         let made = call(identifier_expression("make"), vec![GoExpression::Type(array_type), count]);
         out.push(GoStatement::Define { names: vec![units.clone()], values: vec![made] });
         let function = self.temporary("function");

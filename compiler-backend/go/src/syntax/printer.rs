@@ -7,7 +7,10 @@ use rayon::prelude::*;
 use super::directives::{
     GO_LINE_PLACEHOLDER, INLINE_DIRECTIVE_MARK, directive, name_go_lines, settle_line_directives,
 };
-use super::{GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, SourceLine, StructField};
+use super::{
+    GoBinaryOperator, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    SourceLine, StructField,
+};
 use crate::foreign::LineCoverage;
 
 impl GoDeclaration {
@@ -388,7 +391,7 @@ impl Printer {
             GoStatement::Assign { targets, values } => {
                 if let ([target], [value]) = (targets.as_slice(), values.as_slice())
                     && let GoExpression::Binary { operator, left, right } = value.unattributed()
-                    && COMPOUND_OPERATORS.contains(operator)
+                    && operator.has_assignment_form()
                     && is_plain_place(target)
                     && same_place(target, left)
                 {
@@ -680,13 +683,13 @@ impl Printer {
                 format!("{function}({})", arguments.join(", "))
             }
             GoExpression::Binary { operator, left, right } => {
-                let precedence = binary_precedence(operator);
+                let precedence = operator.precedence();
                 let parenthesised = precedence < parent_precedence;
                 let depth = if parenthesised { depth.saturating_sub(1).max(1) } else { depth };
                 let blank = precedence < binary_cutoff(expression, depth);
                 let left_depth = match left.unattributed() {
                     GoExpression::Binary { operator, .. }
-                        if binary_precedence(operator) == precedence =>
+                        if operator.precedence() == precedence =>
                     {
                         depth
                     }
@@ -866,7 +869,7 @@ fn walk_binary(expression: &GoExpression) -> (bool, bool, u8) {
     let GoExpression::Binary { operator, left, right } = expression.unattributed() else {
         return (false, false, 0);
     };
-    let precedence = binary_precedence(operator);
+    let precedence = operator.precedence();
     let mut has_sums = precedence == 4;
     let mut has_products = precedence == 5;
     let mut problem = 0;
@@ -877,29 +880,27 @@ fn walk_binary(expression: &GoExpression) -> (bool, bool, u8) {
         problem = problem.max(operand_problem);
     };
     if let GoExpression::Binary { operator: left_operator, .. } = left.unattributed()
-        && binary_precedence(left_operator) >= precedence
+        && left_operator.precedence() >= precedence
     {
         absorb(left);
     }
     match right.unattributed() {
         GoExpression::Binary { operator: right_operator, .. }
-            if binary_precedence(right_operator) > precedence =>
+            if right_operator.precedence() > precedence =>
         {
             absorb(right)
         }
         GoExpression::Unary { operator: unary, .. } => match (*operator, *unary) {
-            ("/", "*") | ("&", "&") | ("&", "^") => problem = 5,
-            ("+", "+") | ("-", "-") => problem = problem.max(4),
+            (GoBinaryOperator::Divide, GoUnaryOperator::Dereference)
+            | (GoBinaryOperator::BitwiseAnd, GoUnaryOperator::Complement) => problem = 5,
+            (GoBinaryOperator::Subtract, GoUnaryOperator::Negate) => problem = problem.max(4),
             _ => {}
         },
-        GoExpression::Address(_) if *operator == "&" => problem = 5,
+        GoExpression::Address(_) if *operator == GoBinaryOperator::BitwiseAnd => problem = 5,
         _ => {}
     }
     (has_sums, has_products, problem)
 }
-
-/// The operators Go has an assignment form of, `x += y` for `x = x + y`.
-const COMPOUND_OPERATORS: [&str; 10] = ["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>"];
 
 /// A variable, or a field or element of one at a constant or variable index: a place whose
 /// address works out the same however often Go evaluates it, so `x = x + y` and `x += y`,
@@ -929,16 +930,6 @@ fn same_place(place: &GoExpression, other: &GoExpression) -> bool {
             GoExpression::Index { value: right, index: right_index },
         ) => same_place(left, right) && same_place(left_index, right_index),
         _ => false,
-    }
-}
-
-fn binary_precedence(operator: &str) -> u8 {
-    match operator {
-        "||" => 1,
-        "&&" => 2,
-        "==" | "!=" | "<" | "<=" | ">" | ">=" => 3,
-        "+" | "-" | "|" | "^" => 4,
-        _ => 5,
     }
 }
 

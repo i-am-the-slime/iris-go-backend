@@ -10,7 +10,9 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names};
+use crate::syntax::{
+    GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator, Name, statements_names,
+};
 
 pub(super) fn reuse_field_reads(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -143,7 +145,9 @@ impl Walk for Stores {
                     GoExpression::Field { name, .. } => {
                         self.fields.insert(name.clone());
                     }
-                    GoExpression::Unary { operator: "*", .. } => self.whole = true,
+                    GoExpression::Unary { operator: GoUnaryOperator::Dereference, .. } => {
+                        self.whole = true
+                    }
                     _ => {}
                 }
             }

@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::naming::{is_vague, lower_first, numbered};
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 pub(super) fn unique(base: String, taken: &mut FxHashSet<String>) -> String {
     numbered(&base, |name| !taken.insert(name.to_string()))
@@ -35,11 +35,18 @@ pub(super) fn field(value: GoExpression, name: &str) -> GoExpression {
 fn costs_nothing(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Binary { operator, left, right } => {
-            !matches!(*operator, "/" | "%" | "<<" | ">>")
-                && costs_nothing(left)
+            !matches!(
+                *operator,
+                GoBinaryOperator::Divide
+                    | GoBinaryOperator::Remainder
+                    | GoBinaryOperator::ShiftLeft
+                    | GoBinaryOperator::ShiftRight
+            ) && costs_nothing(left)
                 && costs_nothing(right)
         }
-        GoExpression::Unary { operator, operand } => *operator != "*" && costs_nothing(operand),
+        GoExpression::Unary { operator, operand } => {
+            *operator != GoUnaryOperator::Dereference && costs_nothing(operand)
+        }
         GoExpression::Field { value, .. } => is_simple(value),
         GoExpression::Qualified { .. } => true,
         expression => is_simple(expression),
@@ -47,7 +54,7 @@ fn costs_nothing(expression: &GoExpression) -> bool {
 }
 
 pub(super) fn binary(
-    operator: &'static str,
+    operator: GoBinaryOperator,
     left: GoExpression,
     right: GoExpression,
 ) -> GoExpression {
@@ -56,8 +63,10 @@ pub(super) fn binary(
 
 pub(super) fn negated(operand: GoExpression) -> GoExpression {
     match operand {
-        GoExpression::Unary { operator: "-", operand } => *operand,
-        operand => GoExpression::Unary { operator: "-", operand: Box::new(operand) },
+        GoExpression::Unary { operator: GoUnaryOperator::Negate, operand } => *operand,
+        operand => {
+            GoExpression::Unary { operator: GoUnaryOperator::Negate, operand: Box::new(operand) }
+        }
     }
 }
 
@@ -79,7 +88,7 @@ pub(super) fn conjunction(tests: Vec<GoExpression>) -> Option<GoExpression> {
             distinct.push(test);
         }
     }
-    distinct.into_iter().reduce(|left, right| binary("&&", left, right))
+    distinct.into_iter().reduce(|left, right| binary(GoBinaryOperator::LogicalAnd, left, right))
 }
 
 pub(super) fn is_simple(expression: &GoExpression) -> bool {

@@ -572,6 +572,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::syntax::GoBinaryOperator;
 
     fn literal(parameter: &str) -> GoExpression {
         GoExpression::Function {
@@ -608,7 +609,7 @@ mod tests {
             parameters: vec![(format!("x{NUMBERED}2"), GoType::Int)],
             result: Some(GoType::Int),
             body: vec![GoStatement::Return(Some(GoExpression::Binary {
-                operator: "+",
+                operator: GoBinaryOperator::Add,
                 left: Box::new(GoExpression::Identifier("x".into())),
                 right: Box::new(GoExpression::Identifier(format!("x{NUMBERED}2"))),
             }))],
