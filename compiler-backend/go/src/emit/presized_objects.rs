@@ -6,20 +6,14 @@
 //! times. Made with room for an entry per element,
 //!
 //! ```go
-//! m := &struct{ Index map[string]int; Ints int; Keys []string; Vals []int }{
-//!     Index: make(map[string]int, len(words)),
-//!     Keys:  make([]string, 0, len(words)),
-//!     Vals:  make([]int, 0, len(words)),
-//! }
+//! m := object.NewWithCapacity[int](len(words))
 //! ```
 //!
 //! it never grows. It is the empty table still: no entries, no array-index keys, and an index
 //! that every operation of the runtime keeps up to date once there is one.
 
 use crate::go_traversal::each_block_in_declaration;
-use crate::syntax::{
-    GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType, StructField,
-};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoPackage, GoStatement, GoType};
 
 pub(super) fn presize_filled_objects(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -78,31 +72,11 @@ fn pokes(statement: &GoStatement, name: &str) -> bool {
 
 /// The empty table with room for an entry per element of `array`.
 fn presized(values: GoType, array: String) -> GoExpression {
-    let length = || GoExpression::Call {
+    let new = GoExpression::qualified(GoPackage::Object, "NewWithCapacity");
+    let new = GoExpression::Instantiation { function: Box::new(new), arguments: vec![values] };
+    let length = GoExpression::Call {
         function: Box::new(GoExpression::builtin(GoBuiltin::Len)),
-        arguments: vec![GoExpression::Identifier(array.clone())],
+        arguments: vec![GoExpression::Identifier(array)],
     };
-    let make = |type_: GoType, sizes: Vec<GoExpression>| {
-        let mut arguments = vec![GoExpression::Type(type_)];
-        arguments.extend(sizes);
-        GoExpression::Call { function: Box::new(GoExpression::builtin(GoBuiltin::Make)), arguments }
-    };
-    let index = GoType::Named("map[string]int".into());
-    let keys = GoType::Slice(Box::new(GoType::String));
-    let vals = GoType::Slice(Box::new(values));
-    let table = GoType::Struct(vec![
-        StructField::new("Index", index.clone()),
-        StructField::new("Ints", GoType::Int),
-        StructField::new("Keys", keys.clone()),
-        StructField::new("Vals", vals.clone()),
-    ]);
-    let zero = || GoExpression::Integer(0);
-    GoExpression::Address(Box::new(GoExpression::Composite {
-        type_: table,
-        fields: vec![
-            (Some("Index".into()), make(index, vec![length()])),
-            (Some("Keys".into()), make(keys, vec![zero(), length()])),
-            (Some("Vals".into()), make(vals, vec![zero(), length()])),
-        ],
-    }))
+    GoExpression::Call { function: Box::new(new), arguments: vec![length] }
 }

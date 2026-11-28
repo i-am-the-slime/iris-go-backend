@@ -120,12 +120,7 @@ func FromFoldable(l []tuple.TupleString) *struct {
 	Keys  []string
 	Vals  []int
 } {
-	object2 := &struct {
-		Index map[string]int
-		Ints  int
-		Keys  []string
-		Vals  []int
-	}{Index: make(map[string]int, len(l)), Keys: make([]string, 0, len(l)), Vals: make([]int, 0, len(l))}
+	object2 := object.NewWithCapacity[int](len(l))
 	for tupleIndex := range l {
 		object.Poke(l[tupleIndex].First, l[tupleIndex].Second, object2)
 	}
