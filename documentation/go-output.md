@@ -37,13 +37,12 @@ gets you one.
 
 Want the Go source in a directory of your own instead? `googoo go out` writes it to `out/`. If
 `out/` has no `go.mod` yet, you get one naming the module `iris.local/<package>`; change the
-`module` line whenever you like, and the next `googoo go out` uses your name. It has no `go.sum`,
-so let Go write one before you build:
+`module` line whenever you like, and the next `googoo go out` uses your name. It comes with its
+`go.sum`, so it builds right away:
 
 ```bash
 googoo go out
 cd out
-go mod tidy
 go build
 ```
 

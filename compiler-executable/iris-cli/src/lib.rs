@@ -23,7 +23,7 @@ pub fn run() -> i32 {
                 eprintln!("{error}");
                 2
             }
-            Ok(cli::GoTarget::Sources(config)) => match iris_go::run(config) {
+            Ok(cli::GoTarget::Sources(config)) => match iris_go::write_module(config) {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("{error}");

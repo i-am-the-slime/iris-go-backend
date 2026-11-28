@@ -116,6 +116,55 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     Ok(())
 }
 
+/// Writes the Go module as [`run`] does, with the `go.sum` that `go build` needs to build it
+/// right away.
+pub fn write_module(config: GoConfig) -> Result<(), String> {
+    let destination = config.destination.clone();
+    run(config)?;
+    require_runtime(&destination)?;
+    record_checksums(&destination);
+    Ok(())
+}
+
+/// Adds the runtime release the generated Go is written against to a `go.mod` of your own that
+/// does not require it, or requires an older one.
+fn require_runtime(destination: &Path) -> Result<(), String> {
+    let go_mod = destination.join("go.mod");
+    let declaration = read_text(&go_mod)?.unwrap_or_default();
+    let runtime = requirements::Requirement {
+        module: program::RUNTIME_MODULE.to_string(),
+        version: RUNTIME_VERSION.to_string(),
+        indirect: false,
+    };
+    let Some(declaration) = requirements::with_requirements(&declaration, &[runtime]) else {
+        return Ok(());
+    };
+    fs::write(&go_mod, declaration)
+        .map_err(|error| format!("could not write {}: {error}", go_mod.display()))
+}
+
+/// Downloads the modules the destination's `go.mod` requires, at the versions it pins, which
+/// records their checksums in `go.sum`. The Go is written either way, so a download that fails
+/// only says what to run.
+fn record_checksums(destination: &Path) {
+    let downloaded = std::process::Command::new("go")
+        .args(["mod", "download", "all"])
+        .current_dir(destination)
+        .output();
+    let reason = match downloaded {
+        Ok(downloaded) if downloaded.status.success() => return,
+        Ok(downloaded) => String::from_utf8_lossy(&downloaded.stderr).trim_end().to_string(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            "`go` is not on PATH".to_string()
+        }
+        Err(error) => format!("could not run `go mod download all`: {error}"),
+    };
+    eprintln!(
+        "go: {} has no go.sum yet, so run `go mod download all` there before `go build`: {reason}",
+        destination.display()
+    );
+}
+
 /// Removes the vector kernel files an earlier compilation wrote beside a package file this one
 /// writes without them, which would otherwise build into the package unused.
 fn remove_stale_kernel_files(destination: &Path, files: &[(String, String)]) -> Result<(), String> {

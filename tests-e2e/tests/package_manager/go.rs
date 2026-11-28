@@ -390,3 +390,23 @@ fn greeting_workspace(greeting_go: &str) -> TestWorkspace {
     workspace.write("src/Greeting.go", greeting_go);
     workspace
 }
+
+#[test]
+fn go_writes_a_module_that_go_builds_right_away() {
+    let workspace = greeting_workspace("package ffi\n\nfunc Greet() int {\n\treturn 0\n}\n");
+    // The published runtime, not a checkout, so that go.sum has to name it.
+    workspace.set_env("IRIS_GO", "");
+
+    let output = workspace.command(&["go", "out"]);
+    assert!(output.status.success(), "{}", workspace.report(&output));
+    let runtime = "github.com/i-am-the-slime/iris-go ";
+    assert!(workspace.read("out/go.sum").contains(runtime), "go.sum names the runtime");
+
+    let built = std::process::Command::new("go")
+        .args(["build", "-o", "greeter", "."])
+        .current_dir(workspace.path().join("out"))
+        .env_remove("IRIS_GO")
+        .output()
+        .unwrap();
+    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+}
