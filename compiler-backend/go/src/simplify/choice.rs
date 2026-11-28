@@ -593,8 +593,10 @@ fn plan(
             return None;
         }
         let size = alternative_size(alternative);
-        let joinable = matches!(alternative.body, Guarded::Unconditional(_))
-            && !binders(&alternative.patterns).is_empty();
+        let joinable = match &alternative.body {
+            Guarded::Unconditional(body) => !is_call(body),
+            Guarded::Guards(_) => false,
+        } && !binders(&alternative.patterns).is_empty();
         if joinable && size > JOIN_SIZE {
             placements.push(Placement::Joined);
         } else {
@@ -651,6 +653,11 @@ fn select(
         }
         _ => false,
     }
+}
+
+fn is_call(body: &Expression) -> bool {
+    let ExpressionKind::Apply { function, .. } = &body.kind else { return false };
+    matches!(function.kind, ExpressionKind::Function(_))
 }
 
 fn alternative_size(alternative: &Alternative) -> usize {
