@@ -17,7 +17,7 @@
 //! slot, found := object.Slot(counts, word)
 //! var count int
 //! if found { count = counts.Vals[slot] + 1 } else { count = 1 }
-//! if found { counts.Vals[slot] = count } else { object.Poke(word, count, counts) }
+//! if found { counts.Vals[slot] = count } else { object.PokeAbsent(word, count, counts) }
 //! ```
 //!
 //! Nothing between the two may mention the object or the key, the value may be read only where
@@ -71,7 +71,7 @@ fn write_once_at(
         unreachable!("invariant violated: the write is a call of Poke")
     };
     let written = arguments[1].clone();
-    let poke = block[write].clone();
+    let poke = poke_absent(&block[write]);
     block[write] = GoStatement::If {
         condition: GoExpression::Identifier(lookup.found.clone()),
         then: vec![GoStatement::Assign { targets: vec![found_value], values: vec![written] }],
@@ -130,6 +130,18 @@ fn poke_after(block: &mut [GoStatement], position: usize, lookup: &Lookup) -> Op
     });
     let read_after = block[write..].iter_mut().any(|statement| mentions(statement, &lookup.value));
     (untouched && !read_after).then_some(write)
+}
+
+fn poke_absent(poke: &GoStatement) -> GoStatement {
+    let GoStatement::Expression(GoExpression::Call { function, arguments }) = poke else {
+        unreachable!("invariant violated: the write is a call of Poke")
+    };
+    let GoExpression::Qualified { package, .. } = function.as_ref() else {
+        unreachable!("invariant violated: Poke is qualified by its package")
+    };
+    let function = GoExpression::Qualified { package: package.clone(), name: "PokeAbsent".into() };
+    let arguments = arguments.clone();
+    GoStatement::Expression(GoExpression::Call { function: Box::new(function), arguments })
 }
 
 fn pokes(statement: &GoStatement, lookup: &Lookup) -> bool {

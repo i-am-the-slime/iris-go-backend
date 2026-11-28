@@ -50,7 +50,7 @@ func initializeMain_() int {
 		if found {
 			object2.Vals[slot] = lookupST
 		} else {
-			object.Poke(k, lookupST, object2)
+			object.PokeAbsent(k, lookupST, object2)
 		}
 	}
 	result, found2 := object.Lookup("7", object2)
