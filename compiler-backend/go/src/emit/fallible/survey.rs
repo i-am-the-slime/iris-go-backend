@@ -1,8 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::EitherShape;
 use super::syntax::{joined_results, terminates};
-use super::values;
+use super::{EitherShape, values};
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoExpression, GoStatement, GoType, Name};
 

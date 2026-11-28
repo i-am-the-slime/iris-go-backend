@@ -1,7 +1,6 @@
 use super::{Rewrite, Split};
 use crate::emit::fallible::survey::read_side;
-use crate::emit::fallible::values;
-use crate::emit::fallible::{Conversion, LEFT, converter, failure_test_of, nil};
+use crate::emit::fallible::{Conversion, LEFT, converter, failure_test_of, nil, values};
 use crate::emit::{call, identifier_expression};
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoExpression, GoStatement};

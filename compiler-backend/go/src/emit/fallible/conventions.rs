@@ -1,9 +1,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::EitherShape;
 use super::survey::{Candidate, Survey, unmark_sides};
 use super::syntax::every_block;
-use super::values;
+use super::{EitherShape, values};
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 
