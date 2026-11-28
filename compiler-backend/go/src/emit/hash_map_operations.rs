@@ -237,7 +237,7 @@ where
         Ok(call(identifier_expression(&function), arguments))
     }
 
-    fn map_key_comparison(
+    pub(super) fn map_key_comparison(
         &mut self,
         key: MonotypeId,
         leaves: &[(Vec<String>, MonotypeId)],
@@ -285,7 +285,10 @@ where
         Ok(name)
     }
 
-    fn key_leaves(&mut self, key: MonotypeId) -> GoResult<Vec<(Vec<String>, MonotypeId)>> {
+    pub(super) fn key_leaves(
+        &mut self,
+        key: MonotypeId,
+    ) -> GoResult<Vec<(Vec<String>, MonotypeId)>> {
         let mut leaves = vec![];
         self.collect_key_leaves(key, &mut vec![], &mut leaves)?;
         Ok(leaves)

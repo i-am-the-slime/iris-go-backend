@@ -31,6 +31,9 @@ where
                 self.go_function(GoFunction { package: GoPackage::Prim, name: "CompareString" });
                 self.support_function("orderedStringMap", STRING_SOURCE)
             }
+            Monotype::Data(_) | Monotype::Record(_) => {
+                self.support_function("orderedKeyMap", KEYED_SOURCE)
+            }
             _ => self.support_function("orderedMap", INTEGER_SOURCE),
         };
         let arguments = vec![self.go_type(key)?, self.go_type(value)?];
@@ -181,7 +184,16 @@ where
         let GoType::Pointer(map) = self.go_type(monotype)? else {
             unreachable!("invariant violated: a map kept in order that is no pointer")
         };
-        Ok(call(identifier_expression("new"), vec![GoExpression::Type(*map)]))
+        let Monotype::OrderedMap(key, _) = *self.monotypes.get(monotype) else {
+            unreachable!("invariant violated: a map kept in order of no ordered map type")
+        };
+        if !matches!(self.monotypes.get(key), Monotype::Data(_) | Monotype::Record(_)) {
+            return Ok(call(identifier_expression("new"), vec![GoExpression::Type(*map)]));
+        }
+        let leaves = self.key_leaves(key)?;
+        let compare = identifier_expression(&self.map_key_comparison(key, &leaves)?);
+        let fields = vec![(Some("Compare".to_string()), compare)];
+        Ok(GoExpression::Address(Box::new(GoExpression::Composite { type_: *map, fields })))
     }
 
     fn hoist_table(&mut self, table: GoExpression, out: &mut Vec<GoStatement>) -> GoExpression {
@@ -272,6 +284,9 @@ fn written(table: &GoExpression, name: &str, arguments: Vec<GoExpression>) -> Go
 }
 macro_rules! ordered_map_source {
     ($constraint:literal, $order:literal) => {
+        ordered_map_source!($constraint, "", $order)
+    };
+    ($constraint:literal, $fields:literal, $order:literal) => {
         concat!(
             "// {name} is a Data.Map that one owner holds along its whole life, as a B-tree that its writes
 // change in place. A node holds up to 15 entries in ascending order of their keys, every node
@@ -284,7 +299,9 @@ type {name}[K ",
 \tsize   int
 \texact  bool
 \tspares []*{name}Node[K, V]
-}
+",
+            $fields,
+            "}
 
 type {name}Node[K ",
             $constraint,
@@ -733,6 +750,35 @@ func (m *{name}[K, V]) less(key K, other K) bool {
 \t\treturn prim.CompareString(string(key), string(other)) < 0
 \t}
 \treturn key < other
+}
+"
+);
+
+const KEYED_SOURCE: &str = ordered_map_source!(
+    "comparable",
+    "\tCompare func(K, K) int
+",
+    "
+// see notes a key the map meets: a record or product key needs nothing.
+func (m *{name}[K, V]) see(key K) {}
+
+// search answers the position of the first key of the node at least the key, and whether it is
+// the key.
+func (m *{name}[K, V]) search(node *{name}Node[K, V], key K) (int, bool) {
+\tlow, high := 0, node.count
+\tfor low < high {
+\t\tmiddle := int(uint(low+high) >> 1)
+\t\tif m.Compare(node.keys[middle], key) < 0 {
+\t\t\tlow = middle + 1
+\t\t} else {
+\t\t\thigh = middle
+\t\t}
+\t}
+\treturn low, low < node.count && node.keys[low] == key
+}
+
+func (m *{name}[K, V]) less(key K, other K) bool {
+\treturn m.Compare(key, other) < 0
 }
 "
 );

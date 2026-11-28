@@ -1,0 +1,4 @@
+160
+3316
+[(Tuple 0 0),(Tuple 1 1),(Tuple 2 2),(Tuple 3 31),(Tuple 5 4),(Tuple 6 15),(Tuple 7 17),(Tuple 8 3),(Tuple 10 24),(Tuple 11 23),(Tuple 12 14),(Tuple 13 28)]
+[(Tuple { row: 10, word: "w2" } 30)]

@@ -808,7 +808,7 @@ where
                 .monotypes
                 .ids()
                 .filter_map(|id| match self.monotypes.get(id) {
-                    Monotype::HashMap(key, _) => Some(*key),
+                    Monotype::HashMap(key, _) | Monotype::OrderedMap(key, _) => Some(*key),
                     _ => None,
                 })
                 .collect();
