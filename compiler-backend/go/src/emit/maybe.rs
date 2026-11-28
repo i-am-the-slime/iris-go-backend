@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::names::{NamePart, PendingSpelling};
 use super::packages::Spelling;
@@ -7,6 +7,7 @@ use super::{
     identifier_expression, is_simple,
 };
 use crate::error::GoResult;
+use crate::go_traversal::{self, Walk};
 use crate::monomorphic::{Literal, Pattern, PatternKind};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::identifier;
@@ -624,4 +625,106 @@ where
             ],
         })
     }
+}
+
+impl<Q> Emitter<'_, '_, '_, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub(super) fn char_nothings(&self) -> FxHashMap<String, String> {
+        let layouts = self.data_layouts.values().filter_map(|layout| match &layout.maybe {
+            Some(MaybeLayout::Char { nothing, .. }) => Some((nothing.clone(), layout.name.clone())),
+            _ => None,
+        });
+        layouts.collect()
+    }
+}
+
+pub(super) fn compare_chars_whole(
+    declarations: &mut [GoDeclaration],
+    nothings: &FxHashMap<String, String>,
+) {
+    if nothings.is_empty() {
+        return;
+    }
+    let mut whole = WholeChars { nothings };
+    for declaration in declarations {
+        go_traversal::declaration(&mut whole, declaration);
+    }
+}
+
+struct WholeChars<'n> {
+    nothings: &'n FxHashMap<String, String>,
+}
+
+impl Walk for WholeChars<'_> {
+    fn expression(&mut self, value: &mut GoExpression) {
+        go_traversal::expression(self, value);
+        if let Some(whole) = self.whole_comparison(value) {
+            *value = whole;
+        }
+    }
+}
+
+impl WholeChars<'_> {
+    fn whole_comparison(&self, value: &GoExpression) -> Option<GoExpression> {
+        let GoExpression::Binary { operator, left, right } = value else { return None };
+        let (presence, payload) = match operator {
+            GoBinaryOperator::LogicalAnd => (GoBinaryOperator::NotEqual, GoBinaryOperator::Equal),
+            GoBinaryOperator::LogicalOr => (GoBinaryOperator::Equal, GoBinaryOperator::NotEqual),
+            _ => return None,
+        };
+        let (before, tested) = match &**left {
+            GoExpression::Binary { operator: inner, left: before, right: tested }
+                if inner == operator =>
+            {
+                (Some(&**before), &**tested)
+            }
+            tested => (None, tested),
+        };
+        let (char, type_name) = self.nothing_test(tested, presence)?;
+        let compared = payload_comparison(right, payload, char)?;
+        let compared = match compared {
+            GoExpression::Rune(_) => compared.clone(),
+            _ => GoExpression::Conversion {
+                type_: GoType::Named(type_name.to_string()),
+                value: Box::new(compared.clone()),
+            },
+        };
+        let whole = binary(payload, char.clone(), compared);
+        Some(match before {
+            Some(before) => binary(*operator, before.clone(), whole),
+            None => whole,
+        })
+    }
+
+    fn nothing_test<'e>(
+        &self,
+        tested: &'e GoExpression,
+        presence: GoBinaryOperator,
+    ) -> Option<(&'e GoExpression, &str)> {
+        let GoExpression::Binary { operator, left, right } = tested else { return None };
+        if *operator != presence {
+            return None;
+        }
+        let GoExpression::Identifier(nothing) = &**right else { return None };
+        let type_name = self.nothings.get(nothing)?;
+        matches!(**left, GoExpression::Identifier(_)).then_some((&**left, type_name.as_str()))
+    }
+}
+
+fn payload_comparison<'e>(
+    comparison: &'e GoExpression,
+    operator: GoBinaryOperator,
+    char: &GoExpression,
+) -> Option<&'e GoExpression> {
+    let GoExpression::Binary { operator: compared, left, right } = comparison else { return None };
+    if *compared != operator {
+        return None;
+    }
+    let is_payload = |side: &GoExpression| matches!(side, GoExpression::Conversion { type_: GoType::Rune, value } if **value == *char);
+    if is_payload(left) && !is_payload(right) {
+        return Some(right);
+    }
+    is_payload(right).then_some(&**left)
 }

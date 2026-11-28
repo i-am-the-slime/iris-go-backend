@@ -12,9 +12,9 @@ use super::{
     cells, chunks, closures, composites, conditions, confined, constant_fields, deduplicate,
     diverging, divisions, equality, forwarders, fresh, groups, guards, hash_maps, headers,
     immediate, index_arrays, inlining, intervals, invariants, joins, known, labelled, lengths,
-    lines, loads, merging, narrow_fields, prepends, presized_objects, probes, ranges, references,
-    reuse, scalars, scratch_keys, sharing, shorthands, swaps, text, unpacked, unreferenced,
-    updates, upsert, vector, wrappers,
+    lines, loads, maybe, merging, narrow_fields, prepends, presized_objects, probes, ranges,
+    references, reuse, scalars, scratch_keys, sharing, shorthands, swaps, text, unpacked,
+    unreferenced, updates, upsert, vector, wrappers,
 };
 use crate::arity::Arities;
 use crate::error::GoResult;
@@ -187,7 +187,7 @@ where
         references::promote_references(declarations);
         composites::take_composites_apart(declarations);
         immediate::reduce_immediate_calls(declarations);
-        conditions::assign_conditions(declarations);
+        conditions::assign_conditions(declarations, conditions::Arms::Literal);
         aliases::substitute_aliases(declarations);
         updates::update_in_place(declarations);
         scalars::split_struct_locals(declarations, &structs);
@@ -274,6 +274,8 @@ where
         constant_fields::read_constant_fields(declarations);
         merging::join_repeated_tests(declarations);
         unpacked::read_found_answers(declarations);
+        conditions::assign_conditions(declarations, conditions::Arms::Valued);
+        maybe::compare_chars_whole(declarations, &self.char_nothings());
         let global_names = &self.global_names;
         let global = |name: &str| global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
         upsert::look_up_and_write_once(declarations, &global);

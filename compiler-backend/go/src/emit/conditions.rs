@@ -3,12 +3,19 @@ use crate::syntax::{
     GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
 };
 
-pub(super) fn assign_conditions(declarations: &mut [GoDeclaration]) {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Arms {
+    Literal,
+    Valued,
+}
+
+pub(super) fn assign_conditions(declarations: &mut [GoDeclaration], arms: Arms) {
     for declaration in declarations {
         go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position + 1 < block.len() {
-                if let Some(define) = defined_condition(&block[position], &block[position + 1]) {
+                let define = defined_condition(&block[position], &block[position + 1], arms);
+                if let Some(define) = define {
                     block.splice(position..position + 2, [define]);
                     test_in_place(block, position);
                 }
@@ -43,7 +50,11 @@ fn test_in_place(block: &mut Vec<GoStatement>, position: usize) {
     }
 }
 
-fn defined_condition(variable: &GoStatement, chain: &GoStatement) -> Option<GoStatement> {
+fn defined_condition(
+    variable: &GoStatement,
+    chain: &GoStatement,
+    allowed: Arms,
+) -> Option<GoStatement> {
     let GoStatement::Variable { name, type_: GoType::Bool, value: None } = variable else {
         return None;
     };
@@ -54,23 +65,41 @@ fn defined_condition(variable: &GoStatement, chain: &GoStatement) -> Option<GoSt
         if !is_pure(condition) {
             return None;
         }
-        let GoExpression::Boolean(literal) = assigned_boolean(name, then)? else { return None };
-        arms.push((condition, literal));
+        arms.push((condition, assigned_boolean(name, then)?));
         match otherwise.as_slice() {
             [] => break GoExpression::Boolean(false),
             [GoStatement::If { .. }] => rest = &otherwise[0],
             _ => break assigned_boolean(name, otherwise)?,
         }
     };
-    for (condition, literal) in arms.into_iter().rev() {
-        value = match (literal, value) {
-            (true, GoExpression::Boolean(false)) => condition.clone(),
-            (false, GoExpression::Boolean(true)) => negated(condition),
+    let valued = arms.iter().any(|(_, assigned)| !matches!(assigned, GoExpression::Boolean(_)));
+    if valued && (allowed == Arms::Literal || arms.len() > 1) {
+        return None;
+    }
+    for (condition, assigned) in arms.into_iter().rev() {
+        value = match (assigned, value) {
+            (GoExpression::Boolean(true), GoExpression::Boolean(false)) => condition.clone(),
+            (GoExpression::Boolean(false), GoExpression::Boolean(true)) => negated(condition),
             // The test is pure, so a branch that gives what the rest gives can go.
-            (true, GoExpression::Boolean(true)) => GoExpression::Boolean(true),
-            (false, GoExpression::Boolean(false)) => GoExpression::Boolean(false),
-            (true, rest) => chained(GoBinaryOperator::LogicalOr, condition.clone(), rest),
-            (false, rest) => chained(GoBinaryOperator::LogicalAnd, negated(condition), rest),
+            (GoExpression::Boolean(true), GoExpression::Boolean(true)) => {
+                GoExpression::Boolean(true)
+            }
+            (GoExpression::Boolean(false), GoExpression::Boolean(false)) => {
+                GoExpression::Boolean(false)
+            }
+            (GoExpression::Boolean(true), rest) => {
+                chained(GoBinaryOperator::LogicalOr, condition.clone(), rest)
+            }
+            (GoExpression::Boolean(false), rest) => {
+                chained(GoBinaryOperator::LogicalAnd, negated(condition), rest)
+            }
+            (assigned, GoExpression::Boolean(false)) => {
+                chained(GoBinaryOperator::LogicalAnd, condition.clone(), assigned)
+            }
+            (assigned, GoExpression::Boolean(true)) => {
+                chained(GoBinaryOperator::LogicalOr, negated(condition), assigned)
+            }
+            _ => return None,
         };
     }
     Some(GoStatement::Define { names: vec![name.clone()], values: vec![value] })

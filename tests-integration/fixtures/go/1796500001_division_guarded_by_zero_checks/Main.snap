@@ -153,14 +153,7 @@ func mainGo2(n int, i int, total int) int {
 		if i >= n {
 			return total
 		}
-		var result2 bool
-		if i <= 2 {
-			result2 = false
-		} else if 100/(i-2) > 3 {
-			result2 = true
-		} else {
-			result2 = 100%(i-2) == 1
-		}
+		result2 := !(i <= 2) && (100/(i-2) > 3 || 100%(i-2) == 1)
 		var result int
 		if result2 {
 			result = 1
