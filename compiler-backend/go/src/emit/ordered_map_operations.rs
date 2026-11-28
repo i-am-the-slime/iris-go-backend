@@ -1,5 +1,8 @@
 //! The Go of the operations on a `Data.Map` kept in order ([`crate::maps`]): a B-tree that the
 //! generated program declares once per key kind, whose writes change it in place and answer it.
+//! A map whose keys come in ascending order, as clocks and sorted input do, is a run of its
+//! entries instead until a key comes out of order, so that its writes and its least and greatest
+//! keys cost no search.
 //!
 //! The map is the only version anyone holds ([`super::hash_maps`] decided so), so the program
 //! cannot tell. It is a pointer, as a Go map is a reference, so that every Go variable holding
@@ -289,9 +292,14 @@ macro_rules! ordered_map_source {
     ($constraint:literal, $fields:literal, $order:literal) => {
         concat!(
             "// {name} is a Data.Map that one owner holds along its whole life, as a B-tree that its writes
-// change in place. A node holds up to 15 entries in ascending order of their keys, every node
-// but the root at least 7, and an inner node one child more than it has entries. The leaves that
+// change in place. A node holds up to 15 entries in ascending order of their keys, every node but
+// the root at least 7, and an inner node one child more than it has entries. The leaves that
 // merges free are kept for the splits to come.
+//
+// A map whose keys came in ascending order until its root leaf is full is a run of its entries
+// instead, while every key it is given is above all those before it, or one it holds: deletes
+// leave holes in the run that keep their keys. The first new key below the greatest, or a key
+// next to which the run cannot answer at once, makes it the B-tree of the run's entries again.
 type {name}[K ",
             $constraint,
             ", V any] struct {
@@ -299,9 +307,31 @@ type {name}[K ",
 \tsize   int
 \texact  bool
 \tspares []*{name}Node[K, V]
+\t// Whether a new key came below the greatest.
+\tdisordered bool
+\trun        *{name}Run[K, V]
 ",
             $fields,
             "}
+
+// {name}Run is the run of a map: every entry before first is a hole, and the last is none.
+// Integer keys that go up one by one, the holes among them filled, are found by how far they are
+// from the first.
+type {name}Run[K ",
+            $constraint,
+            ", V any] struct {
+\tentries []{name}Entry[K, V]
+\tfirst   int
+\tsparse  bool
+}
+
+type {name}Entry[K ",
+            $constraint,
+            ", V any] struct {
+\tkey   K
+\tvalue V
+\tlive  bool
+}
 
 type {name}Node[K ",
             $constraint,
@@ -320,20 +350,27 @@ func (m *{name}[K, V]) Len() int {
 }
 
 func (m *{name}[K, V]) Lookup(key K) (V, bool) {
-\tif m != nil {
-\t\tm.see(key)
-\t\tfor node := m.root; node != nil; {
-\t\t\tat, found := m.search(node, key)
-\t\t\tif found {
-\t\t\t\treturn node.values[at], true
-\t\t\t}
-\t\t\tif node.children == nil {
-\t\t\t\tbreak
-\t\t\t}
-\t\t\tnode = node.children[at]
-\t\t}
-\t}
 \tvar none V
+\tif m == nil {
+\t\treturn none, false
+\t}
+\tm.see(key)
+\tif m.run != nil {
+\t\tif at, found := m.locate(key); found && m.run.entries[at].live {
+\t\t\treturn m.run.entries[at].value, true
+\t\t}
+\t\treturn none, false
+\t}
+\tfor node := m.root; node != nil; {
+\t\tat, found := m.search(node, key)
+\t\tif found {
+\t\t\treturn node.values[at], true
+\t\t}
+\t\tif node.children == nil {
+\t\t\tbreak
+\t\t}
+\t\tnode = node.children[at]
+\t}
 \treturn none, false
 }
 
@@ -349,6 +386,12 @@ func (m *{name}[K, V]) Get(key K) V {
 
 func (m *{name}[K, V]) Insert(key K, value V) {
 \tm.see(key)
+\tif m.run != nil {
+\t\tif m.appended(key, value) {
+\t\t\treturn
+\t\t}
+\t\tm.build()
+\t}
 \tif m.root == nil {
 \t\troot := &{name}Node[K, V]{count: 1}
 \t\troot.keys[0], root.values[0] = key, value
@@ -364,6 +407,88 @@ func (m *{name}[K, V]) Insert(key K, value V) {
 \t}
 }
 
+// appended puts the entry after the run when its key is above all of the run's, or in the place
+// of its key, and answers whether it could.
+func (m *{name}[K, V]) appended(key K, value V) bool {
+\tcount := len(m.run.entries)
+\tif count == 0 || m.less(m.run.entries[count-1].key, key) {
+\t\tm.push(key, value)
+\t\treturn true
+\t}
+\tat, found := m.locate(key)
+\tif !found {
+\t\treturn false
+\t}
+\tentry := &m.run.entries[at]
+\tentry.value = value
+\tif !entry.live {
+\t\tentry.live = true
+\t\tm.size++
+\t\tm.run.first = min(m.run.first, at)
+\t}
+\treturn true
+}
+
+// unroot makes the map the run of its root leaf's entries.
+func (m *{name}[K, V]) unroot() {
+\troot := m.root
+\tm.root, m.size = nil, 0
+\tm.run = &{name}Run[K, V]{entries: make([]{name}Entry[K, V], 0, 32)}
+\tfor at := range root.count {
+\t\tm.push(root.keys[at], root.values[at])
+\t}
+}
+
+// build makes the map the B-tree of the run's entries, as full as it may be.
+func (m *{name}[K, V]) build() {
+\tm.disordered = true
+\tif m.size > 0 {
+\t\theight, most := 0, 15
+\t\tfor most < m.size {
+\t\t\theight, most = height+1, most*16+15
+\t\t}
+\t\tat := m.run.first
+\t\tm.root = m.built(m.size, height, (most-15)/16, &at)
+\t}
+\tm.run = nil
+}
+
+// built answers the node of the next entries of the run, as many as the count, at the height
+// above the leaves, where a node below it holds at most most entries under it.
+func (m *{name}[K, V]) built(count int, height int, most int, at *int) *{name}Node[K, V] {
+\tif height == 0 {
+\t\tnode := &{name}Node[K, V]{count: count}
+\t\tfor position := range count {
+\t\t\tnode.keys[position], node.values[position] = m.taken(at)
+\t\t}
+\t\treturn node
+\t}
+\tchildren := (count + most + 1) / (most + 1)
+\tnode := &{name}Node[K, V]{count: children - 1, children: new([17]*{name}Node[K, V])}
+\teach, more := (count-children+1)/children, (count-children+1)%children
+\tfor child := range children {
+\t\tsize := each
+\t\tif child < more {
+\t\t\tsize++
+\t\t}
+\t\tnode.children[child] = m.built(size, height-1, (most-15)/16, at)
+\t\tif child < children-1 {
+\t\t\tnode.keys[child], node.values[child] = m.taken(at)
+\t\t}
+\t}
+\treturn node
+}
+
+// taken answers the next entry of the run from the position, and moves past it.
+func (m *{name}[K, V]) taken(at *int) (K, V) {
+\tfor !m.run.entries[*at].live {
+\t\t*at++
+\t}
+\tentry := &m.run.entries[*at]
+\t*at++
+\treturn entry.key, entry.value
+}
+
 // insert puts the entry under the node, and answers the middle entry and the node of the
 // entries after it when the node overflowed and was split.
 func (m *{name}[K, V]) insert(node *{name}Node[K, V], key K, value V) (bool, K, V, *{name}Node[K, V]) {
@@ -374,6 +499,10 @@ func (m *{name}[K, V]) insert(node *{name}Node[K, V], key K, value V) (bool, K, 
 \tat, found := count, false
 \tif count == 0 || !m.less(node.keys[count-1], key) {
 \t\tat, found = m.search(node, key)
+\t\t// A new key below the greatest is out of order.
+\t\tif !found && node == m.root {
+\t\t\tm.disordered = true
+\t\t}
 \t}
 \tif found {
 \t\tnode.values[at] = value
@@ -396,6 +525,11 @@ func (m *{name}[K, V]) insert(node *{name}Node[K, V], key K, value V) (bool, K, 
 \tcount++
 \tnode.count = count
 \tif count < 16 {
+\t\treturn false, noKey, noValue, nil
+\t}
+\t// A root leaf filled in order becomes the run instead.
+\tif node == m.root && node.children == nil && !m.disordered {
+\t\tm.unroot()
 \t\treturn false, noKey, noValue, nil
 \t}
 \tright := m.spare(node.children == nil)
@@ -428,10 +562,14 @@ func (m *{name}[K, V]) spare(leaf bool) *{name}Node[K, V] {
 }
 
 func (m *{name}[K, V]) Delete(key K) {
-\tif m == nil || m.root == nil {
+\tif m == nil || m.size == 0 {
 \t\treturn
 \t}
 \tm.see(key)
+\tif m.run != nil {
+\t\tm.hollow(key)
+\t\treturn
+\t}
 \tif !m.delete(m.root, key) {
 \t\treturn
 \t}
@@ -443,6 +581,57 @@ func (m *{name}[K, V]) Delete(key K) {
 \t\t\tm.root = m.root.children[0]
 \t\t}
 \t}
+}
+
+// hollow leaves a hole where the entry of the key was in the run. The holes at its ends go, and
+// so do those within once they outnumber the entries, as the run cannot skip them.
+func (m *{name}[K, V]) hollow(key K) {
+\tat, found := m.locate(key)
+\tif !found || !m.run.entries[at].live {
+\t\treturn
+\t}
+\tvar noValue V
+\tm.run.entries[at].live, m.run.entries[at].value = false, noValue
+\tm.size--
+\tcount := len(m.run.entries)
+\tif m.size == 0 {
+\t\tclear(m.run.entries)
+\t\tm.run.entries, m.run.first, m.run.sparse = m.run.entries[:0], 0, false
+\t\treturn
+\t}
+\tif at == count-1 {
+\t\tfor !m.run.entries[count-1].live {
+\t\t\tcount--
+\t\t}
+\t\tclear(m.run.entries[count:])
+\t\tm.run.entries = m.run.entries[:count]
+\t}
+\tif at == m.run.first {
+\t\tfor !m.run.entries[m.run.first].live {
+\t\t\tm.run.first++
+\t\t}
+\t}
+\tif holes := count - m.run.first - m.size; holes > m.size*m.holesEach()+32 {
+\t\tm.compact()
+\t} else if m.run.first > count/2 && m.run.first >= 32 {
+\t\tcopy(m.run.entries, m.run.entries[m.run.first:])
+\t\tclear(m.run.entries[count-m.run.first:])
+\t\tm.run.entries, m.run.first = m.run.entries[:count-m.run.first], 0
+\t}
+}
+
+// compact moves the run's entries together, its holes gone.
+func (m *{name}[K, V]) compact() {
+\tkept := 0
+\tfor _, entry := range m.run.entries[m.run.first:] {
+\t\tif entry.live {
+\t\t\tm.run.entries[kept] = entry
+\t\t\tkept++
+\t\t}
+\t}
+\tclear(m.run.entries[kept:])
+\tm.run.entries, m.run.first = m.run.entries[:kept], 0
+\tm.run.sparse = true
 }
 
 func (m *{name}[K, V]) delete(node *{name}Node[K, V], key K) bool {
@@ -547,6 +736,10 @@ func (m *{name}[K, V]) refill(node *{name}Node[K, V], at int) {
 }
 
 func (m *{name}[K, V]) Min() (K, V, bool) {
+\tif m != nil && m.run != nil && m.size > 0 {
+\t\tleast := &m.run.entries[m.run.first]
+\t\treturn least.key, least.value, true
+\t}
 \tif m == nil || m.root == nil {
 \t\tvar noKey K
 \t\tvar noValue V
@@ -560,6 +753,10 @@ func (m *{name}[K, V]) Min() (K, V, bool) {
 }
 
 func (m *{name}[K, V]) Max() (K, V, bool) {
+\tif m != nil && m.run != nil && m.size > 0 {
+\t\tgreatest := &m.run.entries[len(m.run.entries)-1]
+\t\treturn greatest.key, greatest.value, true
+\t}
 \tif m == nil || m.root == nil {
 \t\tvar noKey K
 \t\tvar noValue V
@@ -573,15 +770,35 @@ func (m *{name}[K, V]) Max() (K, V, bool) {
 }
 
 // AtMost answers the entry of the greatest key at most the key, or of the greatest key below it
-// when the key itself does not count.
+// when the key itself does not count. The run answers it unless the entry is past a long stretch
+// of holes, which the map becomes the tree for.
 func (m *{name}[K, V]) AtMost(key K, counts bool) (K, V, bool) {
 \tvar bestKey K
 \tvar bestValue V
 \tfound := false
-\tif m == nil {
+\tif m == nil || m.size == 0 {
 \t\treturn bestKey, bestValue, false
 \t}
 \tm.see(key)
+\tif m.run != nil {
+\t\tleast, greatest := &m.run.entries[m.run.first], &m.run.entries[len(m.run.entries)-1]
+\t\tif m.less(greatest.key, key) || counts && greatest.key == key {
+\t\t\treturn greatest.key, greatest.value, true
+\t\t}
+\t\tif m.less(key, least.key) || !counts && least.key == key {
+\t\t\treturn bestKey, bestValue, false
+\t\t}
+\t\tat, hit := m.locate(key)
+\t\tif hit && counts && m.run.entries[at].live {
+\t\t\treturn key, m.run.entries[at].value, true
+\t\t}
+\t\tfor below := at - 1; below >= at-16; below-- {
+\t\t\tif m.run.entries[below].live {
+\t\t\t\treturn m.run.entries[below].key, m.run.entries[below].value, true
+\t\t\t}
+\t\t}
+\t\tm.build()
+\t}
 \tfor node := m.root; node != nil; {
 \t\tat, hit := m.search(node, key)
 \t\tif hit && counts {
@@ -599,15 +816,37 @@ func (m *{name}[K, V]) AtMost(key K, counts bool) (K, V, bool) {
 }
 
 // AtLeast answers the entry of the least key at least the key, or of the least key above it
-// when the key itself does not count.
+// when the key itself does not count, as AtMost does.
 func (m *{name}[K, V]) AtLeast(key K, counts bool) (K, V, bool) {
 \tvar bestKey K
 \tvar bestValue V
 \tfound := false
-\tif m == nil {
+\tif m == nil || m.size == 0 {
 \t\treturn bestKey, bestValue, false
 \t}
 \tm.see(key)
+\tif m.run != nil {
+\t\tleast, greatest := &m.run.entries[m.run.first], &m.run.entries[len(m.run.entries)-1]
+\t\tif m.less(key, least.key) || counts && least.key == key {
+\t\t\treturn least.key, least.value, true
+\t\t}
+\t\tif m.less(greatest.key, key) || !counts && greatest.key == key {
+\t\t\treturn bestKey, bestValue, false
+\t\t}
+\t\tat, hit := m.locate(key)
+\t\tif hit && counts && m.run.entries[at].live {
+\t\t\treturn key, m.run.entries[at].value, true
+\t\t}
+\t\tif hit {
+\t\t\tat++
+\t\t}
+\t\tfor above := at; above < at+16; above++ {
+\t\t\tif m.run.entries[above].live {
+\t\t\t\treturn m.run.entries[above].key, m.run.entries[above].value, true
+\t\t\t}
+\t\t}
+\t\tm.build()
+\t}
 \tfor node := m.root; node != nil; {
 \t\tat, hit := m.search(node, key)
 \t\tif hit {
@@ -631,7 +870,13 @@ func (m *{name}[K, V]) AtLeast(key K, counts bool) (K, V, bool) {
 func (m *{name}[K, V]) Entries() ([]K, []V) {
 \tkeys := make([]K, 0, m.Len())
 \tvalues := make([]V, 0, m.Len())
-\tif m != nil && m.root != nil {
+\tif m != nil && m.run != nil {
+\t\tfor _, entry := range m.run.entries[m.run.first:] {
+\t\t\tif entry.live {
+\t\t\t\tkeys, values = append(keys, entry.key), append(values, entry.value)
+\t\t\t}
+\t\t}
+\t} else if m != nil && m.root != nil {
 \t\tkeys, values = m.root.entries(keys, values)
 \t}
 \treturn keys, values
@@ -654,11 +899,20 @@ func (m *{name}[K, V]) Difference(other *{name}[K, V]) {
 \t\treturn
 \t}
 \tif m == other {
-\t\tm.root, m.size = nil, 0
+\t\tm.root, m.size, m.exact, m.disordered, m.run = nil, 0, false, false, nil
 \t\treturn
 \t}
-\tif other != nil && other.root != nil {
+\tif other == nil || other.size == 0 {
+\t\treturn
+\t}
+\tif other.run == nil {
 \t\tm.deleteKeys(other.root)
+\t\treturn
+\t}
+\tfor _, entry := range other.run.entries[other.run.first:] {
+\t\tif entry.live {
+\t\t\tm.Delete(entry.key)
+\t\t}
 \t}
 }
 
@@ -697,6 +951,60 @@ func (m *{name}[K, V]) search(node *{name}Node[K, V], key K) (int, bool) {
 
 func (m *{name}[K, V]) less(key K, other K) bool {
 \treturn key < other
+}
+
+// locate answers the position in the run of the key, or of the least key above it, and whether
+// it is the key's.
+func (m *{name}[K, V]) locate(key K) (int, bool) {
+\trun := m.run.entries
+\tif !m.run.sparse {
+\t\tif len(run) == 0 || key < run[0].key {
+\t\t\treturn 0, false
+\t\t}
+\t\tat := int(key) - int(run[0].key)
+\t\tif at >= len(run) {
+\t\t\treturn len(run), false
+\t\t}
+\t\treturn at, true
+\t}
+\tlow, high := m.run.first, len(run)
+\tfor low < high {
+\t\tmiddle := int(uint(low+high) >> 1)
+\t\tif run[middle].key < key {
+\t\t\tlow = middle + 1
+\t\t} else {
+\t\t\thigh = middle
+\t\t}
+\t}
+\treturn low, low < len(run) && run[low].key == key
+}
+
+// push puts the entry after the run's. Keys that go up by little have the holes between them
+// filled, so that they stay one apart.
+func (m *{name}[K, V]) push(key K, value V) {
+\tcount := len(m.run.entries)
+\tif count > 0 && !m.run.sparse {
+\t\tlast := m.run.entries[count-1].key
+\t\tgap := int(key) - int(last) - 1
+\t\tif holes := count - m.run.first - m.size; gap > 0 && holes+gap > m.size*m.holesEach()+32 {
+\t\t\tm.run.sparse = true
+\t\t} else {
+\t\t\tfor step := 1; step <= gap; step++ {
+\t\t\t\tm.run.entries = append(m.run.entries, {name}Entry[K, V]{key: last + K(step)})
+\t\t\t}
+\t\t}
+\t}
+\tm.run.entries = append(m.run.entries, {name}Entry[K, V]{key: key, value: value, live: true})
+\tm.size++
+}
+
+// holesEach answers how many holes the run keeps for each entry: those of keys that stay one
+// apart cost no search.
+func (m *{name}[K, V]) holesEach() int {
+\tif m.run.sparse {
+\t\treturn 1
+\t}
+\treturn 4
 }
 "
 );
@@ -751,6 +1059,32 @@ func (m *{name}[K, V]) less(key K, other K) bool {
 \t}
 \treturn key < other
 }
+
+// locate answers the position in the run of the key, or of the least key above it, and whether
+// it is the key's.
+func (m *{name}[K, V]) locate(key K) (int, bool) {
+\trun := m.run.entries
+\tlow, high := m.run.first, len(run)
+\tfor low < high {
+\t\tmiddle := int(uint(low+high) >> 1)
+\t\tif m.less(run[middle].key, key) {
+\t\t\tlow = middle + 1
+\t\t} else {
+\t\t\thigh = middle
+\t\t}
+\t}
+\treturn low, low < len(run) && run[low].key == key
+}
+
+// push puts the entry after the run's.
+func (m *{name}[K, V]) push(key K, value V) {
+\tm.run.entries = append(m.run.entries, {name}Entry[K, V]{key: key, value: value, live: true})
+\tm.size++
+}
+
+func (m *{name}[K, V]) holesEach() int {
+\treturn 1
+}
 "
 );
 
@@ -779,6 +1113,32 @@ func (m *{name}[K, V]) search(node *{name}Node[K, V], key K) (int, bool) {
 
 func (m *{name}[K, V]) less(key K, other K) bool {
 \treturn m.Compare(key, other) < 0
+}
+
+// locate answers the position in the run of the key, or of the least key above it, and whether
+// it is the key's.
+func (m *{name}[K, V]) locate(key K) (int, bool) {
+\trun := m.run.entries
+\tlow, high := m.run.first, len(run)
+\tfor low < high {
+\t\tmiddle := int(uint(low+high) >> 1)
+\t\tif m.less(run[middle].key, key) {
+\t\t\tlow = middle + 1
+\t\t} else {
+\t\t\thigh = middle
+\t\t}
+\t}
+\treturn low, low < len(run) && run[low].key == key
+}
+
+// push puts the entry after the run's.
+func (m *{name}[K, V]) push(key K, value V) {
+\tm.run.entries = append(m.run.entries, {name}Entry[K, V]{key: key, value: value, live: true})
+\tm.size++
+}
+
+func (m *{name}[K, V]) holesEach() int {
+\treturn 1
 }
 "
 );

@@ -78,14 +78,37 @@ func main() {
 package shared
 
 // OrderedMap is a Data.Map that one owner holds along its whole life, as a B-tree that its writes
-// change in place. A node holds up to 15 entries in ascending order of their keys, every node
-// but the root at least 7, and an inner node one child more than it has entries. The leaves that
+// change in place. A node holds up to 15 entries in ascending order of their keys, every node but
+// the root at least 7, and an inner node one child more than it has entries. The leaves that
 // merges free are kept for the splits to come.
+//
+// A map whose keys came in ascending order until its root leaf is full is a run of its entries
+// instead, while every key it is given is above all those before it, or one it holds: deletes
+// leave holes in the run that keep their keys. The first new key below the greatest, or a key
+// next to which the run cannot answer at once, makes it the B-tree of the run's entries again.
 type OrderedMap[K ~int | ~int32, V any] struct {
 	root   *OrderedMapNode[K, V]
 	size   int
 	exact  bool
 	spares []*OrderedMapNode[K, V]
+	// Whether a new key came below the greatest.
+	disordered bool
+	run        *OrderedMapRun[K, V]
+}
+
+// OrderedMapRun is the run of a map: every entry before first is a hole, and the last is none.
+// Integer keys that go up one by one, the holes among them filled, are found by how far they are
+// from the first.
+type OrderedMapRun[K ~int | ~int32, V any] struct {
+	entries []OrderedMapEntry[K, V]
+	first   int
+	sparse  bool
+}
+
+type OrderedMapEntry[K ~int | ~int32, V any] struct {
+	key   K
+	value V
+	live  bool
 }
 
 type OrderedMapNode[K ~int | ~int32, V any] struct {
@@ -103,20 +126,27 @@ func (m *OrderedMap[K, V]) Len() int {
 }
 
 func (m *OrderedMap[K, V]) Lookup(key K) (V, bool) {
-	if m != nil {
-		m.see(key)
-		for node := m.root; node != nil; {
-			at, found := m.search(node, key)
-			if found {
-				return node.values[at], true
-			}
-			if node.children == nil {
-				break
-			}
-			node = node.children[at]
-		}
-	}
 	var none V
+	if m == nil {
+		return none, false
+	}
+	m.see(key)
+	if m.run != nil {
+		if at, found := m.locate(key); found && m.run.entries[at].live {
+			return m.run.entries[at].value, true
+		}
+		return none, false
+	}
+	for node := m.root; node != nil; {
+		at, found := m.search(node, key)
+		if found {
+			return node.values[at], true
+		}
+		if node.children == nil {
+			break
+		}
+		node = node.children[at]
+	}
 	return none, false
 }
 
@@ -132,6 +162,12 @@ func (m *OrderedMap[K, V]) Get(key K) V {
 
 func (m *OrderedMap[K, V]) Insert(key K, value V) {
 	m.see(key)
+	if m.run != nil {
+		if m.appended(key, value) {
+			return
+		}
+		m.build()
+	}
 	if m.root == nil {
 		root := &OrderedMapNode[K, V]{count: 1}
 		root.keys[0], root.values[0] = key, value
@@ -147,6 +183,88 @@ func (m *OrderedMap[K, V]) Insert(key K, value V) {
 	}
 }
 
+// appended puts the entry after the run when its key is above all of the run's, or in the place
+// of its key, and answers whether it could.
+func (m *OrderedMap[K, V]) appended(key K, value V) bool {
+	count := len(m.run.entries)
+	if count == 0 || m.less(m.run.entries[count-1].key, key) {
+		m.push(key, value)
+		return true
+	}
+	at, found := m.locate(key)
+	if !found {
+		return false
+	}
+	entry := &m.run.entries[at]
+	entry.value = value
+	if !entry.live {
+		entry.live = true
+		m.size++
+		m.run.first = min(m.run.first, at)
+	}
+	return true
+}
+
+// unroot makes the map the run of its root leaf's entries.
+func (m *OrderedMap[K, V]) unroot() {
+	root := m.root
+	m.root, m.size = nil, 0
+	m.run = &OrderedMapRun[K, V]{entries: make([]OrderedMapEntry[K, V], 0, 32)}
+	for at := range root.count {
+		m.push(root.keys[at], root.values[at])
+	}
+}
+
+// build makes the map the B-tree of the run's entries, as full as it may be.
+func (m *OrderedMap[K, V]) build() {
+	m.disordered = true
+	if m.size > 0 {
+		height, most := 0, 15
+		for most < m.size {
+			height, most = height+1, most*16+15
+		}
+		at := m.run.first
+		m.root = m.built(m.size, height, (most-15)/16, &at)
+	}
+	m.run = nil
+}
+
+// built answers the node of the next entries of the run, as many as the count, at the height
+// above the leaves, where a node below it holds at most most entries under it.
+func (m *OrderedMap[K, V]) built(count int, height int, most int, at *int) *OrderedMapNode[K, V] {
+	if height == 0 {
+		node := &OrderedMapNode[K, V]{count: count}
+		for position := range count {
+			node.keys[position], node.values[position] = m.taken(at)
+		}
+		return node
+	}
+	children := (count + most + 1) / (most + 1)
+	node := &OrderedMapNode[K, V]{count: children - 1, children: new([17]*OrderedMapNode[K, V])}
+	each, more := (count-children+1)/children, (count-children+1)%children
+	for child := range children {
+		size := each
+		if child < more {
+			size++
+		}
+		node.children[child] = m.built(size, height-1, (most-15)/16, at)
+		if child < children-1 {
+			node.keys[child], node.values[child] = m.taken(at)
+		}
+	}
+	return node
+}
+
+// taken answers the next entry of the run from the position, and moves past it.
+func (m *OrderedMap[K, V]) taken(at *int) (K, V) {
+	for !m.run.entries[*at].live {
+		*at++
+	}
+	entry := &m.run.entries[*at]
+	*at++
+	return entry.key, entry.value
+}
+
 // insert puts the entry under the node, and answers the middle entry and the node of the
 // entries after it when the node overflowed and was split.
 func (m *OrderedMap[K, V]) insert(node *OrderedMapNode[K, V], key K, value V) (bool, K, V, *OrderedMapNode[K, V]) {
@@ -157,6 +275,10 @@ func (m *OrderedMap[K, V]) insert(node *OrderedMapNode[K, V], key K, value V) (b
 	at, found := count, false
 	if count == 0 || !m.less(node.keys[count-1], key) {
 		at, found = m.search(node, key)
+		// A new key below the greatest is out of order.
+		if !found && node == m.root {
+			m.disordered = true
+		}
 	}
 	if found {
 		node.values[at] = value
@@ -179,6 +301,11 @@ func (m *OrderedMap[K, V]) insert(node *OrderedMapNode[K, V], key K, value V) (b
 	count++
 	node.count = count
 	if count < 16 {
+		return false, noKey, noValue, nil
+	}
+	// A root leaf filled in order becomes the run instead.
+	if node == m.root && node.children == nil && !m.disordered {
+		m.unroot()
 		return false, noKey, noValue, nil
 	}
 	right := m.spare(node.children == nil)
@@ -211,10 +338,14 @@ func (m *OrderedMap[K, V]) spare(leaf bool) *OrderedMapNode[K, V] {
 }
 
 func (m *OrderedMap[K, V]) Delete(key K) {
-	if m == nil || m.root == nil {
+	if m == nil || m.size == 0 {
 		return
 	}
 	m.see(key)
+	if m.run != nil {
+		m.hollow(key)
+		return
+	}
 	if !m.delete(m.root, key) {
 		return
 	}
@@ -226,6 +357,57 @@ func (m *OrderedMap[K, V]) Delete(key K) {
 			m.root = m.root.children[0]
 		}
 	}
+}
+
+// hollow leaves a hole where the entry of the key was in the run. The holes at its ends go, and
+// so do those within once they outnumber the entries, as the run cannot skip them.
+func (m *OrderedMap[K, V]) hollow(key K) {
+	at, found := m.locate(key)
+	if !found || !m.run.entries[at].live {
+		return
+	}
+	var noValue V
+	m.run.entries[at].live, m.run.entries[at].value = false, noValue
+	m.size--
+	count := len(m.run.entries)
+	if m.size == 0 {
+		clear(m.run.entries)
+		m.run.entries, m.run.first, m.run.sparse = m.run.entries[:0], 0, false
+		return
+	}
+	if at == count-1 {
+		for !m.run.entries[count-1].live {
+			count--
+		}
+		clear(m.run.entries[count:])
+		m.run.entries = m.run.entries[:count]
+	}
+	if at == m.run.first {
+		for !m.run.entries[m.run.first].live {
+			m.run.first++
+		}
+	}
+	if holes := count - m.run.first - m.size; holes > m.size*m.holesEach()+32 {
+		m.compact()
+	} else if m.run.first > count/2 && m.run.first >= 32 {
+		copy(m.run.entries, m.run.entries[m.run.first:])
+		clear(m.run.entries[count-m.run.first:])
+		m.run.entries, m.run.first = m.run.entries[:count-m.run.first], 0
+	}
+}
+
+// compact moves the run's entries together, its holes gone.
+func (m *OrderedMap[K, V]) compact() {
+	kept := 0
+	for _, entry := range m.run.entries[m.run.first:] {
+		if entry.live {
+			m.run.entries[kept] = entry
+			kept++
+		}
+	}
+	clear(m.run.entries[kept:])
+	m.run.entries, m.run.first = m.run.entries[:kept], 0
+	m.run.sparse = true
 }
 
 func (m *OrderedMap[K, V]) delete(node *OrderedMapNode[K, V], key K) bool {
@@ -330,6 +512,10 @@ func (m *OrderedMap[K, V]) refill(node *OrderedMapNode[K, V], at int) {
 }
 
 func (m *OrderedMap[K, V]) Min() (K, V, bool) {
+	if m != nil && m.run != nil && m.size > 0 {
+		least := &m.run.entries[m.run.first]
+		return least.key, least.value, true
+	}
 	if m == nil || m.root == nil {
 		var noKey K
 		var noValue V
@@ -343,6 +529,10 @@ func (m *OrderedMap[K, V]) Min() (K, V, bool) {
 }
 
 func (m *OrderedMap[K, V]) Max() (K, V, bool) {
+	if m != nil && m.run != nil && m.size > 0 {
+		greatest := &m.run.entries[len(m.run.entries)-1]
+		return greatest.key, greatest.value, true
+	}
 	if m == nil || m.root == nil {
 		var noKey K
 		var noValue V
@@ -356,15 +546,35 @@ func (m *OrderedMap[K, V]) Max() (K, V, bool) {
 }
 
 // AtMost answers the entry of the greatest key at most the key, or of the greatest key below it
-// when the key itself does not count.
+// when the key itself does not count. The run answers it unless the entry is past a long stretch
+// of holes, which the map becomes the tree for.
 func (m *OrderedMap[K, V]) AtMost(key K, counts bool) (K, V, bool) {
 	var bestKey K
 	var bestValue V
 	found := false
-	if m == nil {
+	if m == nil || m.size == 0 {
 		return bestKey, bestValue, false
 	}
 	m.see(key)
+	if m.run != nil {
+		least, greatest := &m.run.entries[m.run.first], &m.run.entries[len(m.run.entries)-1]
+		if m.less(greatest.key, key) || counts && greatest.key == key {
+			return greatest.key, greatest.value, true
+		}
+		if m.less(key, least.key) || !counts && least.key == key {
+			return bestKey, bestValue, false
+		}
+		at, hit := m.locate(key)
+		if hit && counts && m.run.entries[at].live {
+			return key, m.run.entries[at].value, true
+		}
+		for below := at - 1; below >= at-16; below-- {
+			if m.run.entries[below].live {
+				return m.run.entries[below].key, m.run.entries[below].value, true
+			}
+		}
+		m.build()
+	}
 	for node := m.root; node != nil; {
 		at, hit := m.search(node, key)
 		if hit && counts {
@@ -382,15 +592,37 @@ func (m *OrderedMap[K, V]) AtMost(key K, counts bool) (K, V, bool) {
 }
 
 // AtLeast answers the entry of the least key at least the key, or of the least key above it
-// when the key itself does not count.
+// when the key itself does not count, as AtMost does.
 func (m *OrderedMap[K, V]) AtLeast(key K, counts bool) (K, V, bool) {
 	var bestKey K
 	var bestValue V
 	found := false
-	if m == nil {
+	if m == nil || m.size == 0 {
 		return bestKey, bestValue, false
 	}
 	m.see(key)
+	if m.run != nil {
+		least, greatest := &m.run.entries[m.run.first], &m.run.entries[len(m.run.entries)-1]
+		if m.less(key, least.key) || counts && least.key == key {
+			return least.key, least.value, true
+		}
+		if m.less(greatest.key, key) || !counts && greatest.key == key {
+			return bestKey, bestValue, false
+		}
+		at, hit := m.locate(key)
+		if hit && counts && m.run.entries[at].live {
+			return key, m.run.entries[at].value, true
+		}
+		if hit {
+			at++
+		}
+		for above := at; above < at+16; above++ {
+			if m.run.entries[above].live {
+				return m.run.entries[above].key, m.run.entries[above].value, true
+			}
+		}
+		m.build()
+	}
 	for node := m.root; node != nil; {
 		at, hit := m.search(node, key)
 		if hit {
@@ -414,7 +646,13 @@ func (m *OrderedMap[K, V]) AtLeast(key K, counts bool) (K, V, bool) {
 func (m *OrderedMap[K, V]) Entries() ([]K, []V) {
 	keys := make([]K, 0, m.Len())
 	values := make([]V, 0, m.Len())
-	if m != nil && m.root != nil {
+	if m != nil && m.run != nil {
+		for _, entry := range m.run.entries[m.run.first:] {
+			if entry.live {
+				keys, values = append(keys, entry.key), append(values, entry.value)
+			}
+		}
+	} else if m != nil && m.root != nil {
 		keys, values = m.root.entries(keys, values)
 	}
 	return keys, values
@@ -437,11 +675,20 @@ func (m *OrderedMap[K, V]) Difference(other *OrderedMap[K, V]) {
 		return
 	}
 	if m == other {
-		m.root, m.size = nil, 0
+		m.root, m.size, m.exact, m.disordered, m.run = nil, 0, false, false, nil
 		return
 	}
-	if other != nil && other.root != nil {
+	if other == nil || other.size == 0 {
+		return
+	}
+	if other.run == nil {
 		m.deleteKeys(other.root)
+		return
+	}
+	for _, entry := range other.run.entries[other.run.first:] {
+		if entry.live {
+			m.Delete(entry.key)
+		}
 	}
 }
 
@@ -472,6 +719,60 @@ func (m *OrderedMap[K, V]) search(node *OrderedMapNode[K, V], key K) (int, bool)
 
 func (m *OrderedMap[K, V]) less(key K, other K) bool {
 	return key < other
+}
+
+// locate answers the position in the run of the key, or of the least key above it, and whether
+// it is the key's.
+func (m *OrderedMap[K, V]) locate(key K) (int, bool) {
+	run := m.run.entries
+	if !m.run.sparse {
+		if len(run) == 0 || key < run[0].key {
+			return 0, false
+		}
+		at := int(key) - int(run[0].key)
+		if at >= len(run) {
+			return len(run), false
+		}
+		return at, true
+	}
+	low, high := m.run.first, len(run)
+	for low < high {
+		middle := int(uint(low+high) >> 1)
+		if run[middle].key < key {
+			low = middle + 1
+		} else {
+			high = middle
+		}
+	}
+	return low, low < len(run) && run[low].key == key
+}
+
+// push puts the entry after the run's. Keys that go up by little have the holes between them
+// filled, so that they stay one apart.
+func (m *OrderedMap[K, V]) push(key K, value V) {
+	count := len(m.run.entries)
+	if count > 0 && !m.run.sparse {
+		last := m.run.entries[count-1].key
+		gap := int(key) - int(last) - 1
+		if holes := count - m.run.first - m.size; gap > 0 && holes+gap > m.size*m.holesEach()+32 {
+			m.run.sparse = true
+		} else {
+			for step := 1; step <= gap; step++ {
+				m.run.entries = append(m.run.entries, OrderedMapEntry[K, V]{key: last + K(step)})
+			}
+		}
+	}
+	m.run.entries = append(m.run.entries, OrderedMapEntry[K, V]{key: key, value: value, live: true})
+	m.size++
+}
+
+// holesEach answers how many holes the run keeps for each entry: those of keys that stay one
+// apart cost no search.
+func (m *OrderedMap[K, V]) holesEach() int {
+	if m.run.sparse {
+		return 1
+	}
+	return 4
 }
 
 type Recent struct {
