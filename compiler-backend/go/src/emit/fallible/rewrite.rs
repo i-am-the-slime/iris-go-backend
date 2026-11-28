@@ -1,3 +1,7 @@
+mod expressions;
+mod statements;
+mod tidy;
+
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::conventions::Conventions;
@@ -8,10 +12,6 @@ use super::{Conversion, EitherShape, nil};
 use crate::emit::locals::NUMBERED;
 use crate::emit::{call, identifier_expression};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
-
-mod expressions;
-mod statements;
-mod tidy;
 
 /// A local holding an `Either` that lives on as two locals.
 #[derive(Clone)]
