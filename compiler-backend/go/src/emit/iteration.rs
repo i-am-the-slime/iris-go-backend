@@ -198,6 +198,7 @@ where
             _ => (1, 0, Order::Backward),
         };
         let initial = self.value(initial, out)?;
+        let initial_value = initial.clone();
         let absorbing = self.absorbing_pattern(&callback, accumulator_position)?;
         let demand = Demand { order, breaks: absorbing.is_some(), ..Demand::FORWARD };
         let need = Need::Argument { callback: &callback, position: element_position };
@@ -256,7 +257,8 @@ where
         out.extend(flags);
         let places: Vec<&Place> = owned.iter().map(|(place, _)| place).collect();
         let absorbing = absorbing.as_ref().filter(|_| !buffered);
-        let looped = self.carried_apart(outcome?, &places, absorbing, &accumulator)?;
+        let accumulated = (accumulator.as_str(), &initial_value);
+        let looped = self.carried_apart(outcome?, &places, absorbing, accumulated)?;
         out.extend(looped);
         if buffered {
             let built = self.temporary("built");
