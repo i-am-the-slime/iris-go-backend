@@ -664,4 +664,3 @@ impl TypeWalker for CollectFileReferences<'_> {
         Ok(WalkAction::Continue)
     }
 }
-

@@ -153,7 +153,8 @@ pub fn get_fully_determined(functional_dependencies: &[Fd], argument_count: usiz
         return get_all_determined(functional_dependencies);
     }
     let all_positions = Positions::all(argument_count);
-    let subset = |bits: u32| (0..argument_count).filter(move |&position| bits & (1 << position) != 0);
+    let subset =
+        |bits: u32| (0..argument_count).filter(move |&position| bits & (1 << position) != 0);
     let covering: Vec<u32> = (0..1u32 << argument_count)
         .filter(|&bits| {
             let positions = subset(bits).collect();

@@ -424,10 +424,16 @@ impl TypeParameter {
 fn is_basic_type_term(term: &[Token]) -> bool {
     match term {
         [package, dot, name] if dot.is(".") => {
-            let spelled = format!("{}.{}", package.word().unwrap_or_default(), name.word().unwrap_or_default());
+            let spelled = format!(
+                "{}.{}",
+                package.word().unwrap_or_default(),
+                name.word().unwrap_or_default()
+            );
             BASIC_CONSTRAINTS.contains(&spelled.as_str())
         }
-        [tilde, name] if tilde.is("~") => name.word().is_some_and(|name| BASIC_TYPES.contains(&name)),
+        [tilde, name] if tilde.is("~") => {
+            name.word().is_some_and(|name| BASIC_TYPES.contains(&name))
+        }
         [name] => name.word().is_some_and(|name| BASIC_TYPES.contains(&name)),
         _ => false,
     }
@@ -935,9 +941,9 @@ fn called_name(tokens: &[Token], open: usize) -> Option<&str> {
 }
 
 fn constraint_escapes(parameters: &[TypeParameter]) -> Vec<Escape> {
-    let constrained = parameters.iter().filter(|parameter| {
-        !parameter.is_unconstrained() && !parameter.admits_only_basic_values()
-    });
+    let constrained = parameters
+        .iter()
+        .filter(|parameter| !parameter.is_unconstrained() && !parameter.admits_only_basic_values());
     let escapes = constrained.map(|parameter| Escape {
         parameter: Some(parameter.name.clone()),
         reason: format!("is constrained by `{}`", spelled(&parameter.constraint)),
@@ -1988,7 +1994,8 @@ func LookupImpl[K comparable, V, M any](just func(V) M, nothing M, key K, entrie
 func Empty[K comparable, V, M any]() map[K]V { return map[K]V{} }
 ";
         let opacity = foreign_opacity(&[source]);
-        let inferred = |name: &str| opacity.function(name).map(|function| function.inferred.clone());
+        let inferred =
+            |name: &str| opacity.function(name).map(|function| function.inferred.clone());
         assert_eq!(inferred("LookupImpl"), Some(vec!["K".into(), "V".into(), "M".into()]));
         assert_eq!(inferred("Empty"), Some(vec![]));
     }

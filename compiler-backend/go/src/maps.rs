@@ -22,8 +22,7 @@ use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     ExpressionKind, FunctionId, FunctionSpelling, Guard, Guarded, Pattern, PatternKind, Program,
 };
-use crate::monotype::expand_synonyms;
-use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, expand_synonyms};
 use crate::types::Substitution;
 
 /// A `Data.Map.Internal` function that a Go map does by hashing the key.
