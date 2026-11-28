@@ -16,6 +16,9 @@ pub(super) fn promote_array_parameters(
         let Some(array) = promotable_parameter(declaration) else { continue };
         let mut names = declaration.all_names();
         let GoDeclaration::Function { body, result, .. } = declaration else { continue };
+        if !loops_without_defers(body) {
+            continue;
+        }
         let mut uses = Uses { array: &array, escapes: false, dereferences: 0, writes: 0 };
         uses.block(body);
         if uses.escapes || uses.writes == 0 {
@@ -24,9 +27,9 @@ pub(super) fn promote_array_parameters(
         let local = fresh(&array, &mut names);
         let original = body.clone();
         let mut promotion =
-            Promotion { array: &array, local: &local, helpers, opaque_blocks: false };
+            Promotion { array: &array, local: &local, helpers, reaches_the_array: false };
         promotion.rewrite(body);
-        if promotion.opaque_blocks {
+        if promotion.reaches_the_array {
             *body = original;
             continue;
         }
@@ -34,10 +37,9 @@ pub(super) fn promote_array_parameters(
         if result.is_none() && falls_through {
             body.push(promotion.write_back());
         }
-        body.insert(
-            0,
-            GoStatement::Define { names: vec![local.clone()], values: vec![dereference(&array)] },
-        );
+        let read =
+            GoStatement::Define { names: vec![local.clone()], values: vec![dereference(&array)] };
+        body.insert(0, read);
     }
 }
 
@@ -140,7 +142,7 @@ struct Promotion<'a> {
     array: &'a str,
     local: &'a str,
     helpers: &'a FxHashSet<String>,
-    opaque_blocks: bool,
+    reaches_the_array: bool,
 }
 
 impl Promotion<'_> {
@@ -151,31 +153,19 @@ impl Promotion<'_> {
         }
     }
 
-    fn reload(&self) -> GoStatement {
-        GoStatement::Assign {
-            targets: vec![GoExpression::Identifier(self.local.to_string())],
-            values: vec![dereference(self.array)],
-        }
-    }
-
     fn rewrite(&mut self, block: &mut Vec<GoStatement>) {
         let statements = std::mem::take(block);
         for mut statement in statements {
             if self.may_reach_the_array(&mut statement) {
-                self.opaque_blocks |= has_blocks(&statement);
-                let returns = matches!(statement, GoStatement::Return(_));
-                block.push(self.write_back());
+                self.reaches_the_array = true;
                 block.push(statement);
-                if !returns {
-                    block.push(self.reload());
-                }
                 continue;
+            }
+            if self.may_throw(&mut statement) || matches!(statement, GoStatement::Return(_)) {
+                block.push(self.write_back());
             }
             self.replace_in_headers(&mut statement);
             self.rewrite_nested(&mut statement);
-            if matches!(statement, GoStatement::Return(_)) {
-                block.push(self.write_back());
-            }
             block.push(statement);
         }
     }
@@ -184,9 +174,15 @@ impl Promotion<'_> {
         if matches!(statement, GoStatement::Defer(_)) {
             return true;
         }
-        let mut headers = Headers { helpers: self.helpers, reaches: false };
+        let mut headers = Headers { helpers: self.helpers, reaches: false, throws: false };
         headers.header_expressions(statement);
         headers.reaches
+    }
+
+    fn may_throw(&self, statement: &mut GoStatement) -> bool {
+        let mut headers = Headers { helpers: self.helpers, reaches: false, throws: false };
+        headers.header_expressions(statement);
+        headers.throws
     }
 
     fn replace_in_headers(&self, statement: &mut GoStatement) {
@@ -253,6 +249,7 @@ fn for_each_header(statement: &mut GoStatement, mut visit: impl FnMut(&mut GoExp
 struct Headers<'a> {
     helpers: &'a FxHashSet<String>,
     reaches: bool,
+    throws: bool,
 }
 
 impl Headers<'_> {
@@ -279,6 +276,10 @@ impl Walk for Headers<'_> {
             GoExpression::Call { function, .. } if !self.is_safe_callee(function) => {
                 self.reaches = true
             }
+            GoExpression::Call { function, .. } if is_runtime_call(function) => {
+                self.throws = true;
+                go_traversal::expression(self, value);
+            }
             _ => go_traversal::expression(self, value),
         }
     }
@@ -299,16 +300,41 @@ impl Walk for Replace<'_> {
     }
 }
 
-fn has_blocks(statement: &GoStatement) -> bool {
-    matches!(
-        statement,
-        GoStatement::If { .. }
-            | GoStatement::Switch { .. }
-            | GoStatement::IfAssert { .. }
-            | GoStatement::Range { .. }
-            | GoStatement::Counting { .. }
-            | GoStatement::CountingDown { .. }
-            | GoStatement::Loop(_)
-            | GoStatement::LabeledLoop { .. }
-    )
+fn loops_without_defers(body: &mut Vec<GoStatement>) -> bool {
+    let mut loops = false;
+    let mut defers = false;
+    go_traversal::each_block(body, |block| {
+        for statement in block.iter() {
+            loops |= matches!(
+                statement,
+                GoStatement::Loop(_)
+                    | GoStatement::LabeledLoop { .. }
+                    | GoStatement::Range { .. }
+                    | GoStatement::Counting { .. }
+                    | GoStatement::CountingDown { .. }
+            );
+            defers |= matches!(statement, GoStatement::Defer(_));
+        }
+    });
+    loops && !defers
+}
+
+fn is_runtime_call(function: &GoExpression) -> bool {
+    match function {
+        GoExpression::Qualified { package, name } => !is_arithmetic(package, name),
+        GoExpression::Instantiation { function, .. } => is_runtime_call(function),
+        _ => false,
+    }
+}
+
+fn is_arithmetic(package: &str, name: &str) -> bool {
+    match package {
+        "math" => true,
+        "prim" => {
+            (name.starts_with("Int") || name.starts_with("Number"))
+                && !name.starts_with("NumberTo")
+                && !name.starts_with("IntToString")
+        }
+        _ => false,
+    }
 }
