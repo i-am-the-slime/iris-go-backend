@@ -65,12 +65,14 @@ pub fn run_program(config: ProgramConfig, arguments: Vec<String>) -> Result<i32,
     if let Some(status) = program.profiled_status {
         return Ok(status);
     }
-    let arguments = if arguments.is_empty() { program.configured_arguments } else { arguments };
-    let status = Command::new(&program.executable)
-        .args(&arguments)
+    let arguments = if arguments.is_empty() { &program.configured_arguments } else { &arguments };
+    let mut child = Command::new(&program.executable)
+        .args(arguments)
         .current_dir(&program.workspace_root)
-        .status()
+        .spawn()
         .map_err(|error| format!("could not run {}: {error}", program.executable.display()))?;
+    drop(program);
+    let status = child.wait().map_err(|error| format!("could not run the program: {error}"))?;
     Ok(exit_code(status))
 }
 
@@ -80,6 +82,7 @@ pub struct Program {
     configured_arguments: Vec<String>,
     /// The exit status of the run that recorded the profile, when there was one.
     pub profiled_status: Option<i32>,
+    _cache_lock: CacheLock,
 }
 
 /// Compiles the package's entry point to Go and builds the executable.
@@ -98,6 +101,7 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
     // The tests get their own module and executable, so switching between running the program
     // and its tests does not build either again.
     let cache = if config.tests { cache.join("test") } else { cache };
+    let cache_lock = CacheLock::acquire(&cache)?;
     let module = cache.join("module");
     let previous_requirements = previous_requirements(&module)?;
     clear_generated(&module)?;
@@ -145,6 +149,7 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         workspace_root: workspace.root.clone(),
         configured_arguments: execution.exec_args,
         profiled_status,
+        _cache_lock: cache_lock,
     })
 }
 
@@ -262,6 +267,26 @@ fn require_go() -> Result<(), String> {
              {MINIMUM_GO} or later from https://go.dev/dl/"
         )),
         Err(error) => Err(format!("could not run `go version`: {error}")),
+    }
+}
+
+struct CacheLock {
+    _file: fs::File,
+}
+
+impl CacheLock {
+    fn acquire(cache: &Path) -> Result<CacheLock, String> {
+        fs::create_dir_all(cache)
+            .map_err(|error| format!("could not create {}: {error}", cache.display()))?;
+        let path = cache.join("lock");
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|error| format!("could not open {}: {error}", path.display()))?;
+        file.lock().map_err(|error| format!("could not lock {}: {error}", path.display()))?;
+        Ok(CacheLock { _file: file })
     }
 }
 
@@ -424,4 +449,19 @@ fn exit_code(status: ExitStatus) -> i32 {
         }
     }
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_build_waits_for_the_build_that_holds_its_cache() {
+        let cache = tempfile::tempdir().unwrap();
+        let held = CacheLock::acquire(cache.path()).unwrap();
+        let other = fs::OpenOptions::new().write(true).open(cache.path().join("lock")).unwrap();
+        assert!(matches!(other.try_lock(), Err(fs::TryLockError::WouldBlock)));
+        drop(held);
+        assert!(other.try_lock().is_ok());
+    }
 }
