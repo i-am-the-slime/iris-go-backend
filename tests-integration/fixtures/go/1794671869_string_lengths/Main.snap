@@ -40,47 +40,9 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int) int {
 	for {
 		var codeUnitLength int
 		if len(text) > 1 && text[0]|text[1] < 128 {
-			codeUnitLength = 2
-		} else {
-			codeUnitLength = prim.CodeUnitLengthUpTo(2, text)
-		}
-		switch codeUnitLength {
-		case 0:
-			return count
-		case 1:
-			var result int
-			var textUnit rune
-			if len(text) > 0 && text[0] < 128 {
-				textUnit = rune(text[0])
-				if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
-					result = count + 1
-				} else {
-					result = count
-				}
-			} else {
-				textUnit = prim.CharAt(0, text)
-				if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
-					result = count + 1
-				} else {
-					result = count
-				}
-			}
-			text, count = "", result
-			continue
-		default:
-			var textUnit2 rune
-			if len(text) > 0 && text[0] < 128 {
-				textUnit2 = rune(text[0])
-			} else {
-				textUnit2 = prim.CharAt(0, text)
-			}
+			textUnit2 := rune(text[0])
 			fieldHead := prim.ToCharCode(textUnit2)
-			var textUnit3 rune
-			if len(text) > 1 && text[0]|text[1] < 128 {
-				textUnit3 = rune(text[1])
-			} else {
-				textUnit3 = prim.CharAt(1, text)
-			}
+			textUnit3 := rune(text[1])
 			cu1 := prim.ToCharCode(textUnit3)
 			if 55296 <= fieldHead && fieldHead <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
 				var result int
@@ -89,12 +51,7 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int) int {
 				} else {
 					result = count
 				}
-				var textRest string
-				if len(text) > 1 && text[0]|text[1] < 128 {
-					textRest = text[2:]
-				} else {
-					textRest = prim.CodeUnitDrop(2, text)
-				}
+				textRest := text[2:]
 				text, count = textRest, result
 				continue
 			}
@@ -104,14 +61,80 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int) int {
 			} else {
 				result2 = count
 			}
-			var textRest2 string
-			if len(text) > 0 && text[0] < 128 {
-				textRest2 = text[1:]
-			} else {
-				textRest2 = prim.CodeUnitDrop(1, text)
-			}
+			textRest2 := text[1:]
 			text, count = textRest2, result2
 			continue
+		} else {
+			codeUnitLength = prim.CodeUnitLengthUpTo(2, text)
+			switch codeUnitLength {
+			case 0:
+				return count
+			case 1:
+				var result int
+				var textUnit rune
+				if len(text) > 0 && text[0] < 128 {
+					textUnit = rune(text[0])
+					if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
+						result = count + 1
+					} else {
+						result = count
+					}
+				} else {
+					textUnit = prim.CharAt(0, text)
+					if prim.ToCharCode(textUnit) == prim.ToCharCode(' ') {
+						result = count + 1
+					} else {
+						result = count
+					}
+				}
+				text, count = "", result
+				continue
+			default:
+				var textUnit2 rune
+				if len(text) > 0 && text[0] < 128 {
+					textUnit2 = rune(text[0])
+				} else {
+					textUnit2 = prim.CharAt(0, text)
+				}
+				fieldHead := prim.ToCharCode(textUnit2)
+				var textUnit3 rune
+				if len(text) > 1 && text[0]|text[1] < 128 {
+					textUnit3 = rune(text[1])
+				} else {
+					textUnit3 = prim.CharAt(1, text)
+				}
+				cu1 := prim.ToCharCode(textUnit3)
+				if 55296 <= fieldHead && fieldHead <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
+					var result int
+					if (fieldHead-55296)*1024+(cu1-56320)+65536 == prim.ToCharCode(' ') {
+						result = count + 1
+					} else {
+						result = count
+					}
+					var textRest string
+					if len(text) > 1 && text[0]|text[1] < 128 {
+						textRest = text[2:]
+					} else {
+						textRest = prim.CodeUnitDrop(2, text)
+					}
+					text, count = textRest, result
+					continue
+				}
+				var result2 int
+				if fieldHead == prim.ToCharCode(' ') {
+					result2 = count + 1
+				} else {
+					result2 = count
+				}
+				var textRest2 string
+				if len(text) > 0 && text[0] < 128 {
+					textRest2 = text[1:]
+				} else {
+					textRest2 = prim.CodeUnitDrop(1, text)
+				}
+				text, count = textRest2, result2
+				continue
+			}
 		}
 	}
 }
