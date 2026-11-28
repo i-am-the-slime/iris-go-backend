@@ -527,18 +527,11 @@ func checked(depth int, values []int) maybe.Int {
 		accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(values))
 		carried := accumulator.Just
 		for _, element := range values {
-			if accumulator.Tag == maybe.TagNothing {
-				break
-			}
-			switch accumulator.Tag {
-			case maybe.TagJust:
-				if element > 0 {
-					carried = append(carried, element)
-				} else {
-					accumulator = maybe.NoArrayInt
-				}
-			default:
+			if element > 0 {
+				carried = append(carried, element)
+			} else {
 				accumulator = maybe.NoArrayInt
+				break
 			}
 		}
 		if accumulator.Tag != maybe.TagNothing {

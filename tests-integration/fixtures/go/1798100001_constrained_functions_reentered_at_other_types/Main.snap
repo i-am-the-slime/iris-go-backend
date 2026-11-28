@@ -69,20 +69,12 @@ func traverseVisit(rose Rose) MaybeRoseInt {
 	accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(rose.Second))
 	carried := accumulator.Just
 	for _, element := range rose.Second {
-		if accumulator.Tag == maybe.TagNothing {
-			break
-		}
-		switch accumulator.Tag {
-		case maybe.TagJust:
-			scrutinee := traverseVisit(element)
-			switch scrutinee.Tag {
-			case maybe.TagJust:
-				carried = append(carried, scrutinee.Just)
-			default:
-				accumulator = NoArrayRoseInt
-			}
-		default:
+		scrutinee := traverseVisit(element)
+		if scrutinee.Tag == maybe.TagJust {
+			carried = append(carried, scrutinee.Just)
+		} else {
 			accumulator = NoArrayRoseInt
+			break
 		}
 	}
 	if accumulator.Tag != maybe.TagNothing {
