@@ -206,10 +206,9 @@ where
     /// of `readJSON` is this function, which the simplifier keeps out of line: its slow path
     /// is Yoga.JSON's whole reader.
     pub(super) fn json_read(&mut self, reference: Expression) -> Expression {
-        let (text, result) = self
-            .monotypes
-            .function_parts(reference.monotype)
-            .expect("invariant violated: readJSON is a function of the text");
+        let Some((text, result)) = self.monotypes.function_parts(reference.monotype) else {
+            return reference;
+        };
         let text = self.fresh_local("text".into(), text);
         let reread = ExpressionKind::Apply {
             function: Box::new(reference),

@@ -502,7 +502,9 @@ where
         let missing =
             |name: &SmolStr| UnsupportedState::MissingInstanceMember { member: name.to_string() };
         let constraint = runtime.constraint;
-        let value = runtime.value.expect("invariant violated: a run-time dictionary has no value");
+        let Some(value) = runtime.value else {
+            return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+        };
         let Some(field) = self.record_field(*value, &name) else {
             return Err(self.unsupported(scope, missing(&name)));
         };
@@ -558,7 +560,12 @@ where
         let entry = &class.class.superclasses[position];
         let constraint = self.context.types.substitute(entry.constraint, &class.substitution);
         let label = self.superclass_label(definition, entry.constraint, position)?;
-        let value = runtime.value.expect("invariant violated: a run-time dictionary has no value");
+        let Some(value) = runtime.value else {
+            return Err(GoError::Unsupported {
+                definition: definition.to_string(),
+                state: UnsupportedState::UnboundEvidence,
+            });
+        };
         let value = self.record_field(*value, &label).ok_or_else(|| GoError::Unsupported {
             definition: definition.to_string(),
             state: UnsupportedState::MissingSuperclass { superclass: label.to_string() },
