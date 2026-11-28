@@ -233,11 +233,11 @@ func codePointLoopViewsTheText(text string, i int, count int) int {
 		if i >= textPoints.Length() {
 			return count
 		}
-		var result2 maybe.Int
+		var left maybe.Int
 		if i < 0 || i == 0 && text == "" {
-			result2 = maybe.NoInt
+			left = maybe.NoInt
 		} else if i == 0 {
-			result2 = maybe.JustInt(direct.CodePointAt0(nil, text))
+			left = maybe.JustInt(direct.CodePointAt0(nil, text))
 		} else {
 			var codePointAt maybe.Int
 			if textIsASCII && uint(i) < uint(len(text)) {
@@ -250,25 +250,27 @@ func codePointLoopViewsTheText(text string, i int, count int) int {
 					codePointAt = maybe.NoInt
 				}
 			}
-			result2 = codePointAt
+			left = codePointAt
 		}
 		codePointTake := textPoints.Take(i + 1)
-		var result3 maybe.Int
+		var result2 bool
 		if codePointTake == "" {
-			result3 = maybe.NoInt
+			switch left.Tag {
+			case maybe.TagNothing:
+				result2 = true
+			default:
+				result2 = false
+			}
 		} else {
-			result3 = maybe.JustInt(direct.CodePointAt0(nil, codePointTake))
-		}
-		var result4 bool
-		if result2.Tag == maybe.TagNothing && result3.Tag == maybe.TagNothing {
-			result4 = true
-		} else if result2.Tag == maybe.TagJust && result3.Tag == maybe.TagJust {
-			result4 = result2.Just == result3.Just
-		} else {
-			result4 = false
+			switch left.Tag {
+			case maybe.TagJust:
+				result2 = left.Just == direct.CodePointAt0(nil, codePointTake)
+			default:
+				result2 = false
+			}
 		}
 		var result int
-		if result4 {
+		if result2 {
 			result = count + 1
 		} else {
 			result = count

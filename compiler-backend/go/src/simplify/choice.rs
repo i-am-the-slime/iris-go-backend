@@ -18,7 +18,7 @@ use crate::monomorphic::{
     PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
-use crate::purity::{is_trivial, mentions_any};
+use crate::purity::{is_trivial, is_within_size, mentions_any};
 
 /// How many more nodes distributing may copy than the case has: alternatives
 /// that several chosen values select are copied once for each.
@@ -32,33 +32,75 @@ impl Simplifier<'_> {
     /// The case distributed into its scrutinee's choice, unless the choice is
     /// not between values the alternatives resolve, or would copy too much;
     /// the scrutinee is taken only when distributed.
-    pub(super) fn distribute(
+    pub(super) fn distribute_columns(
+        &mut self,
+        scrutinees: &mut [Expression],
+        alternatives: &[Alternative],
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        if let [scrutinee] = scrutinees {
+            return self.distribute(scrutinee, alternatives, monotype, Column::alone());
+        }
+        if scrutinees.len() > MULTIPLE_COLUMNS {
+            return None;
+        }
+        for column in 0..scrutinees.len() {
+            if !is_choice(&scrutinees[column]) {
+                continue;
+            }
+            let mut bindings = vec![];
+            let mut others = Vec::with_capacity(scrutinees.len());
+            for (position, other) in scrutinees.iter().enumerate() {
+                if position == column || is_within_size(other, COPIED_COLUMN) {
+                    others.push(other.clone());
+                    continue;
+                }
+                let template =
+                    Local { id: LocalId(0), name: "scrutinee".into(), monotype: other.monotype };
+                let local = self.fresh(&template);
+                others.push(local.expression());
+                bindings.push(Binding { local, value: other.clone() });
+            }
+            let column = Column { position: column, scrutinees: &others };
+            let mut chosen = scrutinees[column.position].clone();
+            if let Some(distributed) = self.distribute(&mut chosen, alternatives, monotype, column)
+            {
+                return Some(self.let_bindings(bindings, distributed));
+            }
+        }
+        None
+    }
+
+    fn distribute(
         &mut self,
         scrutinee: &mut Expression,
         alternatives: &[Alternative],
         monotype: MonotypeId,
+        column: Column<'_>,
     ) -> Option<Expression> {
         let (scrutinee, placements) = match &scrutinee.kind {
             ExpressionKind::Foreign { foreign: Foreign::MaybeIndex, arguments } => {
                 let choice = self.index_choice(arguments.clone(), scrutinee.monotype)?;
-                let placements = plan(&choice, alternatives, self.monotypes)?;
+                let placements = plan(&choice, alternatives, column.position, self.monotypes)?;
                 (choice, placements)
             }
             ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
                 let choice = self.update_choice(arguments.clone(), scrutinee.monotype)?;
-                let placements = plan(&choice, alternatives, self.monotypes)?;
+                let placements = plan(&choice, alternatives, column.position, self.monotypes)?;
                 (choice, placements)
             }
             ExpressionKind::Foreign { foreign, arguments } if is_positioned_write(foreign) => {
                 let choice =
                     self.positioned_write_choice(foreign, arguments.clone(), scrutinee.monotype)?;
-                let placements = plan(&choice, alternatives, self.monotypes)?;
+                let placements = plan(&choice, alternatives, column.position, self.monotypes)?;
                 (choice, placements)
             }
             ExpressionKind::If { .. }
             | ExpressionKind::Let { .. }
             | ExpressionKind::Case { .. } => {
-                if let Some(placements) = plan(scrutinee, alternatives, self.monotypes) {
+                if let Some(placements) =
+                    plan(scrutinee, alternatives, column.position, self.monotypes)
+                {
                     if self.joins_closures(&placements, monotype) {
                         return None;
                     }
@@ -68,7 +110,7 @@ impl Simplifier<'_> {
                     let exposed = self
                         .constructions_exposed(scrutinee)
                         .or_else(|| self.foreign_choices_exposed(scrutinee))?;
-                    let placements = plan(&exposed, alternatives, self.monotypes)?;
+                    let placements = plan(&exposed, alternatives, column.position, self.monotypes)?;
                     (exposed, placements)
                 }
             }
@@ -83,7 +125,7 @@ impl Simplifier<'_> {
         let (joins, alternatives) = self.join_points(alternatives, &placements, monotype);
         let distributed = self.map_choices(scrutinee, monotype, &mut |simplifier, chosen| {
             let case = ExpressionKind::Case {
-                scrutinees: vec![chosen],
+                scrutinees: column.with(chosen),
                 alternatives: alternatives.to_vec(),
             };
             let mut case = Expression::new(case, monotype);
@@ -561,6 +603,41 @@ fn is_mutable_peek(foreign: &Foreign) -> bool {
     )
 }
 
+const MULTIPLE_COLUMNS: usize = 4;
+
+const COPIED_COLUMN: usize = DUPLICATION / 2;
+
+#[derive(Clone, Copy)]
+pub(super) struct Column<'s> {
+    position: usize,
+    scrutinees: &'s [Expression],
+}
+
+impl Column<'_> {
+    fn alone() -> Column<'static> {
+        Column { position: 0, scrutinees: &[] }
+    }
+
+    fn with(self, chosen: Expression) -> Vec<Expression> {
+        if self.scrutinees.is_empty() {
+            return vec![chosen];
+        }
+        let mut scrutinees = self.scrutinees.to_vec();
+        scrutinees[self.position] = chosen;
+        scrutinees
+    }
+}
+
+fn is_choice(expression: &Expression) -> bool {
+    matches!(
+        expression.kind,
+        ExpressionKind::If { .. }
+            | ExpressionKind::Let { .. }
+            | ExpressionKind::Case { .. }
+            | ExpressionKind::Foreign { .. }
+    )
+}
+
 struct Leaves {
     resolved: usize,
     opaque: usize,
@@ -579,12 +656,19 @@ enum Placement {
 fn plan(
     choice: &Expression,
     alternatives: &[Alternative],
+    column: usize,
     monotypes: &Monotypes,
 ) -> Option<Vec<Placement>> {
     let mut selections = vec![0usize; alternatives.len()];
     let mut leaves = Leaves { resolved: 0, opaque: 0 };
-    let selected =
-        select(choice, choice.monotype, alternatives, &mut selections, &mut leaves, monotypes);
+    let selected = select(
+        choice,
+        (column, choice.monotype),
+        alternatives,
+        &mut selections,
+        &mut leaves,
+        monotypes,
+    );
     let opaque_allowed = leaves.opaque == 0
         || (leaves.opaque == 1 && matches!(monotypes.get(choice.monotype), Monotype::Data(_)));
     if !selected || leaves.resolved == 0 || !opaque_allowed {
@@ -622,7 +706,7 @@ fn plan(
 /// type arguments were erased, would carry it into the alternatives.
 fn select(
     choice: &Expression,
-    monotype: MonotypeId,
+    (column, monotype): (usize, MonotypeId),
     alternatives: &[Alternative],
     selections: &mut [usize],
     leaves: &mut Leaves,
@@ -630,19 +714,33 @@ fn select(
 ) -> bool {
     match &choice.kind {
         ExpressionKind::If { then, otherwise, .. } => {
-            select(then, monotype, alternatives, selections, leaves, monotypes)
-                && select(otherwise, monotype, alternatives, selections, leaves, monotypes)
+            select(then, (column, monotype), alternatives, selections, leaves, monotypes)
+                && select(
+                    otherwise,
+                    (column, monotype),
+                    alternatives,
+                    selections,
+                    leaves,
+                    monotypes,
+                )
         }
         ExpressionKind::Let { body, .. } => {
-            select(body, monotype, alternatives, selections, leaves, monotypes)
+            select(body, (column, monotype), alternatives, selections, leaves, monotypes)
         }
         ExpressionKind::Case { alternatives: inner, .. } => {
             inner.iter().all(|alternative| match &alternative.body {
                 Guarded::Unconditional(body) => {
-                    select(body, monotype, alternatives, selections, leaves, monotypes)
+                    select(body, (column, monotype), alternatives, selections, leaves, monotypes)
                 }
                 Guarded::Guards(branches) => branches.iter().all(|branch| {
-                    select(&branch.body, monotype, alternatives, selections, leaves, monotypes)
+                    select(
+                        &branch.body,
+                        (column, monotype),
+                        alternatives,
+                        selections,
+                        leaves,
+                        monotypes,
+                    )
                 }),
             })
         }
@@ -650,7 +748,9 @@ fn select(
         ExpressionKind::Construct { .. } | ExpressionKind::Literal(_)
             if monotypes.same_without_causes(choice.monotype, monotype) =>
         {
-            let Some(outcomes) = column_outcomes(choice, alternatives, 0) else { return false };
+            let Some(outcomes) = column_outcomes(choice, alternatives, column) else {
+                return false;
+            };
             leaves.resolved += 1;
             // A guarded alternative may fall through to the ones after it.
             for (position, outcome) in outcomes.iter().enumerate() {

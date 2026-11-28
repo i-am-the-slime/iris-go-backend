@@ -109,277 +109,282 @@ func initializeMain_() []string {
 		result = 0
 	}
 	x2 := opaque(1)
-	x3 := opaque(1)
-	var result2 maybe.Int
+	var left maybe.Int
 	if x2 > 0 {
-		result2 = maybe.JustInt(x2 + 1)
+		left = maybe.JustInt(x2 + 1)
 	} else {
-		result2 = maybe.NoInt
+		left = maybe.NoInt
 	}
-	var result3 maybe.Int
+	x3 := opaque(1)
+	var result2 bool
 	if x3 > 0 {
-		result3 = maybe.JustInt(x3 + 1)
+		switch left.Tag {
+		case maybe.TagJust:
+			result2 = left.Just == x3+1
+		default:
+			result2 = false
+		}
 	} else {
-		result3 = maybe.NoInt
-	}
-	var result4 bool
-	if result2.Tag == maybe.TagNothing && result3.Tag == maybe.TagNothing {
-		result4 = true
-	} else if result2.Tag == maybe.TagJust && result3.Tag == maybe.TagJust {
-		result4 = result2.Just == result3.Just
-	} else {
-		result4 = false
+		switch left.Tag {
+		case maybe.TagNothing:
+			result2 = true
+		default:
+			result2 = false
+		}
 	}
 	x4 := opaque(1)
-	x5 := opaque(2)
-	var result5 maybe.Int
+	var left2 maybe.Int
 	if x4 > 0 {
-		result5 = maybe.JustInt(x4 + 1)
+		left2 = maybe.JustInt(x4 + 1)
 	} else {
-		result5 = maybe.NoInt
+		left2 = maybe.NoInt
 	}
-	var result6 maybe.Int
+	x5 := opaque(2)
+	var result3 string
 	if x5 > 0 {
-		result6 = maybe.JustInt(x5 + 1)
-	} else {
-		result6 = maybe.NoInt
-	}
-	var result7 string
-	if result5.Tag == maybe.TagNothing && result6.Tag == maybe.TagNothing {
-		result7 = "EQ"
-	} else if result5.Tag == maybe.TagNothing {
-		result7 = "LT"
-	} else if result6.Tag == maybe.TagNothing {
-		result7 = "GT"
-	} else {
-		left0 := result5.Just
-		right0 := result6.Just
-		if left0 < right0 {
-			result7 = "LT"
-		} else if left0 == right0 {
-			result7 = "EQ"
-		} else {
-			result7 = "GT"
+		switch left2.Tag {
+		case maybe.TagNothing:
+			result3 = "LT"
+		default: // maybe.TagJust
+			left0 := left2.Just
+			field := x5 + 1
+			if left0 < field {
+				result3 = "LT"
+			} else if left0 == field {
+				result3 = "EQ"
+			} else {
+				result3 = "GT"
+			}
 		}
+	} else {
+		switch left2.Tag {
+		case maybe.TagNothing:
+			result3 = "EQ"
+		default:
+			result3 = "GT"
+		}
+	}
+	var result4 string
+	if opaque(1) > 0 {
+		result4 = "(Just " + prim.ShowChar('c') + ")"
+	} else {
+		result4 = "Nothing"
+	}
+	x6 := opaque(7)
+	var result5 string
+	if x6 > 0 {
+		result5 = "(Just " + strconv.FormatBool(x6 > 5) + ")"
+	} else {
+		result5 = "Nothing"
+	}
+	x7 := opaque(4)
+	var result6 string
+	if x7 > 0 {
+		result6 = "(Just " + strconv.Itoa(sumTreeNode(sharedTreeLeaf, x7, sharedTreeLeaf)) + ")"
+	} else {
+		result6 = "Nothing"
+	}
+	x8 := opaque(5)
+	var result7 string
+	if x8 > 0 {
+		result7 = "(Just " + strconv.Itoa(1+x8) + ")"
+	} else {
+		result7 = "Nothing"
 	}
 	var result8 string
 	if opaque(1) > 0 {
-		result8 = "(Just " + prim.ShowChar('c') + ")"
+		result8 = "yes"
 	} else {
-		result8 = "Nothing"
+		result8 = "no"
 	}
-	x6 := opaque(7)
+	x9 := opaque(2)
 	var result9 string
-	if x6 > 0 {
-		result9 = "(Just " + strconv.FormatBool(x6 > 5) + ")"
+	if x9 > 0 {
+		x10 := x9 - 1
+		var result10 string
+		if x10 > 0 {
+			result10 = "(Just " + strconv.Itoa(x10+1) + ")"
+		} else {
+			result10 = "Nothing"
+		}
+		result9 = "(Just " + result10 + ")"
 	} else {
 		result9 = "Nothing"
 	}
-	x7 := opaque(4)
-	var result10 string
-	if x7 > 0 {
-		result10 = "(Just " + strconv.Itoa(sumTreeNode(sharedTreeLeaf, x7, sharedTreeLeaf)) + ")"
-	} else {
-		result10 = "Nothing"
-	}
-	x8 := opaque(5)
-	var result11 string
-	if x8 > 0 {
-		result11 = "(Just " + strconv.Itoa(1+x8) + ")"
-	} else {
-		result11 = "Nothing"
-	}
-	var result12 string
-	if opaque(1) > 0 {
-		result12 = "yes"
-	} else {
-		result12 = "no"
-	}
-	x9 := opaque(2)
-	var result13 string
-	if x9 > 0 {
-		x10 := x9 - 1
-		var result14 string
-		if x10 > 0 {
-			result14 = "(Just " + strconv.Itoa(x10+1) + ")"
-		} else {
-			result14 = "Nothing"
-		}
-		result13 = "(Just " + result14 + ")"
-	} else {
-		result13 = "Nothing"
-	}
 	x11 := opaque(-7)
-	x12 := opaque(-7)
-	var result15 MaybeShape
+	var left3 MaybeShape
 	if x11 > 0 {
-		result15 = JustShape(Circle(x11))
+		left3 = JustShape(Circle(x11))
 	} else if x11 < -5 {
-		result15 = JustShape(Square(x11, x11))
+		left3 = JustShape(Square(x11, x11))
 	} else {
-		result15 = NoShape
+		left3 = NoShape
 	}
-	var result16 MaybeShape
+	x12 := opaque(-7)
+	var result11 bool
 	if x12 > 0 {
-		result16 = JustShape(Circle(x12))
+		switch left3.Tag {
+		case maybe.TagJust:
+			result11 = mainJoin(left3.Just, Circle(x12))
+		default:
+			result11 = false
+		}
 	} else if x12 < -5 {
-		result16 = JustShape(Square(x12, x12))
-	} else {
-		result16 = NoShape
-	}
-	var result17 bool
-	if result15.Tag == maybe.TagNothing && result16.Tag == maybe.TagNothing {
-		result17 = true
-	} else if result15.Tag == maybe.TagJust && result16.Tag == maybe.TagJust {
-		if result15.Just.Tag == ShapeCircle && result16.Just.Tag == ShapeCircle {
-			result17 = result15.Just.Field0 == result16.Just.Field0
-		} else if result15.Just.Tag == ShapeSquare && result16.Just.Tag == ShapeSquare {
-			if result15.Just.Field0 == result16.Just.Field0 {
-				result17 = result15.Just.Field1 == result16.Just.Field1
-			} else {
-				result17 = false
-			}
-		} else {
-			result17 = false
+		switch left3.Tag {
+		case maybe.TagJust:
+			result11 = mainJoin(left3.Just, Square(x12, x12))
+		default:
+			result11 = false
 		}
 	} else {
-		result17 = false
+		switch left3.Tag {
+		case maybe.TagNothing:
+			result11 = true
+		default:
+			result11 = false
+		}
 	}
 	x13 := opaque(7)
-	x14 := opaque(-7)
-	var result18 MaybeShape
+	var left4 MaybeShape
 	if x13 > 0 {
-		result18 = JustShape(Circle(x13))
+		left4 = JustShape(Circle(x13))
 	} else if x13 < -5 {
-		result18 = JustShape(Square(x13, x13))
+		left4 = JustShape(Square(x13, x13))
 	} else {
-		result18 = NoShape
+		left4 = NoShape
 	}
-	var result19 MaybeShape
+	x14 := opaque(-7)
+	var result12 string
 	if x14 > 0 {
-		result19 = JustShape(Circle(x14))
-	} else if x14 < -5 {
-		result19 = JustShape(Square(x14, x14))
-	} else {
-		result19 = NoShape
-	}
-	var result20 string
-	if result18.Tag == maybe.TagNothing && result19.Tag == maybe.TagNothing {
-		result20 = "EQ"
-	} else if result18.Tag == maybe.TagNothing {
-		result20 = "LT"
-	} else if result19.Tag == maybe.TagNothing {
-		result20 = "GT"
-	} else if result18.Just.Tag == ShapeCircle && result19.Just.Tag == ShapeCircle {
-		left0 := result18.Just.Field0
-		right0 := result19.Just.Field0
-		if left0 < right0 {
-			result20 = "LT"
-		} else if left0 == right0 {
-			result20 = "EQ"
-		} else {
-			result20 = "GT"
-		}
-	} else if result18.Just.Tag == ShapeCircle {
-		result20 = "LT"
-	} else if result19.Just.Tag == ShapeCircle {
-		result20 = "GT"
-	} else {
-		left0 := result18.Just.Field0
-		left1 := result18.Just.Field1
-		right0 := result19.Just.Field0
-		right1 := result19.Just.Field1
-		if left0 < right0 {
-			result20 = "LT"
-		} else if left0 == right0 {
-			if left1 < right1 {
-				result20 = "LT"
-			} else if left1 == right1 {
-				result20 = "EQ"
-			} else {
-				result20 = "GT"
+		switch left4.Tag {
+		case maybe.TagNothing:
+			result12 = "LT"
+		default: // maybe.TagJust
+			switch left4.Just.Tag {
+			case ShapeCircle:
+				left0 := left4.Just.Field0
+				if left0 < x14 {
+					result12 = "LT"
+				} else if left0 == x14 {
+					result12 = "EQ"
+				} else {
+					result12 = "GT"
+				}
+			default:
+				result12 = "GT"
 			}
-		} else {
-			result20 = "GT"
+		}
+	} else if x14 < -5 {
+		switch left4.Tag {
+		case maybe.TagNothing:
+			result12 = "LT"
+		default: // maybe.TagJust
+			switch left4.Just.Tag {
+			case ShapeCircle:
+				result12 = "LT"
+			default: // ShapeSquare
+				left0 := left4.Just.Field0
+				left1 := left4.Just.Field1
+				if left0 < x14 {
+					result12 = "LT"
+				} else if left0 == x14 {
+					if left1 < x14 {
+						result12 = "LT"
+					} else if left1 == x14 {
+						result12 = "EQ"
+					} else {
+						result12 = "GT"
+					}
+				} else {
+					result12 = "GT"
+				}
+			}
+		}
+	} else {
+		switch left4.Tag {
+		case maybe.TagNothing:
+			result12 = "EQ"
+		default:
+			result12 = "GT"
 		}
 	}
 	x15 := opaque(1)
-	var result21 maybe.Int
+	var result13 maybe.Int
 	if x15 > 0 {
-		result21 = maybe.JustInt(x15 + 1)
+		result13 = maybe.JustInt(x15 + 1)
 	} else {
-		result21 = maybe.NoInt
+		result13 = maybe.NoInt
 	}
-	elements := []maybe.Int{result21, maybe.NoInt}
-	var result22 string
+	elements := []maybe.Int{result13, maybe.NoInt}
+	var result14 string
 	scrutinee := elements[0]
-	var result23 string
+	var result15 string
 	switch scrutinee.Tag {
 	case maybe.TagJust:
-		result23 = "(Just " + strconv.Itoa(scrutinee.Just) + ")"
+		result15 = "(Just " + strconv.Itoa(scrutinee.Just) + ")"
 	default: // maybe.TagNothing
-		result23 = "Nothing"
+		result15 = "Nothing"
 	}
-	result22 = "(Just " + result23 + ")"
+	result14 = "(Just " + result15 + ")"
 	x16 := opaque(1)
-	var result24 *Tree
+	var result16 *Tree
 	if x16 > 0 {
-		result24 = Node(sharedTreeLeaf, x16, sharedTreeLeaf)
+		result16 = Node(sharedTreeLeaf, x16, sharedTreeLeaf)
 	} else {
-		result24 = nil
+		result16 = nil
 	}
-	var result25 string
-	if result24 != nil && result24 != sharedTreeLeaf {
-		result25 = strconv.Itoa(result24.Node1)
-	} else if result24 != nil && result24 == sharedTreeLeaf {
-		result25 = "leaf"
+	var result17 string
+	if result16 != nil && result16 != sharedTreeLeaf {
+		result17 = strconv.Itoa(result16.Node1)
+	} else if result16 != nil && result16 == sharedTreeLeaf {
+		result17 = "leaf"
 	} else {
-		result25 = "none"
+		result17 = "none"
 	}
 	x17 := opaque(2)
-	var result26 maybe.MaybeInt
+	var result18 maybe.MaybeInt
 	if x17 > 0 {
 		x10 := x17 - 1
-		var result14 maybe.Int
+		var result10 maybe.Int
 		if x10 > 0 {
-			result14 = maybe.JustInt(x10 + 1)
+			result10 = maybe.JustInt(x10 + 1)
 		} else {
-			result14 = maybe.NoInt
+			result10 = maybe.NoInt
 		}
-		result26 = maybe.JustMaybeInt(result14)
+		result18 = maybe.JustMaybeInt(result10)
 	} else {
-		result26 = maybe.NoMaybeInt
+		result18 = maybe.NoMaybeInt
 	}
-	var result27 string
-	if result26.Tag == maybe.TagJust && result26.Just.Tag == maybe.TagJust {
-		result27 = strconv.Itoa(result26.Just.Just)
-	} else if result26.Tag == maybe.TagJust && result26.Just.Tag == maybe.TagNothing {
-		result27 = "just nothing"
+	var result19 string
+	if result18.Tag == maybe.TagJust && result18.Just.Tag == maybe.TagJust {
+		result19 = strconv.Itoa(result18.Just.Just)
+	} else if result18.Tag == maybe.TagJust && result18.Just.Tag == maybe.TagNothing {
+		result19 = "just nothing"
 	} else {
-		result27 = "nothing"
+		result19 = "nothing"
 	}
-	var result28 string
+	var result20 string
 	if opaque(1) > 0 {
-		result28 = "c"
+		result20 = "c"
 	} else {
-		result28 = "none"
+		result20 = "none"
 	}
 	x18 := opaque(7)
-	var result29 maybe.Boolean
+	var result21 maybe.Boolean
 	if x18 > 0 {
-		result29 = maybe.JustBoolean(x18 > 5)
+		result21 = maybe.JustBoolean(x18 > 5)
 	} else {
-		result29 = maybe.NoBoolean
+		result21 = maybe.NoBoolean
 	}
-	var result30 string
-	if result29 == maybe.True {
-		result30 = "yes"
-	} else if result29 == maybe.False {
-		result30 = "no"
+	var result22 string
+	if result21 == maybe.True {
+		result22 = "yes"
+	} else if result21 == maybe.False {
+		result22 = "no"
 	} else {
-		result30 = "none"
+		result22 = "none"
 	}
-	return []string{strconv.Itoa(result), strconv.FormatBool(result4), result7, result8, result9, result10, result11, result12, result13, strconv.FormatBool(result17), result20, strconv.FormatBool(opaque(0) > 0), result22, result25, result27, result28, result30}
+	return []string{strconv.Itoa(result), strconv.FormatBool(result2), result3, result4, result5, result6, result7, result8, result9, strconv.FormatBool(result11), result12, strconv.FormatBool(opaque(0) > 0), result14, result17, result19, result20, result22}
 }
 
 func opaque(x int) int {
@@ -400,6 +405,19 @@ func sumTree(tree *Tree) int {
 
 func sumTreeNode(l *Tree, x int, r *Tree) int {
 	return sumTree(l) + x + sumTree(r)
+}
+
+func mainJoin(left0 Shape, right0 Shape) bool {
+	if left0.Tag == ShapeCircle && right0.Tag == ShapeCircle {
+		return left0.Field0 == right0.Field0
+	}
+	if left0.Tag == ShapeSquare && right0.Tag == ShapeSquare {
+		if left0.Field0 == right0.Field0 {
+			return left0.Field1 == right0.Field1
+		}
+		return false
+	}
+	return false
 }
 
 func main() {

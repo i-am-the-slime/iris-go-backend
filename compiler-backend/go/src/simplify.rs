@@ -896,8 +896,8 @@ impl<'m> Simplifier<'m> {
             ExpressionKind::Case { scrutinees, alternatives } => {
                 let scrutinees = scrutinees.into_iter().map(|scrutinee| self.expression(scrutinee));
                 let mut scrutinees: Vec<Expression> = scrutinees.collect();
-                if let [scrutinee] = scrutinees.as_mut_slice()
-                    && let Some(distributed) = self.distribute(scrutinee, &alternatives, monotype)
+                if let Some(distributed) =
+                    self.distribute_columns(&mut scrutinees, &alternatives, monotype)
                 {
                     return choice_at_case(distributed, position);
                 }
