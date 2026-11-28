@@ -3,6 +3,7 @@
 mod directives;
 mod names;
 mod printer;
+pub mod tokens;
 
 pub use names::{DeclarationNames, Name, Reference, statements_names};
 pub use printer::{GoFile, GoImport};

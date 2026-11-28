@@ -3,6 +3,8 @@ use std::ops::Range;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::syntax::tokens::{KEYWORDS, TokenKind, tokens as go_tokens};
+
 #[derive(Debug, Clone, Default)]
 pub struct Opacity {
     pub functions: Vec<OpaqueDeclaration>,
@@ -114,42 +116,6 @@ impl Token {
     }
 }
 
-const KEYWORDS: &[&str] = &[
-    "break",
-    "case",
-    "chan",
-    "const",
-    "continue",
-    "default",
-    "defer",
-    "else",
-    "fallthrough",
-    "for",
-    "func",
-    "go",
-    "goto",
-    "if",
-    "import",
-    "interface",
-    "map",
-    "package",
-    "range",
-    "return",
-    "select",
-    "struct",
-    "switch",
-    "type",
-    "var",
-];
-
-const STATEMENT_ENDING_KEYWORDS: &[&str] = &["break", "continue", "fallthrough", "return"];
-
-const SYMBOLS: &[&str] = &[
-    "<<=", ">>=", "&^=", "...", "&&", "||", "<-", "++", "--", "==", "!=", "<=", ">=", ":=", "+=",
-    "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "&^", "+", "-", "*", "/", "%", "&", "|",
-    "^", "<", ">", "=", "!", "(", ")", "[", "]", "{", "}", ",", ";", ".", ":", "~",
-];
-
 const ASSIGNMENTS: &[&str] =
     &["=", ":=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", "&^="];
 
@@ -169,113 +135,13 @@ const HEADER_KEYWORDS: &[&str] = &["if", "for", "switch", "select", "else"];
 const TYPE_KEYWORDS: &[&str] = &["map", "chan", "struct", "func"];
 
 fn tokens(source: &str) -> Result<Vec<Token>, String> {
-    let characters: Vec<char> = source.chars().collect();
-    let mut tokens = vec![];
-    let mut position = 0;
-    while let Some(&character) = characters.get(position) {
-        let next = characters.get(position + 1).copied();
-        if character == '\n' {
-            end_line(&mut tokens);
-            position += 1;
-        } else if character.is_whitespace() {
-            position += 1;
-        } else if character == '/' && next == Some('/') {
-            while characters.get(position).is_some_and(|&character| character != '\n') {
-                position += 1;
-            }
-        } else if character == '/' && next == Some('*') {
-            let end = comment_end(&characters, position + 2)
-                .ok_or_else(|| "an unterminated comment".to_string())?;
-            if characters[position..end].contains(&'\n') {
-                end_line(&mut tokens);
-            }
-            position = end;
-        } else if matches!(character, '"' | '\'' | '`') {
-            position = literal_end(&characters, position)?;
-            tokens.push(Token::Literal);
-        } else if character.is_alphabetic() || character == '_' {
-            let start = position;
-            while characters
-                .get(position)
-                .is_some_and(|&character| character.is_alphanumeric() || character == '_')
-            {
-                position += 1;
-            }
-            tokens.push(Token::Word(characters[start..position].iter().collect()));
-        } else if character.is_ascii_digit()
-            || (character == '.' && next.is_some_and(|next| next.is_ascii_digit()))
-        {
-            position = number_end(&characters, position);
-            tokens.push(Token::Literal);
-        } else {
-            let symbol = SYMBOLS.iter().find(|symbol| {
-                symbol
-                    .chars()
-                    .enumerate()
-                    .all(|(offset, expected)| characters.get(position + offset) == Some(&expected))
-            });
-            let symbol = symbol.ok_or_else(|| format!("an unexpected `{character}`"))?;
-            position += symbol.len();
-            tokens.push(Token::Symbol(symbol));
-        }
-    }
-    end_line(&mut tokens);
-    Ok(tokens)
-}
-
-fn end_line(tokens: &mut Vec<Token>) {
-    let ends_statement = match tokens.last() {
-        Some(Token::Word(word)) => {
-            !KEYWORDS.contains(&word.as_str()) || STATEMENT_ENDING_KEYWORDS.contains(&word.as_str())
-        }
-        Some(Token::Literal) => true,
-        Some(Token::Symbol(symbol)) => [")", "]", "}", "++", "--"].contains(symbol),
-        None => false,
-    };
-    if ends_statement {
-        tokens.push(Token::Symbol(";"));
-    }
-}
-
-fn comment_end(characters: &[char], start: usize) -> Option<usize> {
-    let mut position = start;
-    while position + 1 < characters.len() {
-        if characters[position] == '*' && characters[position + 1] == '/' {
-            return Some(position + 2);
-        }
-        position += 1;
-    }
-    None
-}
-
-fn literal_end(characters: &[char], start: usize) -> Result<usize, String> {
-    let quote = characters[start];
-    let mut position = start + 1;
-    while let Some(&character) = characters.get(position) {
-        if character == quote {
-            return Ok(position + 1);
-        }
-        if quote != '`' && character == '\n' {
-            break;
-        }
-        position += if quote != '`' && character == '\\' { 2 } else { 1 };
-    }
-    Err("an unterminated literal".to_string())
-}
-
-fn number_end(characters: &[char], start: usize) -> usize {
-    let mut position = start;
-    while let Some(&character) = characters.get(position) {
-        let exponent_sign = matches!(character, '+' | '-')
-            && position > start
-            && matches!(characters[position - 1], 'e' | 'E' | 'p' | 'P');
-        if character.is_alphanumeric() || matches!(character, '_' | '.') || exponent_sign {
-            position += 1;
-        } else {
-            break;
-        }
-    }
-    position
+    let tokens = go_tokens(source)?.into_iter().filter_map(|token| match token.kind {
+        TokenKind::Word => Some(Token::Word(token.text.to_string())),
+        TokenKind::Literal => Some(Token::Literal),
+        TokenKind::Symbol(symbol) => Some(Token::Symbol(symbol)),
+        TokenKind::Comment => None,
+    });
+    Ok(tokens.collect())
 }
 
 fn closing(tokens: &[Token], open: usize) -> Option<usize> {

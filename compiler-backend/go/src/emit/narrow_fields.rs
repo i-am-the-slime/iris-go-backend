@@ -3,6 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::headers::Effects;
 use super::intervals;
 use crate::go_traversal::{self, Walk};
+use crate::syntax::tokens::{Token, tokens};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, StructField};
 
 pub(super) fn narrow_int_fields(
@@ -47,7 +48,13 @@ fn candidate_fields(
             GoDeclaration::Written { source, .. } => source.as_str(),
             _ => continue,
         };
-        candidates.retain(|field| !mentions_word(text, field));
+        match tokens(text) {
+            Ok(tokens) => {
+                let words: FxHashSet<&str> = tokens.iter().filter_map(Token::word).collect();
+                candidates.retain(|field| !words.contains(field.as_str()));
+            }
+            Err(_) => candidates.clear(),
+        }
     }
     candidates
 }
@@ -169,14 +176,6 @@ impl Walk for Census {
         }
         go_traversal::expression(self, value);
     }
-}
-
-fn mentions_word(text: &str, word: &str) -> bool {
-    let identifier = |character: char| character.is_alphanumeric() || character == '_';
-    text.match_indices(word).any(|(at, _)| {
-        !text[..at].chars().next_back().is_some_and(identifier)
-            && !text[at + word.len()..].chars().next().is_some_and(identifier)
-    })
 }
 
 fn narrow_declared_fields(

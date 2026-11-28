@@ -10,6 +10,8 @@ use std::{fs, io};
 
 use thiserror::Error;
 
+use crate::syntax::tokens::tokens;
+
 #[derive(Debug, Error)]
 pub enum EmbedError {
     #[error(
@@ -47,12 +49,19 @@ pub fn embedded_files(file: &Path, source: &str) -> Result<Vec<PathBuf>, EmbedEr
 /// The patterns of every `//go:embed` directive, or the directive whose quote is unterminated.
 fn embed_patterns(source: &str) -> Result<Vec<String>, String> {
     let mut patterns = vec![];
-    for line in source.lines() {
-        let Some(arguments) = line.trim_start().strip_prefix("//go:embed") else { continue };
+    let tokens = tokens(source).unwrap_or_default();
+    let comments = tokens.iter().filter(|token| token.is_comment());
+    let line_comments = comments.filter(|comment| {
+        let line_start = source[..comment.offset].rfind('\n').map_or(0, |newline| newline + 1);
+        source[line_start..comment.offset].trim().is_empty()
+    });
+    for comment in line_comments {
+        let Some(arguments) = comment.text.strip_prefix("//go:embed") else { continue };
         if !arguments.starts_with([' ', '\t']) {
             continue;
         }
-        patterns.extend(directive_arguments(arguments).ok_or_else(|| line.trim().to_string())?);
+        let arguments = directive_arguments(arguments.trim_end());
+        patterns.extend(arguments.ok_or_else(|| comment.text.trim().to_string())?);
     }
     Ok(patterns)
 }
@@ -334,6 +343,12 @@ mod tests {
             embed_patterns(source).unwrap(),
             ["greeting.txt", "fonts/*.ttf", "with space.txt", "raw name.txt", "all:static"]
         );
+    }
+
+    #[test]
+    fn a_directive_inside_a_string_or_after_code_embeds_nothing() {
+        let source = "package ffi\n\nvar usage = `\n//go:embed usage.txt\n`\n\nvar name = \"x\" //go:embed name.txt\n\n/*\n//go:embed commented.txt\n*/\n\n\t//go:embed indented.txt\nvar indented string\n";
+        assert_eq!(embed_patterns(source).unwrap(), ["indented.txt"]);
     }
 
     #[test]
