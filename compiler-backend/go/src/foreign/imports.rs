@@ -241,6 +241,10 @@ pub const STRING_TRIM: Foreign = prim("StringTrim", 1);
 
 pub const ARRAY_APPEND: Foreign = array("Append", 2);
 
+pub const ARRAY_INSERT_AT: Foreign = array_with("InsertAt", 5, found(0, 1));
+
+pub const ARRAY_DELETE_AT: Foreign = direct_with("DeleteAt", 4, found(0, 1));
+
 pub const ARRAY_CONCAT: Foreign = array("Concat", 1);
 
 pub const ARRAY_REVERSE: Foreign = array("Reverse", 1);
@@ -375,8 +379,8 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
             Boundary { iteration: Some(Iteration::FindLastIndex), ..found(0, 1) },
         ),
     ),
-    ("Data.Array", "_insertAt", array_with("InsertAt", 5, found(0, 1))),
-    ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, found(0, 1))),
+    ("Data.Array", "_insertAt", ARRAY_INSERT_AT),
+    ("Data.Array", "_deleteAt", ARRAY_DELETE_AT),
     ("Data.Array", "_updateAt", Foreign::UpdateAt),
     ("Data.Array.NonEmpty.Internal", "foldr1Impl", uncurried(array("Foldr1", 2), &[(0, 2)])),
     ("Data.Array.NonEmpty.Internal", "foldl1Impl", uncurried(array("Foldl1", 2), &[(0, 2)])),

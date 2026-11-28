@@ -1,6 +1,6 @@
 use smol_str::SmolStr;
 
-use crate::foreign::{self, Foreign, Operator};
+use crate::foreign::{self, Foreign, Iteration, Operator};
 use crate::monomorphic::traversal::for_each_child;
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId,
@@ -217,18 +217,36 @@ fn map_write_position(foreign: &Foreign) -> Option<usize> {
 
 fn write_position(carried: Carried<'_>, foreign: &Foreign) -> Option<usize> {
     match foreign {
-        Foreign::ArrayUpdated if carried.updates => Some(2),
+        Foreign::ArrayUpdated | Foreign::ArrayInserted if carried.updates => Some(2),
+        Foreign::ArrayDeleted if carried.updates => Some(1),
         _ => map_write_position(foreign),
     }
 }
 
 fn is_borrowing(foreign: &Foreign) -> bool {
     matches!(foreign, Foreign::Operator(Operator::ArrayLength | Operator::ArrayIndex))
+        || is_search(foreign)
         || matches!(foreign, Foreign::MaybeIndex)
         || foreign.calls(foreign::OBJECT_LOOKUP)
         || foreign.calls(foreign::OBJECT_SIZE)
         || foreign.calls(foreign::OBJECT_INDEX)
         || foreign::borrows_hash_map(foreign)
+}
+
+/// A search of an array, which reads its elements to answer with one of them, a position or a
+/// Boolean, and keeps no hold of the array: `findLastIndex (_ < x) xs` before an insertion.
+fn is_search(foreign: &Foreign) -> bool {
+    let Foreign::Call { boundary, .. } = foreign else { return false };
+    matches!(
+        boundary.iteration,
+        Some(
+            Iteration::FindIndex
+                | Iteration::FindLastIndex
+                | Iteration::Find
+                | Iteration::Any
+                | Iteration::All
+        )
+    )
 }
 
 fn owned_appends_of<'e>(
@@ -425,6 +443,16 @@ fn spine_reads(carried: Carried<'_>, expression: &Expression, first: bool) -> us
                 .max()
                 .unwrap_or(0);
             scrutinised + branches
+        }
+        // A call whose one argument reads the carried value, as a loop's next step that is
+        // `go (n - 1) (let i = length xs / 2 in insertAt i x xs)`, reads it as that argument
+        // does, which is evaluated before the call.
+        ExpressionKind::Apply { function, arguments } if reads(carried, function) == 0 => {
+            let mut reading = arguments.iter().filter(|argument| reads(carried, argument) > 0);
+            match (reading.next(), reading.next()) {
+                (Some(only), None) => spine_reads(carried, only, first),
+                _ => reads(carried, expression),
+            }
         }
         _ => reads(carried, expression),
     }

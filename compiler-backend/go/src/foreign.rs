@@ -16,14 +16,14 @@ pub use hash_map::{
 };
 pub use host::is_opaque_foreign_data;
 pub use imports::{
-    APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_APPLY, ARRAY_CONCAT, ARRAY_FROM_LIST,
-    ARRAY_MAP_WITH_INDEX, ARRAY_REPLICATE, ARRAY_REVERSE, ARRAY_SCANL, ARRAY_SLICE, ARRAY_SORT_BY,
-    ARRAY_TAIL, ARRAY_THAW, ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, EFFECT_FOLD,
-    FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE, INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN,
-    OBJECT_DELETE, OBJECT_FROM_ENTRIES, OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP,
-    OBJECT_SIZE, SEQUENCE_ARRAY, SHOW_NUMBER, STRING_TO_LOWER, STRING_TO_UPPER, STRING_TRIM,
-    TO_CHAR_ARRAY, TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold, array_fold_right,
-    effect_fold,
+    APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_APPLY, ARRAY_CONCAT, ARRAY_DELETE_AT,
+    ARRAY_FROM_LIST, ARRAY_INSERT_AT, ARRAY_MAP_WITH_INDEX, ARRAY_REPLICATE, ARRAY_REVERSE,
+    ARRAY_SCANL, ARRAY_SLICE, ARRAY_SORT_BY, ARRAY_TAIL, ARRAY_THAW, ARRAY_THAW_OWNED,
+    ARRAY_UNCONS, ARRAY_UNZIP, EFFECT_FOLD, FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE,
+    INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE, OBJECT_FROM_ENTRIES,
+    OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE, SEQUENCE_ARRAY,
+    SHOW_NUMBER, STRING_TO_LOWER, STRING_TO_UPPER, STRING_TRIM, TO_CHAR_ARRAY, TRAVERSE_BALANCED,
+    WELL_FORMED_STRING, array_fold, array_fold_right, effect_fold,
 };
 pub use opacity::{ForeignShape, ForeignSignature, Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
@@ -98,6 +98,12 @@ pub enum Foreign {
     /// A copy of an array with the element at an index known to be within it replaced:
     /// `index`, `value` and `array`.
     ArrayUpdated,
+    /// A copy of an array with a value inserted before a position known to be within it or
+    /// at its end: `index`, `value` and `array`.
+    ArrayInserted,
+    /// A copy of an array without the element at an index known to be within it: `index`
+    /// and `array`.
+    ArrayDeleted,
     IntFromNumber,
     Range,
     Snoc,
@@ -577,7 +583,8 @@ impl Foreign {
             Foreign::ObjectFoldM => 4,
             Foreign::MaybeIndex => 4,
             Foreign::UpdateAt => 5,
-            Foreign::ArrayUpdated => 3,
+            Foreign::ArrayUpdated | Foreign::ArrayInserted => 3,
+            Foreign::ArrayDeleted => 2,
             Foreign::IntFromNumber => 3,
             Foreign::Ordering => 5,
             Foreign::Range | Foreign::Snoc | Foreign::RecordGet | Foreign::RecordHas => 2,

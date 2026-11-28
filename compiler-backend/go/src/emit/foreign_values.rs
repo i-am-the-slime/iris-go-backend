@@ -214,6 +214,97 @@ where
         target
     }
 
+    /// The array with a value inserted at a position the write accepts, or without the element
+    /// there: in place on an owned array, once it is copied if it may be shared on entry, and
+    /// into a new array of the length it ends with otherwise.
+    fn positioned_write(
+        &mut self,
+        foreign: &Foreign,
+        arguments: &[Expression],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let inserted = match foreign {
+            Foreign::ArrayInserted => Some(&arguments[1]),
+            _ => None,
+        };
+        let array = &arguments[arguments.len() - 1];
+        let index = self.value(&arguments[0], out)?;
+        let index = self.hoist(index, "index", out);
+        let value = match inserted {
+            Some(value) => {
+                let go_value = self.value(value, out)?;
+                Some(self.typed_constant(go_value, value.monotype)?)
+            }
+            None => None,
+        };
+        let elements = self.value(array, out)?;
+        let Some(owned) = self.owned_updates.get(&std::ptr::from_ref(array)).cloned() else {
+            let elements = self.hoist(elements, "elements", out);
+            let before = slice_of(&elements, None, Some(index.clone()));
+            let after = match value {
+                Some(value) => {
+                    let type_ = self.go_type(array.monotype)?;
+                    let single = GoExpression::Composite { type_, fields: vec![(None, value)] };
+                    vec![single, slice_of(&elements, Some(index), None)]
+                }
+                None => {
+                    let next = binary("+", index, GoExpression::Integer(1));
+                    vec![slice_of(&elements, Some(next), None)]
+                }
+            };
+            let pieces = std::iter::once(before).chain(after).collect();
+            return Ok(self.slices("Concat", pieces));
+        };
+        let name = self.temporary("written");
+        let target = identifier_expression(&name);
+        out.push(GoStatement::Define { names: vec![name], values: vec![elements] });
+        if let Updated::CopiedOnce(copied) = owned {
+            // A clipped array has no room to insert into, so the insertion makes the copy.
+            let fresh = match value {
+                Some(_) => self.slices("Clip", vec![target.clone()]),
+                None => self.slices("Clone", vec![target.clone()]),
+            };
+            let flag = identifier_expression(&copied);
+            self.copied_flags.insert(copied);
+            out.push(GoStatement::If {
+                condition: GoExpression::Unary { operator: "!", operand: Box::new(flag.clone()) },
+                then: vec![
+                    GoStatement::Assign { targets: vec![target.clone()], values: vec![fresh] },
+                    GoStatement::Assign {
+                        targets: vec![flag],
+                        values: vec![GoExpression::Boolean(true)],
+                    },
+                ],
+                otherwise: vec![],
+            });
+        }
+        let written = match value {
+            Some(value) => self.slices("Insert", vec![target.clone(), index, value]),
+            None => {
+                let next = binary("+", index.clone(), GoExpression::Integer(1));
+                self.slices("Delete", vec![target.clone(), index, next])
+            }
+        };
+        out.push(GoStatement::Assign { targets: vec![target.clone()], values: vec![written] });
+        Ok(target)
+    }
+
+    /// `slice 0 (length xs - dropped) xs` as Go slices it, with no call: `xs` up to `dropped`
+    /// before its end, or none of it when it is shorter, capped where it ends like the slice.
+    fn prefix(
+        &mut self,
+        array: &Expression,
+        dropped: i64,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let elements = self.value(array, out)?;
+        let elements = self.hoist(elements, "elements", out);
+        let length = call(identifier_expression("len"), vec![elements.clone()]);
+        let shortened = binary("-", length, GoExpression::Integer(dropped));
+        let end = call(identifier_expression("max"), vec![shortened, GoExpression::Integer(0)]);
+        Ok(self.slices("Clip", vec![slice_of(&elements, None, Some(end))]))
+    }
+
     fn copy_once(&mut self, target: &GoExpression, copied: &str) -> GoStatement {
         self.imports.insert("slices".into());
         let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
@@ -373,6 +464,9 @@ where
             }
             return Ok(self.updated_array(elements, index, value, out));
         }
+        if let Foreign::ArrayInserted | Foreign::ArrayDeleted = foreign {
+            return self.positioned_write(foreign, arguments, out);
+        }
         if let Foreign::IntFromNumber = foreign {
             return self.int_from_number(&arguments[2], monotype, out);
         }
@@ -408,6 +502,11 @@ where
             }
             let write = GoFunction { package: GoPackage::Object, name };
             return Ok(call(self.go_function(write), values));
+        }
+        if foreign.calls(crate::foreign::ARRAY_SLICE)
+            && let Some(dropped) = dropped_from_end(arguments)
+        {
+            return self.prefix(&arguments[2], dropped, out);
         }
         if let Foreign::OwnedReverse = foreign {
             let array = self.value(&arguments[0], out)?;
@@ -672,13 +771,63 @@ pub(super) enum Updated {
     Exclusive,
 }
 
+/// How many elements `slice 0 (length xs - dropped) xs` leaves off the end of the array it
+/// slices, when its bounds are those.
+fn dropped_from_end(arguments: &[Expression]) -> Option<i64> {
+    let [start, end, array] = arguments else { return None };
+    let ExpressionKind::Literal(Literal::Int(0)) = start.kind else { return None };
+    let ExpressionKind::Local(sliced) = array.kind else { return None };
+    let ExpressionKind::Foreign {
+        foreign: Foreign::Operator(Operator::IntSubtract),
+        arguments: subtracted,
+    } = &end.kind
+    else {
+        return None;
+    };
+    let [length, dropped] = subtracted.as_slice() else { return None };
+    let ExpressionKind::Literal(Literal::Int(dropped)) = dropped.kind else { return None };
+    let measured = match &length.kind {
+        ExpressionKind::Foreign {
+            foreign: Foreign::Operator(Operator::ArrayLength),
+            arguments: measured,
+        } => measured,
+        _ => return None,
+    };
+    let [ExpressionKind::Local(measured)] =
+        measured.iter().map(|m| &m.kind).collect::<Vec<_>>()[..]
+    else {
+        return None;
+    };
+    (*measured == sliced && dropped >= 0).then_some(dropped)
+}
+
+fn slice_of(
+    elements: &GoExpression,
+    low: Option<GoExpression>,
+    high: Option<GoExpression>,
+) -> GoExpression {
+    GoExpression::Slice {
+        value: Box::new(elements.clone()),
+        low: low.map(Box::new),
+        high: high.map(Box::new),
+    }
+}
+
+/// The array that a write at a position, which an owned array takes in place, starts from.
+fn written_array<'e>(foreign: &Foreign, arguments: &'e [Expression]) -> Option<&'e Expression> {
+    match foreign {
+        Foreign::ArrayUpdated | Foreign::ArrayInserted => Some(&arguments[2]),
+        Foreign::ArrayDeleted => Some(&arguments[1]),
+        _ => None,
+    }
+}
+
 pub(super) fn updated_arrays(body: &Expression) -> rustc_hash::FxHashSet<*const Expression> {
     let mut written = rustc_hash::FxHashSet::default();
     crate::monomorphic::traversal::visit(body, &mut |expression| {
-        if let ExpressionKind::Foreign { foreign: Foreign::ArrayUpdated, arguments } =
-            &expression.kind
-        {
-            written.insert(std::ptr::from_ref(&arguments[2]));
+        let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return };
+        if let Some(array) = written_array(foreign, arguments) {
+            written.insert(std::ptr::from_ref(array));
         }
     });
     written

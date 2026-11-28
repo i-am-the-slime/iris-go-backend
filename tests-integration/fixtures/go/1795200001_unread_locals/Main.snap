@@ -1,30 +1,16 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-const TagNothing = 0
-
-const TagJust = 1
-
-type ArrayInt struct {
-	Just []int
-	Tag  uint8
-}
-
 // main.go
 package main
 
 import (
-	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 
 func main_() int {
 	prim.IntTrunc(0.5)
-	direct.DeleteAt(0, []int{})
 	counter := 0
 	counter += 1
 	return counter*10 + 2

@@ -8,7 +8,8 @@ use rustc_hash::FxHashMap;
 use super::coverage::{alternatives_size, column_outcomes};
 use super::{INLINE_SIZE, Simplifier, substitute};
 use crate::foreign::{
-    Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
+    ARRAY_DELETE_AT, ARRAY_INSERT_AT, Comparison, Foreign, GoFunction, GoPackage,
+    MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
@@ -44,6 +45,12 @@ impl Simplifier<'_> {
             }
             ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
                 let choice = self.update_choice(arguments.clone(), scrutinee.monotype)?;
+                let placements = plan(&choice, alternatives, self.monotypes)?;
+                (choice, placements)
+            }
+            ExpressionKind::Foreign { foreign, arguments } if is_positioned_write(foreign) => {
+                let choice =
+                    self.positioned_write_choice(foreign, arguments.clone(), scrutinee.monotype)?;
                 let placements = plan(&choice, alternatives, self.monotypes)?;
                 (choice, placements)
             }
@@ -141,6 +148,15 @@ impl Simplifier<'_> {
                     }
                     ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
                         simplifier.update_choice(arguments.clone(), chosen.monotype)
+                    }
+                    ExpressionKind::Foreign { foreign, arguments }
+                        if is_positioned_write(foreign) =>
+                    {
+                        simplifier.positioned_write_choice(
+                            foreign,
+                            arguments.clone(),
+                            chosen.monotype,
+                        )
                     }
                     _ => None,
                 };
@@ -265,7 +281,7 @@ impl Simplifier<'_> {
         let placeholder = Expression::new(ExpressionKind::Unit, element);
         let just = constructor(&self.apply(just, vec![placeholder], monotype))?;
         let nothing = constructor(&nothing)?;
-        let maybe = MaybeChoice { data, just, nothing, monotype };
+        let maybe = MaybeChoice { data, just, nothing, monotype, reaches_end: false };
         Some(self.bounds_choice(maybe, elements, index, |elements, index| {
             operation(Operator::ArrayIndex, vec![elements, index], element)
         }))
@@ -285,7 +301,7 @@ impl Simplifier<'_> {
         let placeholder = Expression::new(ExpressionKind::Unit, elements.monotype);
         let just = constructor(&self.apply(just, vec![placeholder], monotype))?;
         let nothing = constructor(&nothing)?;
-        let maybe = MaybeChoice { data, just, nothing, monotype };
+        let maybe = MaybeChoice { data, just, nothing, monotype, reaches_end: false };
         let mut bindings = vec![];
         let value = self.shared_operand(value, "value", &mut bindings);
         let array = elements.monotype;
@@ -302,8 +318,45 @@ impl Simplifier<'_> {
         Some(Expression::new(ExpressionKind::Let { bindings, body: Box::new(choice) }, monotype))
     }
 
-    /// `Just (found elements index)` when `index` is within `elements`, and
-    /// `Nothing` otherwise.
+    /// `insertAt i x xs` and `deleteAt i xs` as the choice their foreigns make:
+    /// `Just` the array with `x` inserted before position `i`, or with the element at
+    /// `i` removed, when `i` is a position they accept, and `Nothing` otherwise. The
+    /// write then names the array it starts from, which an owned array takes in place.
+    pub(super) fn positioned_write_choice(
+        &mut self,
+        foreign: &Foreign,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        let inserts = foreign.calls(ARRAY_INSERT_AT);
+        let mut arguments = arguments.into_iter();
+        let (just, nothing) = (arguments.next()?, arguments.next()?);
+        let index = arguments.next()?;
+        let value = if inserts { Some(arguments.next()?) } else { None };
+        let elements = arguments.next()?;
+        let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return None };
+        let placeholder = Expression::new(ExpressionKind::Unit, elements.monotype);
+        let just = constructor(&self.apply(just, vec![placeholder], monotype))?;
+        let nothing = constructor(&nothing)?;
+        let maybe = MaybeChoice { data, just, nothing, monotype, reaches_end: inserts };
+        let mut bindings = vec![];
+        let value = value.map(|value| self.shared_operand(value, "value", &mut bindings));
+        let array = elements.monotype;
+        let choice = self.bounds_choice(maybe, elements, index, |elements, index| {
+            let (foreign, arguments) = match value {
+                Some(value) => (&Foreign::ArrayInserted, vec![index, value, elements]),
+                None => (&Foreign::ArrayDeleted, vec![index, elements]),
+            };
+            Expression::new(ExpressionKind::Foreign { foreign, arguments }, array)
+        });
+        if bindings.is_empty() {
+            return Some(choice);
+        }
+        Some(Expression::new(ExpressionKind::Let { bindings, body: Box::new(choice) }, monotype))
+    }
+
+    /// `Just (found elements index)` when `index` is within `elements`, or at its end
+    /// when the choice reaches it, and `Nothing` otherwise.
     fn bounds_choice(
         &mut self,
         maybe: MaybeChoice,
@@ -311,7 +364,7 @@ impl Simplifier<'_> {
         index: Expression,
         found: impl FnOnce(Expression, Expression) -> Expression,
     ) -> Expression {
-        let MaybeChoice { data, just, nothing, monotype } = maybe;
+        let MaybeChoice { data, just, nothing, monotype, reaches_end } = maybe;
         let mut bindings = vec![];
         let elements = self.shared_operand(elements, "elements", &mut bindings);
         let index = self.shared_operand(index, "index", &mut bindings);
@@ -324,11 +377,11 @@ impl Simplifier<'_> {
             vec![index.clone(), zero],
             boolean,
         );
-        let below_length = self.operator(
-            &Foreign::Operator(Operator::Compare(Comparison::LessThan)),
-            vec![index.clone(), length],
-            boolean,
-        );
+        let upper: &'static Foreign = match reaches_end {
+            true => &Foreign::Operator(Operator::Compare(Comparison::LessThanOrEqual)),
+            false => &Foreign::Operator(Operator::Compare(Comparison::LessThan)),
+        };
+        let below_length = self.operator(upper, vec![index.clone(), length], boolean);
         let within = self.operator(
             &Foreign::Operator(Operator::BooleanAnd),
             vec![non_negative, below_length],
@@ -358,6 +411,13 @@ struct MaybeChoice {
     just: usize,
     nothing: usize,
     monotype: MonotypeId,
+    /// Whether the index may also be the array's length, as an insertion's may.
+    reaches_end: bool,
+}
+
+/// `insertAt` and `deleteAt`, which answer with `Nothing` outside the positions they accept.
+fn is_positioned_write(foreign: &Foreign) -> bool {
+    foreign.calls(ARRAY_INSERT_AT) || foreign.calls(ARRAY_DELETE_AT)
 }
 
 impl Simplifier<'_> {
