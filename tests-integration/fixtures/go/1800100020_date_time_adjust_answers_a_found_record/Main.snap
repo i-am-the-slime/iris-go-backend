@@ -70,11 +70,11 @@ type MaybeMaybeDate struct {
 
 var NoMaybeDate = MaybeMaybeDate{Tag: maybe.TagNothing}
 
-var NoDate = MaybeDate{Tag: maybe.TagNothing}
-
 func JustDate(just Date) MaybeDate {
 	return MaybeDate{Tag: maybe.TagJust, Just: just}
 }
+
+var NoDate = MaybeDate{Tag: maybe.TagNothing}
 
 func JustMaybeDate(just MaybeDate) MaybeMaybeDate {
 	return MaybeMaybeDate{Tag: maybe.TagJust, Just: just}
@@ -282,29 +282,27 @@ func AdjustDays(d float64, dt DateTime) MaybeDateTime {
 		} else {
 			result2 = date.NoMaybeDate
 		}
-		var result3 date.MaybeDate
 		switch result2.Tag {
 		case maybe.TagJust:
-			result3 = result2.Just
-		default: // maybe.TagNothing
-			result3 = date.NoDate
-		}
-		switch result3.Tag {
-		case maybe.TagJust:
-			if hour >= 0 && hour <= 23 {
-				if minute >= 0 && minute <= 59 {
-					if second >= 0 && second <= 59 {
-						if millisecond >= 0 && millisecond <= 999 {
-							return JustDateTime(DateTime{First: result3.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+			switch result2.Just.Tag {
+			case maybe.TagJust:
+				if hour >= 0 && hour <= 23 {
+					if minute >= 0 && minute <= 59 {
+						if second >= 0 && second <= 59 {
+							if millisecond >= 0 && millisecond <= 999 {
+								return JustDateTime(DateTime{First: result2.Just.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+							}
+							return NoDateTime
 						}
 						return NoDateTime
 					}
 					return NoDateTime
 				}
 				return NoDateTime
+			default:
+				return NoDateTime
 			}
-			return NoDateTime
-		default:
+		default: // maybe.TagNothing
 			return NoDateTime
 		}
 	} else {
@@ -378,29 +376,27 @@ func AdjustHours(d float64, dt DateTime) MaybeDateTime {
 		} else {
 			result2 = date.NoMaybeDate
 		}
-		var result3 date.MaybeDate
 		switch result2.Tag {
 		case maybe.TagJust:
-			result3 = result2.Just
-		default: // maybe.TagNothing
-			result3 = date.NoDate
-		}
-		switch result3.Tag {
-		case maybe.TagJust:
-			if hour >= 0 && hour <= 23 {
-				if minute >= 0 && minute <= 59 {
-					if second >= 0 && second <= 59 {
-						if millisecond >= 0 && millisecond <= 999 {
-							return JustDateTime(DateTime{First: result3.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+			switch result2.Just.Tag {
+			case maybe.TagJust:
+				if hour >= 0 && hour <= 23 {
+					if minute >= 0 && minute <= 59 {
+						if second >= 0 && second <= 59 {
+							if millisecond >= 0 && millisecond <= 999 {
+								return JustDateTime(DateTime{First: result2.Just.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+							}
+							return NoDateTime
 						}
 						return NoDateTime
 					}
 					return NoDateTime
 				}
 				return NoDateTime
+			default:
+				return NoDateTime
 			}
-			return NoDateTime
-		default:
+		default: // maybe.TagNothing
 			return NoDateTime
 		}
 	} else {
@@ -474,29 +470,27 @@ func AdjustMinutes(d float64, dt DateTime) MaybeDateTime {
 		} else {
 			result2 = date.NoMaybeDate
 		}
-		var result3 date.MaybeDate
 		switch result2.Tag {
 		case maybe.TagJust:
-			result3 = result2.Just
-		default: // maybe.TagNothing
-			result3 = date.NoDate
-		}
-		switch result3.Tag {
-		case maybe.TagJust:
-			if hour >= 0 && hour <= 23 {
-				if minute >= 0 && minute <= 59 {
-					if second >= 0 && second <= 59 {
-						if millisecond >= 0 && millisecond <= 999 {
-							return JustDateTime(DateTime{First: result3.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+			switch result2.Just.Tag {
+			case maybe.TagJust:
+				if hour >= 0 && hour <= 23 {
+					if minute >= 0 && minute <= 59 {
+						if second >= 0 && second <= 59 {
+							if millisecond >= 0 && millisecond <= 999 {
+								return JustDateTime(DateTime{First: result2.Just.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+							}
+							return NoDateTime
 						}
 						return NoDateTime
 					}
 					return NoDateTime
 				}
 				return NoDateTime
+			default:
+				return NoDateTime
 			}
-			return NoDateTime
-		default:
+		default: // maybe.TagNothing
 			return NoDateTime
 		}
 	} else {
@@ -570,29 +564,27 @@ func AdjustMilliseconds(d float64, dt DateTime) MaybeDateTime {
 		} else {
 			result2 = date.NoMaybeDate
 		}
-		var result3 date.MaybeDate
 		switch result2.Tag {
 		case maybe.TagJust:
-			result3 = result2.Just
-		default: // maybe.TagNothing
-			result3 = date.NoDate
-		}
-		switch result3.Tag {
-		case maybe.TagJust:
-			if hour >= 0 && hour <= 23 {
-				if minute >= 0 && minute <= 59 {
-					if second >= 0 && second <= 59 {
-						if millisecond >= 0 && millisecond <= 999 {
-							return JustDateTime(DateTime{First: result3.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+			switch result2.Just.Tag {
+			case maybe.TagJust:
+				if hour >= 0 && hour <= 23 {
+					if minute >= 0 && minute <= 59 {
+						if second >= 0 && second <= 59 {
+							if millisecond >= 0 && millisecond <= 999 {
+								return JustDateTime(DateTime{First: result2.Just.Just, Second: time.Time{First: hour, Second: minute, Third: second, Fourth: millisecond}})
+							}
+							return NoDateTime
 						}
 						return NoDateTime
 					}
 					return NoDateTime
 				}
 				return NoDateTime
+			default:
+				return NoDateTime
 			}
-			return NoDateTime
-		default:
+		default: // maybe.TagNothing
 			return NoDateTime
 		}
 	} else {

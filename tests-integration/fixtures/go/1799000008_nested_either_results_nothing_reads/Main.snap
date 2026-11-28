@@ -35,18 +35,6 @@ type StringFailure struct {
 	Left   string
 }
 
-// Data/Maybe/maybe.go
-package maybe
-
-const TagNothing = 0
-
-const TagJust = 1
-
-type Int struct {
-	Just int
-	Tag  uint8
-}
-
 // main.go
 package main
 
@@ -59,20 +47,19 @@ import (
 func main() {
 	for _, text := range []string{"4", "2001", "-3", "x"} {
 		n, found := prim.IntFromStringAs(10, text)
-		var err either.StringFailure
 		if found {
-			_, _, err = readSide(n)
+			_, _, err := readSide(n)
+			if err.Failed {
+				journal.Log("failed: " + err.Left)
+			}
 		} else {
-			err = either.StringFailure{Failed: true, Left: "not a number: " + text}
-		}
-		if err.Failed {
-			journal.Log("failed: " + err.Left)
+			journal.Log("failed: not a number: " + text)
 		}
 		x, found2 := prim.IntFromStringAs(10, text)
 		if found2 {
-			_, _, err2 := readSide(x)
-			if err2.Failed {
-				journal.Log("failed: " + err2.Left)
+			_, _, err := readSide(x)
+			if err.Failed {
+				journal.Log("failed: " + err.Left)
 			}
 		}
 	}

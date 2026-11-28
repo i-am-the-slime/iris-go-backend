@@ -206,10 +206,10 @@ func initializeMain_() []string {
 	default:
 		result3 = false
 	}
-	var result4 dataordering.Ordering
+	var result4 string
 	switch deep.Tag {
 	case NestedFlat:
-		result4 = dataordering.OrderingLT
+		result4 = "LT"
 	default: // NestedNest
 		original := func(array []int) func([]int) bool {
 			return func(array2 []int) bool {
@@ -234,24 +234,22 @@ func initializeMain_() []string {
 		}, deep.Nest, shared.Convert2([]int{1}))
 		switch ordering {
 		case dataordering.OrderingEQ:
-			result4 = dataordering.OrderingEQ
+			result4 = "EQ"
 		default:
-			result4 = ordering
+			switch ordering {
+			case dataordering.OrderingLT:
+				result4 = "LT"
+			case dataordering.OrderingGT:
+				result4 = "GT"
+			default: // dataordering.OrderingEQ
+				result4 = "EQ"
+			}
 		}
 	}
 	var result5 string
-	switch result4 {
-	case dataordering.OrderingLT:
-		result5 = "LT"
-	case dataordering.OrderingGT:
-		result5 = "GT"
-	default: // dataordering.OrderingEQ
-		result5 = "EQ"
-	}
-	var result6 string
 	switch deep.Tag {
 	case NestedFlat:
-		result6 = "Flat " + strconv.Itoa(deep.Flat.(int)*10)
+		result5 = "Flat " + strconv.Itoa(deep.Flat.(int)*10)
 	default: // NestedNest
 		text := []byte("Nest (")
 		original := func(fa *Nested) func(func(any) any) *Nested {
@@ -272,19 +270,19 @@ func initializeMain_() []string {
 			return shared.Convert2(original2(shared.Convert(coerced)))
 		}))
 		text = append(text, ')')
-		result6 = string(text)
+		result5 = string(text)
 	}
-	var result7 int
+	var result6 int
 	switch deep.Tag {
 	case NestedFlat:
-		result7 = deep.Flat.(int)
+		result6 = deep.Flat.(int)
 	default: // NestedNest
 		original := func(step func(int) func(any) int) func(int, *Nested) int {
 			return func(initial int, nested *Nested) int {
 				return foldl(step, initial, nested)
 			}
 		}
-		result7 = original(func(coerced int) func(any) int {
+		result6 = original(func(coerced int) func(any) int {
 			original2 := func(values []int) int {
 				return foldLanes(values, coerced)
 			}
@@ -293,10 +291,10 @@ func initializeMain_() []string {
 			}
 		})(0, deep.Nest)
 	}
-	var result8 string
+	var result7 string
 	switch deep.Tag {
 	case NestedFlat:
-		result8 = strconv.Itoa(deep.Flat.(int))
+		result7 = strconv.Itoa(deep.Flat.(int))
 	default: // NestedNest
 		original := func(visit func(any) string) func(*Nested) string {
 			return func(nested *Nested) string {
@@ -311,21 +309,21 @@ func initializeMain_() []string {
 			}
 			return accumulator
 		}
-		result8 = original(func(coerced any) string {
+		result7 = original(func(coerced any) string {
 			return original2(shared.Convert(coerced))
 		})(deep.Nest)
 	}
-	var result9 int
+	var result8 int
 	switch deep.Tag {
 	case NestedFlat:
-		result9 = 100 - deep.Flat.(int)
+		result8 = 100 - deep.Flat.(int)
 	default: // NestedNest
 		original := func(step func(int) func(any) int) func(int, *Nested) int {
 			return func(initial int, nested *Nested) int {
 				return foldl(step, initial, nested)
 			}
 		}
-		result9 = original(func(coerced int) func(any) int {
+		result8 = original(func(coerced int) func(any) int {
 			original2 := func(values []int) int {
 				accumulator := coerced
 				for _, value := range values {
@@ -338,14 +336,14 @@ func initializeMain_() []string {
 			}
 		})(100, deep.Nest)
 	}
-	var result10 *Nested
+	var result9 *Nested
 	switch deep.Tag {
 	case NestedFlat:
 		n := deep.Flat.(int)
 		if n > 0 {
-			result10 = &Nested{Tag: NestedFlat, Flat: n + 1}
+			result9 = &Nested{Tag: NestedFlat, Flat: n + 1}
 		} else {
-			result10 = nil
+			result9 = nil
 		}
 	default: // NestedNest
 		original := func(visit func(any) *maybe.Maybe) func(*Nested) *Nested {
@@ -374,30 +372,30 @@ func initializeMain_() []string {
 			return maybe.Convert(original2(shared.Convert(coerced)))
 		})(deep.Nest)
 		if scrutinee != nil {
-			result10 = &Nested{Tag: NestedNest, Nest: scrutinee}
+			result9 = &Nested{Tag: NestedNest, Nest: scrutinee}
 		} else {
-			result10 = nil
+			result9 = nil
 		}
 	}
-	var result11 string
-	if result10 != nil {
-		var result12 string
-		switch result10.Tag {
+	var result10 string
+	if result9 != nil {
+		var result11 string
+		switch result9.Tag {
 		case NestedFlat:
-			result12 = "Flat " + strconv.Itoa(result10.Flat.(int))
+			result11 = "Flat " + strconv.Itoa(result9.Flat.(int))
 		default: // NestedNest
 			text := []byte("Nest (")
 			text = appendShowNestedArrayIntShowDictionary(text, func(coerced any) string {
 				return datashow.ArrayInt(shared.Convert(coerced))
-			}, result10.Nest)
+			}, result9.Nest)
 			text = append(text, ')')
-			result12 = string(text)
+			result11 = string(text)
 		}
-		result11 = "(Just " + result12 + ")"
+		result10 = "(Just " + result11 + ")"
 	} else {
-		result11 = "Nothing"
+		result10 = "Nothing"
 	}
-	return []string{result, strconv.FormatBool(result2) + " " + strconv.FormatBool(result3), result5, result6, strconv.Itoa(result7) + " " + result8 + " " + strconv.Itoa(result9), result11}
+	return []string{result, strconv.FormatBool(result2) + " " + strconv.FormatBool(result3), result4, result5, strconv.Itoa(result6) + " " + result7 + " " + strconv.Itoa(result8), result10}
 }
 
 var deep = initializeDeep()

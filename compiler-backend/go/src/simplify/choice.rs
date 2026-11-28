@@ -561,6 +561,11 @@ fn is_mutable_peek(foreign: &Foreign) -> bool {
     )
 }
 
+struct Leaves {
+    resolved: usize,
+    opaque: usize,
+}
+
 enum Placement {
     /// Copied into every chosen value that reaches it.
     Copied,
@@ -577,7 +582,12 @@ fn plan(
     monotypes: &Monotypes,
 ) -> Option<Vec<Placement>> {
     let mut selections = vec![0usize; alternatives.len()];
-    if !select(choice, choice.monotype, alternatives, &mut selections, monotypes) {
+    let mut leaves = Leaves { resolved: 0, opaque: 0 };
+    let selected =
+        select(choice, choice.monotype, alternatives, &mut selections, &mut leaves, monotypes);
+    let opaque_allowed = leaves.opaque == 0
+        || (leaves.opaque == 1 && matches!(monotypes.get(choice.monotype), Monotype::Data(_)));
+    if !selected || leaves.resolved == 0 || !opaque_allowed {
         return None;
     }
     let mut copied = 0;
@@ -615,23 +625,24 @@ fn select(
     monotype: MonotypeId,
     alternatives: &[Alternative],
     selections: &mut [usize],
+    leaves: &mut Leaves,
     monotypes: &Monotypes,
 ) -> bool {
     match &choice.kind {
         ExpressionKind::If { then, otherwise, .. } => {
-            select(then, monotype, alternatives, selections, monotypes)
-                && select(otherwise, monotype, alternatives, selections, monotypes)
+            select(then, monotype, alternatives, selections, leaves, monotypes)
+                && select(otherwise, monotype, alternatives, selections, leaves, monotypes)
         }
         ExpressionKind::Let { body, .. } => {
-            select(body, monotype, alternatives, selections, monotypes)
+            select(body, monotype, alternatives, selections, leaves, monotypes)
         }
         ExpressionKind::Case { alternatives: inner, .. } => {
             inner.iter().all(|alternative| match &alternative.body {
                 Guarded::Unconditional(body) => {
-                    select(body, monotype, alternatives, selections, monotypes)
+                    select(body, monotype, alternatives, selections, leaves, monotypes)
                 }
                 Guarded::Guards(branches) => branches.iter().all(|branch| {
-                    select(&branch.body, monotype, alternatives, selections, monotypes)
+                    select(&branch.body, monotype, alternatives, selections, leaves, monotypes)
                 }),
             })
         }
@@ -640,6 +651,7 @@ fn select(
             if monotypes.same_without_causes(choice.monotype, monotype) =>
         {
             let Some(outcomes) = column_outcomes(choice, alternatives, 0) else { return false };
+            leaves.resolved += 1;
             // A guarded alternative may fall through to the ones after it.
             for (position, outcome) in outcomes.iter().enumerate() {
                 if let super::coverage::ColumnOutcome::Matches = outcome {
@@ -648,6 +660,13 @@ fn select(
                         break;
                     }
                 }
+            }
+            true
+        }
+        _ if monotypes.same_without_causes(choice.monotype, monotype) => {
+            leaves.opaque += 1;
+            for selection in selections.iter_mut() {
+                *selection += 1;
             }
             true
         }

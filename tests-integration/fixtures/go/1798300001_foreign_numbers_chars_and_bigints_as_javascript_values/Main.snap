@@ -168,10 +168,6 @@ func LeftEitherForeign(left NonEmpty) EitherForeign {
 	return EitherForeign{Tag: EitherForeignLeft, Left: left}
 }
 
-func ErrorAtProperty(errorAtProperty0 string, errorAtProperty1 *ForeignError) *ForeignError {
-	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: errorAtProperty0, ErrorAtProperty1: errorAtProperty1}
-}
-
 func RightEitherBigInt(right *big.Int) EitherBigInt {
 	return EitherBigInt{Tag: EitherBigIntRight, Right: right}
 }
@@ -182,6 +178,10 @@ func LeftEitherBigInt(left NonEmpty) EitherBigInt {
 
 func Cons(cons0 *ForeignError, cons1 *ListForeignError) *ListForeignError {
 	return &ListForeignError{Cons0: cons0, Cons1: cons1}
+}
+
+func ErrorAtProperty(errorAtProperty0 string, errorAtProperty1 *ForeignError) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: errorAtProperty0, ErrorAtProperty1: errorAtProperty1}
 }
 
 func Show(foreignError *ForeignError) string {
@@ -460,12 +460,17 @@ func initializeMain_() []string {
 		var err2 foreign.NonEmptyFailure
 		switch unsafeReadPropImpl.Tag {
 		case foreign.EitherForeignLeft:
-			err2 = foreign.NonEmptyFailure{Failed: true, Left: unsafeReadPropImpl.Left}
+			bigInt, err2 = mainJoin(unsafeReadPropImpl.Left)
 		default: // foreign.EitherForeignRight
-			bigInt, err2 = json.ReadImpl(unsafeReadPropImpl.Right)
+			bigInt2, err3 := json.ReadImpl(unsafeReadPropImpl.Right)
+			if err3.Failed {
+				bigInt, err2 = mainJoin(err3.Left)
+			} else {
+				bigInt, err2 = bigInt2, foreign.NonEmptyFailure{}
+			}
 		}
 		if err2.Failed {
-			result6 = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmpty{First: foreign.ErrorAtProperty("big", err2.Left.First), Second: mainChunkedRevMap(foreign.SharedListListForeignErrorNil, err2.Left.Second)}) + ")"
+			result6 = "(Left " + foreign.ShowNonEmptyListForeignError(err2.Left) + ")"
 		} else {
 			result6 = "(Right { big: " + jsbigint.ToString(bigInt) + " })"
 		}
@@ -473,7 +478,11 @@ func initializeMain_() []string {
 	return []string{foreignvalue.TypeOf(any(array.Snoc[any](array.Snoc[any]([]any{}, int(1)), "Freddy"))), result, result3, foreignvalue.UnsafeStringify(prim.CharSingleton('a')), foreignvalue.UnsafeStringify(jsbigint.FromInt(10)), foreignvalue.UnsafeStringify(direct.ForeignRecord([]string{"missing", "letter", "big"}, []any{result4, prim.CharSingleton('x'), jsbigint.FromInt(7)})), result5, result6}
 }
 
-func mainChunkedRevMap(chunksAcc *foreign.ListListForeignError, chunk *foreign.ListForeignError) *foreign.ListForeignError {
+func mainJoin(x foreign.NonEmpty) (*big.Int, foreign.NonEmptyFailure) {
+	return nil, foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.ErrorAtProperty("big", x.First), Second: mainJoinChunkedRevMap(foreign.SharedListListForeignErrorNil, x.Second)}}
+}
+
+func mainJoinChunkedRevMap(chunksAcc *foreign.ListListForeignError, chunk *foreign.ListForeignError) *foreign.ListForeignError {
 	var listListForeignErrorCells alloc.Cells[foreign.ListListForeignError]
 	for {
 		if chunk != foreign.SharedListForeignErrorNil && chunk.Cons1 != foreign.SharedListForeignErrorNil && chunk.Cons1.Cons1 != foreign.SharedListForeignErrorNil {
@@ -489,11 +498,11 @@ func mainChunkedRevMap(chunksAcc *foreign.ListListForeignError, chunk *foreign.L
 		} else {
 			result = foreign.SharedListForeignErrorNil
 		}
-		return mainChunkedRevMapReverseUnrolledMap(chunksAcc, result)
+		return mainJoinChunkedRevMapReverseUnrolledMap(chunksAcc, result)
 	}
 }
 
-func mainChunkedRevMapReverseUnrolledMap(list *foreign.ListListForeignError, acc *foreign.ListForeignError) *foreign.ListForeignError {
+func mainJoinChunkedRevMapReverseUnrolledMap(list *foreign.ListListForeignError, acc *foreign.ListForeignError) *foreign.ListForeignError {
 	var foreignErrorCells alloc.Cells[foreign.ForeignError]
 	var listForeignErrorCells alloc.Cells[foreign.ListForeignError]
 	for {
