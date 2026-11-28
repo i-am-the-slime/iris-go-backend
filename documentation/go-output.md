@@ -17,7 +17,7 @@ googoo run -- first second
 
 That compiles your package to Go, builds it, and runs it with `first second` as its arguments. Its
 output, input and exit status are your program's. You need Go 1.27 or later and Spago on your
-`PATH`. Iris fetches your packages with Spago, and `brew install spago` or `npm install -g spago`
+`PATH`. googoo fetches your packages with Spago, and `brew install spago` or `npm install -g spago`
 gets you one.
 
 - **Entry point**: `main` in `Main`, or in the module your `spago.yaml` names under `run.main`.
@@ -25,20 +25,26 @@ gets you one.
 - **An entry that isn't an `Effect`**: an `Int`, `Number`, `Boolean`, `Char` or `String`, or an
   array of them, gets printed, arrays as `[1 2 3]`. Anything else (a record, a `Maybe`, a
   function) is computed but not printed, and `googoo go` says so.
-- **Tests**: there's no `googoo test` yet. `googoo run --main Test.Main` runs your test suite
-  instead, and a failing test exits with a non-zero status.
+- **Tests**: `googoo run --main Test.Main` runs your test suite, and a failing test exits with a
+  non-zero status. `googoo test` runs tests with Node.js, so it fails on Go-only packages.
 - **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
 - **Packages**: `-p my-app` in a workspace with several.
 - **Fast reruns**: the first run downloads the Go runtime. After that, if your program compiles to
   the same Go, it starts right away without building again.
 - **Just the executable**: `googoo go` builds it and prints its path. It lives under
   `.spago/go/<package>/bin/`.
-- **Hacking on the runtime**: `IRIS_GO=~/code/iris-go googoo run` builds against your checkout
-  of [iris-go](https://github.com/i-am-the-slime/iris-go) instead of the release.
 
 Want the Go source in a directory of your own instead? `googoo go out` writes it to `out/`. If
 `out/` has no `go.mod` yet, you get one naming the module `iris.local/<package>`; change the
-`module` line whenever you like, and the next `googoo go out` uses your name.
+`module` line whenever you like, and the next `googoo go out` uses your name. It has no `go.sum`,
+so let Go write one before you build:
+
+```bash
+googoo go out
+cd out
+go mod tidy
+go build
+```
 
 ### Profile-guided optimisation
 
@@ -75,7 +81,7 @@ GOGC=400 googoo run
 
 On the benchmarks we measured, `GOGC=400` made allocation-heavy programs up to 30 % faster, and
 peak memory grew by up to 1.6 times. A program with a large heap that it keeps around, such as a
-server, can grow up to 2.5 times bigger, which is why Iris leaves `GOGC` alone. To bound it, set
+server, can grow up to 2.5 times bigger, which is why googoo leaves `GOGC` alone. To bound it, set
 `GOMEMLIMIT` as well, say `GOGC=400 GOMEMLIMIT=2GiB`: Go then collects more often as the heap gets
 close to 2 GiB.
 
@@ -109,7 +115,7 @@ main.main()
 When a Go build crashes, the trace names the lines of your `.purs` files, library code under
 `.spago` included, and so do `pprof` profiles and Delve's breakpoints (for Delve, `go build`
 the output of `googoo go out` yourself: `googoo run` builds without debug info). That's the
-`//line` comments in the generated Go. A function Iris inlines shows up as the line that calls
+`//line` comments in the generated Go. A function googoo inlines shows up as the line that calls
 it.
 
 They make the Go a bit noisier to read. `googoo go --no-line-directives out` leaves them out.
@@ -464,7 +470,7 @@ func Every(n int, f func(int)) {
 ```
 
 Every foreign import is a Go function or variable with its name capitalised. Call the package
-whatever you like, Iris renames it.
+whatever you like, googoo renames it.
 
 | PureScript | Go |
 | --- | --- |
@@ -479,7 +485,7 @@ whatever you like, Iris renames it.
 | `foreign import data T` | any Go type you declare as `T` |
 
 - **Strings are WTF-8.** A JavaScript string is UTF-16 and can hold half a character, a lone
-  surrogate like `"\uD83D"`. Plain UTF-8 can't store that, so Iris uses WTF-8 ("wobbly
+  surrogate like `"\uD83D"`. Plain UTF-8 can't store that, so googoo uses WTF-8 ("wobbly
   transformation format"): ordinary text is byte for byte normal UTF-8, and only a lone surrogate
   gets the extra three-byte encoding. You'll never see it with normal text. When your Go hands a
   string to PureScript, make it valid UTF-8; bytes from outside (files, sockets, protobuf) are
@@ -487,12 +493,12 @@ whatever you like, Iris renames it.
 - **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int, x A)`, not a
   function returning a function.
 - **Calling a function performs its effect.** `elapsed :: Stopwatch -> Effect Number` is
-  `Elapsed(stopwatch Stopwatch) float64`: no thunk to return, Iris calls it when the effect runs.
+  `Elapsed(stopwatch Stopwatch) float64`: no thunk to return, googoo calls it when the effect runs.
   `start` has no arguments, so `Start` _is_ the effect.
 - **Callbacks stay curried and perform when called.** `Int -> Effect Unit` is `func(int)`, and
   `a -> b -> Effect c` is `func(A) func(B) C`.
 - **An `Effect` callback gets called right away.** Go calls it while your foreign runs, on the same
-  goroutine, like `Every` above or a sort's comparator. Iris puts nothing around it. Calling one
+  goroutine, like `Every` above or a sort's comparator. googoo puts nothing around it. Calling one
   later, from a goroutine, is a bug: see
   [Callbacks from goroutines](#callbacks-from-goroutines).
 - **`EffectFn` and `STFn` work the same way.** `EffectFn2 a b c` is `func(A, B) C`.
@@ -571,7 +577,7 @@ func OnWorkersImpl(workers int, handler func(), done func()) {
 ```
 
 An `IO Unit` is a plain `func()` in Go, so the Go side just calls it, from as many goroutines as it
-likes. Iris doesn't wrap anything at the crossing: `liftEffect` is the only place that waits.
+likes. googoo doesn't wrap anything at the crossing: `liftEffect` is the only place that waits.
 
 Two more things in there:
 
@@ -616,7 +622,7 @@ become `_`, and a label that doesn't start with a letter gets an `X` in front: `
 If two labels end up with the same name, the one starting with a lower-case letter wins, so `a` is
 always `A`. A label starting with a capital gets a `_` behind it: `"A"` next to `a` is `A_`. Anything
 else that clashes gets a number: `"content-type"` next to `content_type` is `Content_type2`. In the
-structs Iris writes, every field whose name isn't just its label with a capital first letter has
+structs googoo writes, every field whose name isn't just its label with a capital first letter has
 the label as a tag, so you can look it up. `{ "A" :: Int, a :: String, "content-type" :: String,
 content_type :: String }` is:
 
@@ -629,7 +635,7 @@ type Header struct {
 }
 ```
 
-Tags are optional in your own structs; Iris only goes by the field names. A field can hold another
+Tags are optional in your own structs; googoo only goes by the field names. A field can hold another
 named record if that one has a struct too: `Headers []Header`.
 
 A function in a field looks just like a callback: curried, and it performs its effect when called,
@@ -682,13 +688,13 @@ import _ "embed"
 var Greeting string
 ```
 
-Iris copies whatever the patterns match along with the `.go` file, so your program is one binary
+googoo copies whatever the patterns match along with the `.go` file, so your program is one binary
 with its fonts, templates and data baked in. Patterns work as in Go: several per line, quoted,
 globs like `fonts/*.ttf`, whole directories (minus files starting with `.` or `_`, unless you
 write `all:fonts`). Symlinks are followed, so several modules can link to one asset folder.
 
 A pattern has to stay beside or below the `.go` file, and has to match something. If it doesn't,
-Iris says so before `go build` runs:
+googoo says so before `go build` runs:
 
 ```
 src/Greeting.go: //go:embed greeting.txt: no matching files found
@@ -696,13 +702,13 @@ src/Greeting.go: //go:embed greeting.txt: no matching files found
 
 ### Libraries
 
-Libraries work the same way. If a package you install has `.go` files next to its `.js` files, Iris
+Libraries work the same way. If a package you install has `.go` files next to its `.js` files, googoo
 picks them up. iris-go also ships Go versions of some popular libraries that don't have their own
 yet, such as hyrule's `FRP.Event`, and of all the core libraries. A `.go` file next to the source
 always wins.
 
 You only need Go for the foreign imports your program actually uses. If a module has no Go at all,
-Iris tells you:
+googoo tells you:
 
 ```
 cannot specialize Main.main: foreign import Stopwatch.elapsed has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
@@ -716,7 +722,7 @@ If the `.go` file is there but a function is missing, `go build` tells you inste
 
 ## Programs the Go backend rejects
 
-Iris type-checks the whole program and then specialises every polymorphic function to the concrete
+googoo type-checks the whole program and then specialises every polymorphic function to the concrete
 types that `main` uses. Programs that cannot be specialised fail to compile, with a message that
 starts `cannot specialize <definition>:`. The JavaScript backend compiles them.
 

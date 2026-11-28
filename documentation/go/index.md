@@ -1,6 +1,6 @@
 # What your PureScript becomes in Go
 
-These pages show, by example, the Go that Iris writes for your PureScript. Each example is a small
+These pages show, by example, the Go that googoo writes for your PureScript. Each example is a small
 program next to the Go it compiles to, trimmed to the lines that correspond to it: imports,
 start-up plumbing and the `//line` comments that point stack traces at your PureScript are left
 out, nothing is rewritten.
@@ -20,13 +20,12 @@ out, nothing is rewritten.
 ## See it for yourself
 
 ```bash
-mkdir out
-printf 'module example.com/app\n\ngo 1.27.0\n' > out/go.mod
-googoo go --entry Main.main out
+googoo go out
 ```
 
 That writes your program to `out/main.go`, with packages for your modules' foreign code and for the
-types several modules share. To build and run your program in one step, use `googoo run`.
+types several modules share, and a `go.mod` if there isn't one yet. To build and run your program in
+one step, use `googoo run`.
 
 How a Go build behaves differently from a JavaScript one, and which programs it can't compile yet,
 is in [Go output: differences from the JavaScript backend](../go-output.md).

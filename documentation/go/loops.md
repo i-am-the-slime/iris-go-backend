@@ -80,7 +80,7 @@ func main() {
 ```
 
 `snoc` copies its array, so a fold of `snoc`s would copy the whole array at every step. Nothing but
-the fold ever sees `acc`, though, so Iris appends to it with Go's `append`. In the same way, a
+the fold ever sees `acc`, though, so googoo appends to it with Go's `append`. In the same way, a
 string that a fold only appends to grows in a `[]byte` and becomes a string once, at the end.
 
 ## Data that nothing else holds is reused
@@ -138,7 +138,7 @@ func insertReusing(x int, value *Tree) *Tree {
 ```
 
 Each tree in the fold is dropped as soon as the next one is built, so `insert` can overwrite the
-nodes it takes apart instead of allocating new ones, writing only the field that changed. Iris
+nodes it takes apart instead of allocating new ones, writing only the field that changed. googoo
 writes a second version of `insert` that
 does that, and calls it where the old tree is dead. A tree you still hold elsewhere gets the plain
 `insert`, which copies.

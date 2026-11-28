@@ -30,7 +30,7 @@ func main() {
 }
 ```
 
-`answer`, `ratio` and `name` are gone, and so are `+`, `*` and `<>`: Iris did the sums, and
+`answer`, `ratio` and `name` are gone, and so are `+`, `*` and `<>`: googoo did the sums, and
 `show 43` is just `"43"`, `show 1.5` just `"1.5"`. Small functions get copied into the code that calls them, so whatever
 depends only on constants ends up computed too.
 
@@ -580,7 +580,7 @@ func eq(ra Card, rb Card) bool {
 true
 ```
 
-There are no dictionaries. Iris knows which instance each `show`, `compare` and `==` means, and
+There are no dictionaries. googoo knows which instance each `show`, `compare` and `==` means, and
 writes that instance's code where it's used: `show suit` is a function with a `switch`, `show rank`
 is `strconv.Itoa`, and the derived `Ord Suit` orders the constructors the way Go orders their
 numbers, so `sort` is `slices.Sort`. `==` on two arrays of cards gets an equality function for
