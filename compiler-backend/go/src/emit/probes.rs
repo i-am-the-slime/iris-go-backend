@@ -96,13 +96,13 @@ fn test(statement: &GoStatement) -> Option<Test> {
 /// The position of the `if found` after the test, when the statements up to it leave the map,
 /// the key and the answer alone.
 fn branch_after(block: &mut [GoStatement], position: usize, test: &Test) -> Option<usize> {
-    for index in position + 1..block.len() {
-        if let GoStatement::If { condition: GoExpression::Identifier(tested), .. } = &block[index]
+    for (index, statement) in block.iter_mut().enumerate().skip(position + 1) {
+        if let GoStatement::If { condition: GoExpression::Identifier(tested), .. } = &*statement
             && *tested == test.found
         {
             return Some(index);
         }
-        if changes(&mut block[index], test) || writes(&mut block[index], &test.found) {
+        if changes(statement, test) || writes(statement, &test.found) {
             return None;
         }
     }

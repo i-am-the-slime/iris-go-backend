@@ -150,6 +150,7 @@ pub(crate) fn hash_map_operations_used(
     hash_maps::operations_used(program, monotypes, operations)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn emit_program<Q>(
     mut program: Program,
     monotypes: &mut Monotypes,

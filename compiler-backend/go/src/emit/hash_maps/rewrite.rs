@@ -530,7 +530,7 @@ impl<'r> Rewrite<'r> {
                     .filter(|operation| operation.arity() == arguments.len()),
                 _ => None,
             },
-            ExpressionKind::Function(id) => self.operations.get(&id).copied(),
+            ExpressionKind::Function(id) => self.operations.get(id).copied(),
             _ => None,
         };
         let Some(operation) = operation else { return };

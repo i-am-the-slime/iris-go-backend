@@ -22,7 +22,7 @@ pub(super) fn build_looked_up_keys_in_scratch(
 }
 
 fn statements(
-    block: &mut Vec<GoStatement>,
+    block: &mut [GoStatement],
     looping: bool,
     scratch: &mut Option<String>,
     names: &mut FxHashSet<String>,

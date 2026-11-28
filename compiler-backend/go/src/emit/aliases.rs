@@ -517,13 +517,13 @@ fn return_directly(block: &mut Vec<GoStatement>) {
     else {
         return;
     };
-    let staged = match (&block[defined], &block[last]) {
+    let staged = matches!(
+        (&block[defined], &block[last]),
         (
             GoStatement::Define { names, values },
             GoStatement::Return(Some(GoExpression::Identifier(returned))),
-        ) if names.len() == 1 && values.len() == 1 && &names[0] == returned => true,
-        _ => false,
-    };
+        ) if names.len() == 1 && values.len() == 1 && &names[0] == returned
+    );
     if !staged || defined + 1 != last {
         return;
     }

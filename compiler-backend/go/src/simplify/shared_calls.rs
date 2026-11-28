@@ -169,7 +169,7 @@ impl Simplifier<'_> {
                         }
                     })
                 }
-                ExpressionKind::Local(local) => names.get(&local).cloned(),
+                ExpressionKind::Local(local) => names.get(local).cloned(),
                 _ => None,
             },
             ExpressionKind::Foreign { foreign: Foreign::Call { function, .. }, .. } => {
