@@ -8,8 +8,11 @@
 //! instead. These operations are called as functions until then, rather than copied into their
 //! callers, so that every use of a map still says what it does.
 
+use building_types::QueryResult;
 use checking::TypeId;
 use checking::core::Type;
+use files::FileId;
+use indexing::{IndexedTypeItemKind, TypeItemId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
@@ -19,7 +22,9 @@ use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     ExpressionKind, FunctionId, FunctionSpelling, Guard, Guarded, Pattern, PatternKind, Program,
 };
+use crate::monotype::expand_synonyms;
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::types::Substitution;
 
 /// A `Data.Map.Internal` function that a Go map does by hashing the key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -290,20 +295,159 @@ fn pattern_data(pattern: &Pattern, found: &mut Vec<DataType>) {
 }
 
 /// Whether Go's `==` on the key's Go type is the key's `Eq`, and sorting by its `Ord` is a sort
-/// Go can do: `Int`, `Char` and `String`.
+/// Go can do: `Int`, `Char` and `String`, and the records and products of them whose `Ord`
+/// compares their fields in turn, as a derived one does.
 fn is_hashable_key<Q>(context: &mut Context<'_, Q>, key: TypeId) -> bool
 where
     Q: checking::ExternalQueries,
 {
-    let key = context.types.strip_annotations(key);
-    let Type::Constructor(file_id, item) = context.types.lookup(key).clone() else {
-        return false;
+    let mut leaves = KEY_LEAF_LIMIT;
+    is_key_type(context, key, &mut leaves).unwrap_or(false)
+}
+
+const KEY_LEAF_LIMIT: usize = 8;
+
+fn is_key_type<Q>(
+    context: &mut Context<'_, Q>,
+    key: TypeId,
+    leaves: &mut usize,
+) -> QueryResult<bool>
+where
+    Q: checking::ExternalQueries,
+{
+    let key = expand_synonyms(context, key)?;
+    let (head, arguments) = context.types.spine(key);
+    let Type::Constructor(file_id, item) = context.types.lookup(head).clone() else {
+        return Ok(false);
     };
-    if file_id != context.queries.prim_id() {
-        return false;
+    if file_id == context.queries.prim_id() {
+        let name = context.type_name(file_id, item)?;
+        return match (name.as_str(), &arguments[..]) {
+            ("Int" | "Char" | "String", []) => Ok(take_leaf(leaves)),
+            ("Record", &[row]) => is_key_record(context, row, leaves),
+            _ => Ok(false),
+        };
     }
-    let Ok(name) = context.type_name(file_id, item) else { return false };
-    matches!(name.as_str(), "Int" | "Char" | "String")
+    if !derives_order(context, file_id, item)? {
+        return Ok(false);
+    }
+    let Some(fields) = product_fields(context, file_id, item, &arguments)? else {
+        return Ok(false);
+    };
+    if fields.is_empty() {
+        return Ok(false);
+    }
+    for field in fields {
+        if !is_key_type(context, field, leaves)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn take_leaf(leaves: &mut usize) -> bool {
+    match leaves.checked_sub(1) {
+        Some(left) => {
+            *leaves = left;
+            true
+        }
+        None => false,
+    }
+}
+
+fn is_key_record<Q>(
+    context: &mut Context<'_, Q>,
+    row: TypeId,
+    leaves: &mut usize,
+) -> QueryResult<bool>
+where
+    Q: checking::ExternalQueries,
+{
+    let row = expand_synonyms(context, row)?;
+    let Type::Row(row_id) = context.types.lookup(row).clone() else { return Ok(false) };
+    let row_type = context.queries.lookup_row_type(row_id).clone();
+    if row_type.tail.is_some() || row_type.fields.is_empty() {
+        return Ok(false);
+    }
+    let labels: FxHashSet<&SmolStr> = row_type.fields.iter().map(|field| &field.label).collect();
+    if labels.len() != row_type.fields.len() {
+        return Ok(false);
+    }
+    for field in row_type.fields.iter() {
+        if !is_key_type(context, field.id, leaves)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn derives_order<Q>(
+    context: &mut Context<'_, Q>,
+    file_id: FileId,
+    item: TypeItemId,
+) -> QueryResult<bool>
+where
+    Q: checking::ExternalQueries,
+{
+    let module = context.module(file_id)?;
+    let mut derives_eq = false;
+    let mut derives_ord = false;
+    for instance in module.checked.derived_instances.values() {
+        let (class_file, class_item) = instance.resolution;
+        let class_module = context.module(class_file)?.name.clone();
+        let class = context.type_name(class_file, class_item)?;
+        let derives = match (class_module.as_str(), class.as_str()) {
+            ("Data.Eq", "Eq") => &mut derives_eq,
+            ("Data.Ord", "Ord") => &mut derives_ord,
+            _ => continue,
+        };
+        let (_, body) = context.types.peel_quantifiers(instance.signature);
+        let (_, head) = context.types.peel_constraints(body);
+        let (_, arguments) = context.types.spine(head);
+        let &[argument] = &arguments[..] else { continue };
+        let (constructor, _) = context.types.spine(argument);
+        if *context.types.lookup(constructor) == Type::Constructor(file_id, item) {
+            *derives = true;
+        }
+    }
+    Ok(derives_eq && derives_ord)
+}
+
+fn product_fields<Q>(
+    context: &mut Context<'_, Q>,
+    file_id: FileId,
+    item: TypeItemId,
+    arguments: &[TypeId],
+) -> QueryResult<Option<Vec<TypeId>>>
+where
+    Q: checking::ExternalQueries,
+{
+    let module = context.module(file_id)?;
+    let (IndexedTypeItemKind::Data { constructors, .. }
+    | IndexedTypeItemKind::Newtype { constructors, .. }) = &module.indexed.items[item].kind
+    else {
+        return Ok(None);
+    };
+    let &[term] = &constructors[..] else { return Ok(None) };
+    let Some(signature) = module.checked.lookup_term_item_type(term) else { return Ok(None) };
+    let (_, body) = context.types.peel_quantifiers(signature);
+    let mut fields = vec![];
+    let mut current = body;
+    while let Some((argument, result)) = context.types.function_parts(current) {
+        fields.push(argument);
+        current = result;
+    }
+    let (_, parameters) = context.types.spine(current);
+    if parameters.len() != arguments.len() {
+        return Ok(None);
+    }
+    let mut substitution = Substitution::default();
+    for (parameter, &argument) in parameters.iter().zip(arguments) {
+        let Type::Rigid(name, _, _) = context.types.lookup(*parameter) else { return Ok(None) };
+        substitution.insert(*name, argument);
+    }
+    let fields = fields.into_iter().map(|field| context.types.substitute(field, &substitution));
+    Ok(Some(fields.collect()))
 }
 
 /// What a Go map, or a map kept in order ([`crate::monotype::Monotype::OrderedMap`]), does for a

@@ -505,6 +505,8 @@ where
             lowered_function_types: vec![],
             reference_declared: false,
             support_functions: FxHashMap::default(),
+            key_comparisons: FxHashMap::default(),
+            map_keys: None,
             homes: FxHashMap::default(),
             spellings: FxHashMap::default(),
             pending_spellings: vec![],
@@ -688,6 +690,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     reference_declared: bool,
     /// The name of each support function declared so far, by the base of its name.
     support_functions: FxHashMap<&'static str, String>,
+    key_comparisons: FxHashMap<MonotypeId, String>,
+    map_keys: Option<FxHashSet<DataType>>,
     /// The module each declaration belongs to, where it has one of its own:
     /// a function's is its origin, a data type's the module defining it.
     homes: FxHashMap<String, FileId>,

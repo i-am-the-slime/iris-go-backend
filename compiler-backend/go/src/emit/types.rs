@@ -789,6 +789,9 @@ where
 
     pub(super) fn is_boxed(&mut self, data: &DataType) -> GoResult<bool> {
         let Some(shape) = self.inline_shape(data)? else { return Ok(true) };
+        if self.is_map_key(data)? {
+            return Ok(false);
+        }
         let limit = if !self.copied_by_containers.contains(data) {
             TRANSIENT_DATA_LIMIT
         } else if self.contains_itself_through_arrays(data)? {
@@ -797,6 +800,33 @@ where
             INLINE_DATA_LIMIT
         };
         Ok(shape.size() > limit)
+    }
+
+    fn is_map_key(&mut self, data: &DataType) -> GoResult<bool> {
+        if self.map_keys.is_none() {
+            let mut pending: Vec<MonotypeId> = self
+                .monotypes
+                .ids()
+                .filter_map(|id| match self.monotypes.get(id) {
+                    Monotype::HashMap(key, _) => Some(*key),
+                    _ => None,
+                })
+                .collect();
+            let mut keys = FxHashSet::default();
+            while let Some(monotype) = pending.pop() {
+                match self.monotypes.get(monotype).clone() {
+                    Monotype::Data(data) if keys.insert(data.clone()) => {
+                        pending.extend(self.constructor_fields(&data)?)
+                    }
+                    Monotype::Record(fields) => {
+                        pending.extend(fields.iter().map(|field| field.monotype))
+                    }
+                    _ => {}
+                }
+            }
+            self.map_keys = Some(keys);
+        }
+        Ok(self.map_keys.as_ref().is_some_and(|keys| keys.contains(data)))
     }
 
     /// Adds the `Origin` field to an erased layout's struct, once.

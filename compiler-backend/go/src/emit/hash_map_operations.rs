@@ -5,13 +5,14 @@
 //! A write changes the map in place and answers it. The map is the only version anyone holds
 //! ([`super::hash_maps`] decided so), so the program cannot tell.
 
-use super::{Emitter, binary, call, identifier_expression};
-use crate::error::GoResult;
+use super::packages::Spelling;
+use super::{DataKind, Emitter, binary, call, field, identifier_expression};
+use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -183,6 +184,7 @@ where
                 let compare = self.go_function(compare);
                 call(identifier_expression(&function), vec![table, compare])
             }
+            Monotype::Data(_) | Monotype::Record(_) => self.sorted_product_entries(table, key)?,
             _ => {
                 let function =
                     self.support_function("sortedIntegerEntries", INTEGER_ENTRIES_SOURCE);
@@ -201,7 +203,228 @@ where
         ];
         self.record_value(entries, fields)
     }
+
+    fn sorted_product_entries(
+        &mut self,
+        table: GoExpression,
+        key: MonotypeId,
+    ) -> GoResult<GoExpression> {
+        let leaves = self.key_leaves(key)?;
+        let compare = identifier_expression(&self.map_key_comparison(key, &leaves)?);
+        let integers = leaves.iter().all(|(_, monotype)| {
+            matches!(self.monotypes.get(*monotype), Monotype::Int | Monotype::Char)
+        });
+        if !integers {
+            self.imports.insert("slices".into());
+            let function = self.support_function("sortedEntries", ENTRIES_SOURCE);
+            return Ok(call(identifier_expression(&function), vec![table, compare]));
+        }
+        let type_ = self.go_type(key)?;
+        let mut arguments = vec![table, compare];
+        for (path, _) in &leaves {
+            let leaf =
+                path.iter().fold(identifier_expression("key"), |value, name| field(value, name));
+            arguments.push(GoExpression::Function {
+                parameters: vec![("key".into(), type_.clone())],
+                result: Some(GoType::Named("int64".into())),
+                body: vec![GoStatement::Return(Some(call(
+                    identifier_expression("int64"),
+                    vec![leaf],
+                )))],
+            });
+        }
+        let function = self.support_function("sortedFieldEntries", FIELD_ENTRIES_SOURCE);
+        Ok(call(identifier_expression(&function), arguments))
+    }
+
+    fn map_key_comparison(
+        &mut self,
+        key: MonotypeId,
+        leaves: &[(Vec<String>, MonotypeId)],
+    ) -> GoResult<String> {
+        if let Some(name) = self.key_comparisons.get(&key) {
+            return Ok(name.clone());
+        }
+        let name = self.global_name(Spelling::Base("compareKeys".into()));
+        self.key_comparisons.insert(key, name.clone());
+        let read = |side: &str, path: &[String]| {
+            path.iter().fold(identifier_expression(side), |value, name| field(value, name))
+        };
+        let mut body = vec![];
+        let last = leaves.len() - 1;
+        for (index, (path, monotype)) in leaves.iter().enumerate() {
+            let compare = match self.monotypes.get(*monotype) {
+                Monotype::String => {
+                    self.go_function(GoFunction { package: GoPackage::Prim, name: "CompareString" })
+                }
+                _ => {
+                    self.imports.insert("cmp".into());
+                    GoExpression::Qualified { package: "cmp".into(), name: "Compare".into() }
+                }
+            };
+            let compared = call(compare, vec![read("left", path), read("right", path)]);
+            if index == last {
+                body.push(GoStatement::Return(Some(compared)));
+                break;
+            }
+            let order = if index == 0 { "order".to_string() } else { format!("order{index}") };
+            body.push(GoStatement::Define { names: vec![order.clone()], values: vec![compared] });
+            body.push(GoStatement::If {
+                condition: binary("!=", identifier_expression(&order), GoExpression::Integer(0)),
+                then: vec![GoStatement::Return(Some(identifier_expression(&order)))],
+                otherwise: vec![],
+            });
+        }
+        let type_ = self.go_type(key)?;
+        self.type_declarations.push(GoDeclaration::Function {
+            name: name.clone(),
+            parameters: vec![("left".into(), type_.clone()), ("right".into(), type_)],
+            result: Some(GoType::Int),
+            body,
+        });
+        Ok(name)
+    }
+
+    fn key_leaves(&mut self, key: MonotypeId) -> GoResult<Vec<(Vec<String>, MonotypeId)>> {
+        let mut leaves = vec![];
+        self.collect_key_leaves(key, &mut vec![], &mut leaves)?;
+        Ok(leaves)
+    }
+
+    fn collect_key_leaves(
+        &mut self,
+        key: MonotypeId,
+        path: &mut Vec<String>,
+        leaves: &mut Vec<(Vec<String>, MonotypeId)>,
+    ) -> GoResult<()> {
+        let fields: Vec<(String, MonotypeId)> = match self.monotypes.get(key).clone() {
+            Monotype::Int | Monotype::Char | Monotype::String if !path.is_empty() => {
+                leaves.push((path.clone(), key));
+                return Ok(());
+            }
+            Monotype::Record(fields) if self.single_instantiation(key).is_none() => {
+                let mut fields = fields.to_vec();
+                fields.sort_by(|left, right| left.label.cmp(&right.label));
+                fields
+                    .iter()
+                    .map(|record_field| {
+                        (self.record_field_name(key, &record_field.label), record_field.monotype)
+                    })
+                    .collect()
+            }
+            Monotype::Data(data) => {
+                let layout = self.data_layout(&data)?;
+                match &layout.constructors[..] {
+                    [constructor]
+                        if layout.kind == DataKind::Product
+                            && !layout.boxed
+                            && !layout.erases_arguments
+                            && layout.edges.is_none()
+                            && layout.maybe.is_none() =>
+                    {
+                        constructor.fields.clone()
+                    }
+                    _ => vec![],
+                }
+            }
+            _ => vec![],
+        };
+        if fields.is_empty() {
+            return Err(unordered_key());
+        }
+        for (name, monotype) in fields {
+            path.push(name);
+            self.collect_key_leaves(monotype, path, leaves)?;
+            path.pop();
+        }
+        Ok(())
+    }
 }
+
+fn unordered_key() -> GoError {
+    GoError::Unsupported {
+        definition: "Data.Map".into(),
+        state: UnsupportedState::Construct { construct: "a Go map key without ordered fields" },
+    }
+}
+
+const FIELD_ENTRIES_SOURCE: &str = "func {name}[K comparable, V any](table map[K]V, compare func(K, K) int, fields ...func(K) int64) ([]K, []V) {
+\tcount := len(table)
+\tkeys := make([]K, 0, count)
+\tvalues := make([]V, 0, count)
+\tfor key, value := range table {
+\t\tkeys = append(keys, key)
+\t\tvalues = append(values, value)
+\t}
+\tif count <= 32 {
+\t\tfor index := 1; index < count; index++ {
+\t\t\tkey, value := keys[index], values[index]
+\t\t\tat := index
+\t\t\tfor ; at > 0 && compare(keys[at-1], key) > 0; at-- {
+\t\t\t\tkeys[at], values[at] = keys[at-1], values[at-1]
+\t\t\t}
+\t\t\tkeys[at], values[at] = key, value
+\t\t}
+\t\treturn keys, values
+\t}
+\torder := make([]int32, count)
+\tfor index := range order {
+\t\torder[index] = int32(index)
+\t}
+\tspare := make([]int32, count)
+\tdigits := make([]uint64, count)
+\tfor field := len(fields) - 1; field >= 0; field-- {
+\t\tproject := fields[field]
+\t\tlowest := project(keys[0])
+\t\thighest := lowest
+\t\tfor index, key := range keys {
+\t\t\tdigit := project(key)
+\t\t\tdigits[index] = uint64(digit)
+\t\t\tlowest = min(lowest, digit)
+\t\t\thighest = max(highest, digit)
+\t\t}
+\t\tbase := uint64(lowest)
+\t\tspan := uint64(highest) - base
+\t\tfor shift := 0; shift < 64 && span>>shift != 0; shift += 8 {
+\t\t\tvar starts [256]int
+\t\t\tfor _, at := range order {
+\t\t\t\tstarts[byte((digits[at]-base)>>shift)]++
+\t\t\t}
+\t\t\ttotal := 0
+\t\t\tfor bucket := range starts {
+\t\t\t\tstarts[bucket], total = total, total+starts[bucket]
+\t\t\t}
+\t\t\tfor _, at := range order {
+\t\t\t\tbucket := byte((digits[at] - base) >> shift)
+\t\t\t\tspare[starts[bucket]] = at
+\t\t\t\tstarts[bucket]++
+\t\t\t}
+\t\t\torder, spare = spare, order
+\t\t}
+\t}
+\tsortedKeys := make([]K, count)
+\tsortedValues := make([]V, count)
+\tfor index, at := range order {
+\t\tsortedKeys[index], sortedValues[index] = keys[at], values[at]
+\t}
+\treturn sortedKeys, sortedValues
+}
+";
+
+const ENTRIES_SOURCE: &str =
+    "func {name}[K comparable, V any](table map[K]V, compare func(K, K) int) ([]K, []V) {
+\tkeys := make([]K, 0, len(table))
+\tfor key := range table {
+\t\tkeys = append(keys, key)
+\t}
+\tslices.SortFunc(keys, compare)
+\tvalues := make([]V, len(keys))
+\tfor index, key := range keys {
+\t\tvalues[index] = table[key]
+\t}
+\treturn keys, values
+}
+";
 
 const INTEGER_ENTRIES_SOURCE: &str =
     "func {name}[K ~int | ~int32, V any](table map[K]V) ([]K, []V) {

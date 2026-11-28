@@ -1,0 +1,3 @@
+[(Tuple Descending 2 8 8),(Tuple Descending 2 5 5),(Tuple Descending 2 2 2),(Tuple Descending 1 7 7),(Tuple Descending 1 4 4),(Tuple Descending 1 1 1),(Tuple Descending 0 6 6),(Tuple Descending 0 3 3)]
+[(Tuple Swapped (Tuple 1 1) 1),(Tuple Swapped (Tuple 2 2) 2),(Tuple Swapped (Tuple 0 3) 3),(Tuple Swapped (Tuple 1 4) 4),(Tuple Swapped (Tuple 2 5) 5),(Tuple Swapped (Tuple 0 6) 6),(Tuple Swapped (Tuple 1 7) 7),(Tuple Swapped (Tuple 2 8) 8)]
+[(Tuple (Tuple 0.0 0) 8),(Tuple (Tuple 0.0 1) 7)]

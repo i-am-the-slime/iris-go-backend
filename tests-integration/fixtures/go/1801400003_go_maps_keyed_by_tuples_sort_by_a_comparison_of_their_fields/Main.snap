@@ -1,0 +1,287 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Map/Internal/internal.go
+package internal
+
+import (
+	"cmp"
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"math/bits"
+	"slices"
+)
+
+type MapTupleIntString struct {
+	Node2 tuple.Tuple
+	Node4 *MapTupleIntString
+	Node5 *MapTupleIntString
+	Node0 int
+	Node1 int
+	Node3 int
+}
+
+var SharedMapTupleIntStringLeaf = &MapTupleIntString{}
+
+type MapKey struct {
+	Node4 *MapKey
+	Node5 *MapKey
+	Node0 int
+	Node1 int
+	Node2 shared.Key
+	Node3 int
+}
+
+var SharedMapKeyLeaf = &MapKey{}
+
+type EntriesOfArrayTupleIntString struct {
+	Keys   []tuple.Tuple
+	Values []int
+}
+
+func CompareKeys(left tuple.Tuple, right tuple.Tuple) int {
+	order := cmp.Compare(int(left.First), int(right.First))
+	if order != 0 {
+		return order
+	}
+	return prim.CompareString(left.Second, right.Second)
+}
+
+func SortedEntries[K comparable, V any](table map[K]V, compare func(K, K) int) ([]K, []V) {
+	keys := make([]K, 0, len(table))
+	for key := range table {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, compare)
+	values := make([]V, len(keys))
+	for index, key := range keys {
+		values[index] = table[key]
+	}
+	return keys, values
+}
+
+type EntriesOfArrayKey struct {
+	Keys   []shared.Key
+	Values []int
+}
+
+func CompareKeys2(left shared.Key, right shared.Key) int {
+	order := cmp.Compare(left.Column, right.Column)
+	if order != 0 {
+		return order
+	}
+	return cmp.Compare(left.Row, right.Row)
+}
+
+func SortedFieldEntries[K comparable, V any](table map[K]V, compare func(K, K) int, fields ...func(K) int64) ([]K, []V) {
+	count := len(table)
+	keys := make([]K, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	if count <= 32 {
+		for index := 1; index < count; index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && compare(keys[at-1], key) > 0; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+		return keys, values
+	}
+	order := make([]int32, count)
+	for index := range order {
+		order[index] = int32(index)
+	}
+	spare := make([]int32, count)
+	digits := make([]uint64, count)
+	for field := len(fields) - 1; field >= 0; field-- {
+		project := fields[field]
+		lowest := project(keys[0])
+		highest := lowest
+		for index, key := range keys {
+			digit := project(key)
+			digits[index] = uint64(digit)
+			lowest = min(lowest, digit)
+			highest = max(highest, digit)
+		}
+		base := uint64(lowest)
+		span := uint64(highest) - base
+		for shift := 0; shift < 64 && span>>shift != 0; shift += 8 {
+			var starts [256]int
+			for _, at := range order {
+				starts[byte((digits[at]-base)>>shift)]++
+			}
+			total := 0
+			for bucket := range starts {
+				starts[bucket], total = total, total+starts[bucket]
+			}
+			for _, at := range order {
+				bucket := byte((digits[at] - base) >> shift)
+				spare[starts[bucket]] = at
+				starts[bucket]++
+			}
+			order, spare = spare, order
+		}
+	}
+	sortedKeys := make([]K, count)
+	sortedValues := make([]V, count)
+	for index, at := range order {
+		sortedKeys[index], sortedValues[index] = keys[at], values[at]
+	}
+	return sortedKeys, sortedValues
+}
+
+func NodeMapTupleIntString(node0 int, node1 int, node2 tuple.Tuple, node3 int, node4 *MapTupleIntString, node5 *MapTupleIntString) *MapTupleIntString {
+	return &MapTupleIntString{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+func NodeMapKey(node0 int, node1 int, node2 shared.Key, node3 int, node4 *MapKey, node5 *MapKey) *MapKey {
+	return &MapKey{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+func TreeFromKeys(keys []tuple.Tuple, values []int, low int, high int) *MapTupleIntString {
+	if low == high {
+		return SharedMapTupleIntStringLeaf
+	}
+	var middle int
+	var key tuple.Tuple
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return NodeMapTupleIntString(bits.Len(uint(count)), count, key, values[middle], TreeFromKeys(keys, values, low, middle), TreeFromKeys(keys, values, middle+1, high))
+}
+
+func TreeFromTable(table map[tuple.Tuple]int) *MapTupleIntString {
+	var entries EntriesOfArrayTupleIntString
+	var keys []tuple.Tuple
+	var values []int
+	keys2, values2 := SortedEntries(table, CompareKeys)
+	entries = EntriesOfArrayTupleIntString{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys(keys, values, 0, len(keys))
+}
+
+func TreeFromKeys2(keys []shared.Key, values []int, low int, high int) *MapKey {
+	if low == high {
+		return SharedMapKeyLeaf
+	}
+	var middle int
+	var key shared.Key
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return NodeMapKey(bits.Len(uint(count)), count, key, values[middle], TreeFromKeys2(keys, values, low, middle), TreeFromKeys2(keys, values, middle+1, high))
+}
+
+func TreeFromTable2(table map[shared.Key]int) *MapKey {
+	var entries EntriesOfArrayKey
+	var keys []shared.Key
+	var values []int
+	keys2, values2 := SortedFieldEntries(table, CompareKeys2, func(key shared.Key) int64 {
+		return int64(key.Column)
+	}, func(key shared.Key) int64 {
+		return int64(key.Row)
+	})
+	entries = EntriesOfArrayKey{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys2(keys, values, 0, len(keys))
+}
+
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(i int, i2 int) int {
+	return i + i2
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	Second string
+	First  int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Semiring"
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	accumulator := make(map[tuple.Tuple]int)
+	for k := 1; k < 41; k++ {
+		m := accumulator
+		m[tuple.Tuple{First: int32(k % 7), Second: strconv.Itoa(k % 3)}] = k
+		accumulator = m
+	}
+	accumulator2 := make(map[shared.Key]int)
+	for k := 1; k < 41; k++ {
+		m := accumulator2
+		key := shared.Key{Row: k % 4, Column: k % 5}
+		old, found := m[key]
+		var result int
+		if found {
+			result = semiring.Add(old, k)
+		} else {
+			result = k
+		}
+		m[key] = result
+		accumulator2 = m
+	}
+	return mainGo(0, internal.TreeFromTable(accumulator)) + mainGo2(0, internal.TreeFromTable2(accumulator2))
+}
+
+func mainGo(z_ int, m_ *internal.MapTupleIntString) int {
+	for {
+		if m_ == internal.SharedMapTupleIntStringLeaf {
+			return z_
+		}
+		v := m_.Node3
+		l := m_.Node4
+		r := m_.Node5
+		z_, m_ = mainGo(z_, l)+v, r
+	}
+}
+
+func mainGo2(z_ int, m_ *internal.MapKey) int {
+	for {
+		if m_ == internal.SharedMapKeyLeaf {
+			return z_
+		}
+		v := m_.Node3
+		l := m_.Node4
+		r := m_.Node5
+		z_, m_ = mainGo2(z_, l)*3+v, r
+	}
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/shared.go
+package shared
+
+type Key struct {
+	Column int
+	Row    int
+}
