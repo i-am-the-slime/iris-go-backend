@@ -27,7 +27,6 @@ package main
 import (
 	"fixture/Data/Tuple"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/object"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -35,29 +34,16 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() int {
-	object2 := object.New[int]()
+	object := make(map[string]int)
 	for n := 1; n < 3001; n++ {
 		tuple2 := tuple.Tuple{First: strconv.Itoa(n % 97), Second: 1}
-		k := tuple2.First
-		v := int(tuple2.Second)
-		slot, found := object.Slot(object2, k)
-		var lookupST int
-		if found {
-			lookupST = v + object2.Vals[slot]
-		} else {
-			lookupST = v
-		}
-		if found {
-			object2.Vals[slot] = lookupST
-		} else {
-			object.PokeAbsent(k, lookupST, object2)
-		}
+		object[tuple2.First] = object[tuple2.First] + int(tuple2.Second)
 	}
-	result, found2 := object.Lookup("7", object2)
-	if !found2 {
+	result, found := object["7"]
+	if !found {
 		result = 0
 	}
-	return object.Size(object2) + result
+	return len(object) + result
 }
 
 func main() {

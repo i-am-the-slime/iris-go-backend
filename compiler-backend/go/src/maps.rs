@@ -17,12 +17,15 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use crate::context::Context;
+use crate::foreign::Foreign;
 use crate::modules::Modules;
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
-    ExpressionKind, FunctionId, FunctionSpelling, Guard, Guarded, Pattern, PatternKind, Program,
+    Expression, ExpressionKind, FunctionId, FunctionSpelling, Guard, Guarded, Literal, Pattern,
+    PatternKind, Program,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, expand_synonyms};
+use crate::syntax::GoPackage;
 use crate::types::Substitution;
 
 /// A `Data.Map.Internal` function that a Go map does by hashing the key.
@@ -53,10 +56,14 @@ pub enum MapOperation {
     LookupGE,
     /// `lookupGT k m`: the entry of the least key above `k`.
     LookupGT,
+    AscendingEntries,
 }
 
 impl MapOperation {
-    fn named(name: &str) -> Option<MapOperation> {
+    fn named(module: &str, name: &str) -> Option<MapOperation> {
+        if module == OBJECT_MODULE {
+            return (name == "toAscUnfoldable").then_some(MapOperation::AscendingEntries);
+        }
         Some(match name {
             "empty" => MapOperation::Empty,
             "singleton" => MapOperation::Singleton,
@@ -102,7 +109,8 @@ impl MapOperation {
             | MapOperation::IsEmpty
             | MapOperation::Difference
             | MapOperation::FindMin
-            | MapOperation::FindMax => Some(0),
+            | MapOperation::FindMax
+            | MapOperation::AscendingEntries => Some(0),
             MapOperation::Lookup
             | MapOperation::Member
             | MapOperation::Delete
@@ -124,6 +132,10 @@ impl MapOperation {
         }
     }
 
+    pub fn reads_objects(self) -> bool {
+        self == MapOperation::AscendingEntries
+    }
+
     /// Whether the operation only reads the map it is given.
     pub fn reads(self) -> bool {
         self.reads_order()
@@ -133,6 +145,7 @@ impl MapOperation {
                     | MapOperation::Member
                     | MapOperation::Size
                     | MapOperation::IsEmpty
+                    | MapOperation::AscendingEntries
             )
     }
 }
@@ -154,15 +167,18 @@ where
     for (index, function) in program.functions.iter().enumerate() {
         let Some(origin) = function.origin else { continue };
         let Some(module) = modules.index(origin) else { continue };
-        if modules.name(module) != MAP_MODULE {
+        let module = modules.name(module);
+        if module != MAP_MODULE && module != OBJECT_MODULE {
             continue;
         }
         let spelling = monotypes.function_spellings.get(&function.name);
         let Some(FunctionSpelling::Specialized { name, types, .. }) = spelling else { continue };
-        let Some(operation) = MapOperation::named(name) else { continue };
-        let Some(&key) = types.first() else { continue };
-        if !is_hashable_key(context, key) {
-            continue;
+        let Some(operation) = MapOperation::named(module, name) else { continue };
+        if module == MAP_MODULE {
+            let Some(&key) = types.first() else { continue };
+            if !is_hashable_key(context, key) {
+                continue;
+            }
         }
         // Unsimplified, the operation may take its arguments one at a time.
         let arguments = function.parameters.iter().map(|parameter| parameter.monotype);
@@ -178,6 +194,14 @@ where
         };
         if matches!(monotypes.get(map), Monotype::Data(data) if shaped.contains(data))
             || celled.contains(&map)
+        {
+            continue;
+        }
+        let ascending = operation == MapOperation::AscendingEntries;
+        if ascending
+            && (arguments.len() != 1
+                || !matches!(monotypes.get(map), Monotype::Object(_))
+                || !matches!(monotypes.get(result), Monotype::Array(_)))
         {
             continue;
         }
@@ -566,7 +590,7 @@ impl KeptOperations {
             let Some(module) = function.origin.and_then(|origin| modules.index(origin)) else {
                 continue;
             };
-            if modules.name(module) == MAP_MODULE {
+            if [MAP_MODULE, OBJECT_MODULE].contains(&modules.name(module)) {
                 operations.insert(FunctionId(index as u32), operation);
             }
         }
@@ -575,3 +599,101 @@ impl KeptOperations {
 }
 
 const MAP_MODULE: &str = "Data.Map.Internal";
+
+const OBJECT_MODULE: &str = "Foreign.Object";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ObjectOperation {
+    Empty,
+    Insert,
+    Remove,
+    Lookup,
+    Size,
+    IsEmpty,
+    New,
+    Poke,
+    Delete,
+    LookupST,
+    Peek,
+}
+
+impl ObjectOperation {
+    pub fn of(foreign: &Foreign, arguments: &[Expression]) -> Option<ObjectOperation> {
+        let (Foreign::Call { function, arity, .. } | Foreign::Perform { function, arity, .. }) =
+            *foreign
+        else {
+            return None;
+        };
+        if function.package != GoPackage::Object || arity != arguments.len() {
+            return None;
+        }
+        let effectful = matches!(foreign, Foreign::Perform { .. });
+        let operation = match (function.name, effectful) {
+            ("Empty", false) => ObjectOperation::Empty,
+            ("Insert", false) => ObjectOperation::Insert,
+            ("Remove", false) => ObjectOperation::Remove,
+            ("Lookup", false) => ObjectOperation::Lookup,
+            ("Size", false) => ObjectOperation::Size,
+            ("All", false) if answers_false(&arguments[0]) => ObjectOperation::IsEmpty,
+            ("New", true) => ObjectOperation::New,
+            ("Poke", true) => ObjectOperation::Poke,
+            ("Delete", true) => ObjectOperation::Delete,
+            ("LookupST", true) => ObjectOperation::LookupST,
+            ("PeekImpl", true) => ObjectOperation::Peek,
+            _ => return None,
+        };
+        Some(operation)
+    }
+
+    pub fn map_position(self) -> Option<usize> {
+        match self {
+            ObjectOperation::Empty | ObjectOperation::New => None,
+            ObjectOperation::Size => Some(0),
+            ObjectOperation::Remove | ObjectOperation::IsEmpty | ObjectOperation::Delete => Some(1),
+            ObjectOperation::Insert | ObjectOperation::Poke => Some(2),
+            ObjectOperation::Lookup | ObjectOperation::LookupST | ObjectOperation::Peek => Some(3),
+        }
+    }
+
+    pub fn reads(self) -> bool {
+        matches!(
+            self,
+            ObjectOperation::Lookup
+                | ObjectOperation::Size
+                | ObjectOperation::IsEmpty
+                | ObjectOperation::LookupST
+                | ObjectOperation::Peek
+        )
+    }
+
+    pub fn answers_map(self) -> bool {
+        matches!(
+            self,
+            ObjectOperation::Empty
+                | ObjectOperation::Insert
+                | ObjectOperation::Remove
+                | ObjectOperation::New
+                | ObjectOperation::Poke
+                | ObjectOperation::Delete
+        )
+    }
+
+    pub fn writes(self) -> bool {
+        matches!(
+            self,
+            ObjectOperation::Insert
+                | ObjectOperation::Remove
+                | ObjectOperation::Poke
+                | ObjectOperation::Delete
+        )
+    }
+}
+
+fn answers_false(predicate: &Expression) -> bool {
+    matches!(
+        &predicate.kind,
+        ExpressionKind::Lambda { parameters, body }
+            if parameters.len() == 2
+                && matches!(body.kind, ExpressionKind::Literal(Literal::Boolean(false)))
+    )
+}

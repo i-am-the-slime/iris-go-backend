@@ -42,8 +42,8 @@ use smol_str::SmolStr;
 
 use super::uniqueness::{self, Forced, Scope, Shapes};
 use crate::foreign::{Foreign, HandsBack, Iteration};
-use crate::maps::MapOperation;
-use crate::monomorphic::traversal::for_each_child;
+use crate::maps::{MapOperation, ObjectOperation};
+use crate::monomorphic::traversal::{for_each_child, visit};
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
     LocalId, Pattern, PatternKind, Program, RecordUpdate,
@@ -66,7 +66,7 @@ pub(crate) fn operations_used(
     if operations.is_empty() {
         return FxHashSet::default();
     }
-    let shapes = map_shapes(program, operations);
+    let shapes = map_shapes(program, monotypes, operations);
     // The map operations keep their places among the functions when variants are added.
     let decided = match callers::specialise(program, monotypes, operations, &shapes) {
         Specialised::Unchanged(decided) | Specialised::Variants(_, decided) => decided,
@@ -92,10 +92,7 @@ pub(super) fn choose_hash_maps(
     monotypes: &mut Monotypes,
     operations: &FxHashMap<FunctionId, MapOperation>,
 ) {
-    if operations.is_empty() {
-        return;
-    }
-    let shapes = map_shapes(program, operations);
+    let shapes = map_shapes(program, monotypes, operations);
     if shapes.is_empty() {
         return;
     }
@@ -148,10 +145,12 @@ fn analyse(
 struct MapShape {
     key: MonotypeId,
     value: MonotypeId,
+    object: bool,
 }
 
 fn map_shapes(
     program: &Program,
+    monotypes: &Monotypes,
     operations: &FxHashMap<FunctionId, MapOperation>,
 ) -> FxHashMap<MonotypeId, MapShape> {
     let mut keys: FxHashMap<MonotypeId, MonotypeId> = FxHashMap::default();
@@ -189,12 +188,41 @@ fn map_shapes(
             | MapOperation::IsEmpty
             | MapOperation::Difference
             | MapOperation::FindMin
-            | MapOperation::FindMax => {}
+            | MapOperation::FindMax
+            | MapOperation::AscendingEntries => {}
         }
     }
-    keys.into_iter()
-        .filter_map(|(map, key)| Some((map, MapShape { key, value: *values.get(&map)? })))
-        .collect()
+    let objects = written_objects(program, monotypes, &mut keys, &mut values);
+    let shapes = keys.into_iter().filter_map(|(map, key)| {
+        let shape = MapShape { key, value: *values.get(&map)?, object: objects.contains(&map) };
+        Some((map, shape))
+    });
+    shapes.collect()
+}
+
+fn written_objects(
+    program: &Program,
+    monotypes: &Monotypes,
+    keys: &mut FxHashMap<MonotypeId, MonotypeId>,
+    values: &mut FxHashMap<MonotypeId, MonotypeId>,
+) -> FxHashSet<MonotypeId> {
+    let mut objects = FxHashSet::default();
+    if !monotypes.ids().any(|id| matches!(monotypes.get(id), Monotype::Object(_))) {
+        return objects;
+    }
+    for function in &program.functions {
+        visit(&function.body, &mut |expression| {
+            let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return };
+            let operation = ObjectOperation::of(foreign, arguments);
+            if let Some(ObjectOperation::Insert | ObjectOperation::Poke) = operation {
+                let map = arguments[2].monotype;
+                keys.insert(map, arguments[0].monotype);
+                values.insert(map, arguments[1].monotype);
+                objects.insert(map);
+            }
+        });
+    }
+    objects
 }
 
 /// The slots of a type's values: one for a map, the slots of each field for a record, in the
@@ -206,6 +234,7 @@ struct Layout {
     fields: Vec<FieldSlots>,
     /// The labels that lead to each slot's map.
     paths: Vec<Vec<SmolStr>>,
+    objects: Vec<bool>,
 }
 
 struct FieldSlots {
@@ -277,8 +306,9 @@ impl Layouts {
         if let Some(layout) = self.known.get(&monotype) {
             return Rc::clone(layout);
         }
-        let layout = if shapes.contains_key(&monotype) {
-            Layout { width: 1, fields: vec![], paths: vec![vec![]] }
+        let layout = if let Some(shape) = shapes.get(&monotype) {
+            let objects = vec![shape.object];
+            Layout { width: 1, fields: vec![], paths: vec![vec![]], objects }
         } else if let Some(record) = fields_of(monotypes, monotype) {
             if !self.visiting.insert(monotype) {
                 return Rc::new(Layout::default());
@@ -286,6 +316,7 @@ impl Layouts {
             let mut fields = vec![];
             let mut width = 0;
             let mut paths = vec![];
+            let mut objects = vec![];
             for field in record.iter() {
                 let inner = self.layout(monotypes, shapes, field.monotype);
                 for path in &inner.paths {
@@ -293,6 +324,7 @@ impl Layouts {
                     labels.extend(path.iter().cloned());
                     paths.push(labels);
                 }
+                objects.extend(inner.objects.iter().copied());
                 if inner.width > 0 {
                     let label = field.label.clone();
                     let (monotype, start) = (field.monotype, width);
@@ -301,7 +333,7 @@ impl Layouts {
                 }
             }
             self.visiting.remove(&monotype);
-            Layout { width, fields, paths }
+            Layout { width, fields, paths, objects }
         } else {
             Layout::default()
         };
@@ -383,6 +415,7 @@ struct Webs<'p> {
     parents: Vec<Node>,
     /// Whether the node must be a tree: it is made or used in a way only the tree does.
     tree: Vec<bool>,
+    objects: Vec<bool>,
     locals: FxHashMap<LocalId, Slots>,
     results: FxHashMap<FunctionId, Slots>,
     /// The slots of every expression whose type has some.
@@ -407,6 +440,7 @@ struct Webs<'p> {
     could_take: Vec<bool>,
     /// The seeds of folds that closures read off maps they close over ([`Decided::copies`]).
     copies: FxHashSet<*const Expression>,
+    record_seeds: Vec<(*const Expression, Slots)>,
 }
 
 /// Which calls are taken to hand on no trees, as if each called the variant of its function
@@ -532,6 +566,7 @@ impl<'p> Webs<'p> {
             layouts: Layouts::default(),
             parents: vec![],
             tree: vec![],
+            objects: vec![],
             locals: FxHashMap::default(),
             results: FxHashMap::default(),
             expressions: FxHashMap::default(),
@@ -546,6 +581,7 @@ impl<'p> Webs<'p> {
             site_of: FxHashMap::default(),
             could_take: vec![],
             copies: FxHashSet::default(),
+            record_seeds: vec![],
         }
     }
 
@@ -566,12 +602,33 @@ impl<'p> Webs<'p> {
         let node = self.parents.len();
         self.parents.push(node);
         self.tree.push(tree);
+        self.objects.push(false);
         node
     }
 
     fn fresh_slots(&mut self, monotype: MonotypeId, tree: bool) -> Slots {
-        let width = self.layout(monotype).width;
-        (0..width).map(|_| self.fresh(tree)).collect()
+        let layout = self.layout(monotype);
+        let slots = layout.objects.iter().map(|&object| {
+            let node = self.fresh(tree);
+            self.objects[node] = object;
+            node
+        });
+        slots.collect()
+    }
+
+    fn fresh_object(&mut self) -> Node {
+        let node = self.fresh(false);
+        self.objects[node] = true;
+        node
+    }
+
+    fn force_object_trees(&mut self, slots: &[Node]) {
+        for &node in slots {
+            let root = self.root(node);
+            if self.objects[root] {
+                self.tree[root] = true;
+            }
+        }
     }
 
     fn root(&mut self, node: Node) -> Node {
@@ -593,6 +650,7 @@ impl<'p> Webs<'p> {
         if left != right {
             self.parents[right] = left;
             self.tree[left] |= self.tree[right];
+            self.objects[left] |= self.objects[right];
         }
         left
     }
@@ -658,6 +716,12 @@ impl<'p> Webs<'p> {
                 continue;
             }
             self.function(id, function);
+        }
+        let seeds = std::mem::take(&mut self.record_seeds);
+        for (seed, slots) in seeds {
+            if self.copies.contains(&seed) {
+                self.force_object_trees(&slots);
+            }
         }
     }
 
@@ -797,6 +861,20 @@ impl<'p> Webs<'p> {
                 let answer = self.fresh_slots(expression.monotype, false);
                 self.hand_back(foreign, arguments, expression.monotype, answer.clone());
                 answer
+            }
+            ExpressionKind::Foreign { foreign, arguments }
+                if ObjectOperation::of(foreign, arguments)
+                    .is_some_and(|operation| operation.answers_map()) =>
+            {
+                let Some(operation) = ObjectOperation::of(foreign, arguments) else {
+                    unreachable!("invariant violated: an object operation that is none")
+                };
+                vec![self.object_operation_node(operation, arguments)]
+            }
+            ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments }
+                if arguments.len() == 1 =>
+            {
+                self.effect_value(&arguments[0], expression.monotype)
             }
             ExpressionKind::Record(fields) => {
                 let fields = fields.iter().map(|(label, value)| (label.as_str(), value));
@@ -940,6 +1018,56 @@ impl<'p> Webs<'p> {
         node
     }
 
+    fn object_operation_node(
+        &mut self,
+        operation: ObjectOperation,
+        arguments: &'p [Expression],
+    ) -> Node {
+        let position = operation.map_position();
+        for (index, argument) in arguments.iter().enumerate() {
+            if Some(index) != position {
+                self.expression(argument);
+            }
+        }
+        let Some(position) = position else { return self.fresh_object() };
+        let map = &arguments[position];
+        if !self.is_map(map.monotype) {
+            self.expression(map);
+            return self.fresh(true);
+        }
+        let node = self.value(map)[0];
+        self.operated.push(node);
+        node
+    }
+
+    fn effect_value(&mut self, effect: &'p Expression, result: MonotypeId) -> Slots {
+        match &effect.kind {
+            ExpressionKind::EffectPure(value) if value.monotype == result => self.value(value),
+            ExpressionKind::EffectBind { action, local, body } => {
+                self.effect_bind(action, local, body);
+                self.effect_value(body, result)
+            }
+            ExpressionKind::Let { bindings, body } => {
+                self.bindings(effect, bindings);
+                self.effect_value(body, result)
+            }
+            ExpressionKind::Foreign { foreign, arguments }
+                if self.is_map(result)
+                    && ObjectOperation::of(foreign, arguments)
+                        .is_some_and(|operation| operation.writes()) =>
+            {
+                let Some(operation) = ObjectOperation::of(foreign, arguments) else {
+                    unreachable!("invariant violated: an object operation that is none")
+                };
+                vec![self.object_operation_node(operation, arguments)]
+            }
+            _ => {
+                self.expression(effect);
+                self.fresh_slots(result, true)
+            }
+        }
+    }
+
     fn arguments(&mut self, call: &Expression, id: FunctionId, arguments: &'p [Expression]) {
         let parameters = &self.program.function(id).parameters;
         let mut passed = vec![];
@@ -967,6 +1095,9 @@ impl<'p> Webs<'p> {
         let ExpressionKind::Lambda { parameters, body } = &callback.kind else { unreachable!() };
         let fold = self.fresh_slots(expression.monotype, false);
         let seeded = self.value(seed);
+        if !self.is_map(seed.monotype) {
+            self.record_seeds.push((std::ptr::from_ref(seed), seeded.clone()));
+        }
         self.soft(seeded, fold.clone(), Flow::Seed, seed);
         let accumulator = self.local(parameters[0].id, parameters[0].monotype);
         self.join_slots(&accumulator, &fold);
@@ -1113,6 +1244,7 @@ impl<'p> Webs<'p> {
     fn expression(&mut self, expression: &'p Expression) {
         if self.holds_maps(expression.monotype) {
             let slots = self.value(expression);
+            self.force_object_trees(&slots);
             self.escapes.push((slots, std::ptr::from_ref(expression)));
             return;
         }
@@ -1143,6 +1275,14 @@ impl<'p> Webs<'p> {
                     self.expression(body);
                 }
             }
+            ExpressionKind::Foreign { foreign, arguments }
+                if ObjectOperation::of(foreign, arguments).is_some() =>
+            {
+                let Some(operation) = ObjectOperation::of(foreign, arguments) else {
+                    unreachable!("invariant violated: an object operation that is none")
+                };
+                self.object_operation_node(operation, arguments);
+            }
             ExpressionKind::Lambda { parameters, .. } => {
                 self.bound_trees(parameters);
                 self.expression_children(expression);
@@ -1162,6 +1302,16 @@ impl<'p> Webs<'p> {
     /// `local <- action`: a local bound to the maps of what a foreign hands back is that
     /// value, the others are trees.
     fn effect_bind(&mut self, action: &'p Expression, local: &'p Local, body: &'p Expression) {
+        if let ExpressionKind::Foreign { foreign, arguments } = &action.kind
+            && let Some(operation) = ObjectOperation::of(foreign, arguments)
+            && operation.answers_map()
+            && self.is_map(local.monotype)
+        {
+            let node = self.object_operation_node(operation, arguments);
+            let bound = self.local(local.id, local.monotype);
+            self.join(bound[0], node);
+            return;
+        }
         let result = self.monotypes.effect_result(action.monotype).unwrap_or(action.monotype);
         let handed = match &action.kind {
             ExpressionKind::Foreign { foreign, arguments } if self.holds_maps(local.monotype) => {
@@ -1338,14 +1488,25 @@ impl<'p> Webs<'p> {
                     },
                     Flow::Seed => false,
                 };
-                if !passes_trees {
+                let passes_back = match edge.flow {
+                    Flow::Argument | Flow::Seed => true,
+                    Flow::Call => hope == Hope::None,
+                    Flow::Result => passes_trees,
+                };
+                if !passes_trees && !passes_back {
                     continue;
                 }
                 for (&from, &to) in edge.from.iter().zip(&edge.to) {
                     let from = root_of(&mut self.parents, from);
                     let to = root_of(&mut self.parents, to);
-                    if tree[from] && !tree[to] {
+                    let object = self.objects[from] || self.objects[to];
+                    let forward = passes_trees || (object && edge.flow == Flow::Seed);
+                    if forward && tree[from] && !tree[to] {
                         tree[to] = true;
+                        changed = true;
+                    }
+                    if object && passes_back && tree[to] && !tree[from] {
+                        tree[from] = true;
                         changed = true;
                     }
                 }
@@ -1667,6 +1828,13 @@ fn read_by(
     call: &Expression,
     argument: &Expression,
 ) -> bool {
+    if let ExpressionKind::Foreign { foreign, arguments } = &call.kind {
+        let position = arguments.iter().position(|other| std::ptr::eq(other, argument));
+        let operation = ObjectOperation::of(foreign, arguments);
+        return operation.is_some_and(|operation| {
+            operation.reads() && position.is_some() && operation.map_position() == position
+        });
+    }
     let ExpressionKind::Apply { function, arguments } = &call.kind else { return false };
     let position = arguments.iter().position(|other| std::ptr::eq(other, argument));
     let Some(position) = position else { return false };

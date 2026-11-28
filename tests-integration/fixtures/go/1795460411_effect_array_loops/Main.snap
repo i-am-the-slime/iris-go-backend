@@ -124,7 +124,6 @@ import (
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/object"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -337,32 +336,35 @@ func folds() {
 		journal.Log("left " + strconv.Itoa(x))
 	}
 	journal.Log("object")
-	object2 := object.New[int]()
-	value, found := object.LookupST("a", object2)
-	var lookupST int
+	object := make(map[string]int)
+	old, found := object["a"]
+	var result2 int
 	if found {
-		lookupST = 1 + value
+		i := old
+		result2 = 1 + i
 	} else {
-		lookupST = 1
+		result2 = 1
 	}
-	object.Poke("a", lookupST, object2)
-	value2, found2 := object.LookupST("b", object2)
-	var lookupST2 int
+	object["a"] = result2
+	old2, found2 := object["b"]
+	var result3 int
 	if found2 {
-		lookupST2 = 2 + value2
+		i := old2
+		result3 = 2 + i
 	} else {
-		lookupST2 = 2
+		result3 = 2
 	}
-	object.Poke("b", lookupST2, object2)
-	value3, found3 := object.LookupST("a", object2)
-	var lookupST3 int
+	object["b"] = result3
+	old3, found3 := object["a"]
+	var result4 int
 	if found3 {
-		lookupST3 = 30 + value3
+		i := old3
+		result4 = 30 + i
 	} else {
-		lookupST3 = 30
+		result4 = 30
 	}
-	object.Poke("a", lookupST3, object2)
-	x2, found4 := object.Lookup("a", object2)
+	object["a"] = result4
+	x2, found4 := object["a"]
 	var result string
 	if found4 {
 		result = "(Just " + strconv.Itoa(x2) + ")"

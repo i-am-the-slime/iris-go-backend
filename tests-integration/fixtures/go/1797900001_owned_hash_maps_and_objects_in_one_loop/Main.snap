@@ -74,7 +74,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	hashmap "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
-	"github.com/i-am-the-slime/iris-go/object"
 	"strconv"
 	"strings"
 )
@@ -88,14 +87,14 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	array := []string{"a", "b", "a", ""}
-	accumulator := shared.Tally{ByWord: hashmap.NativeEmpty[string, int](), ByFirst: object.Empty[int](), Lengths: hashmap.NativeEmpty[int, int]()}
-	accumulator.ByFirst = object.Lend(accumulator.ByFirst)
+	accumulator := shared.Counts{ByWord: hashmap.NativeEmpty[string, int](), ByFirst: make(map[string]int), Lengths: hashmap.NativeEmpty[int, int]()}
 	accumulator.ByWord = hashmap.Lend(accumulator.ByWord)
 	accumulator.Lengths = hashmap.Lend(accumulator.Lengths)
 	for _, word := range array {
+		counts := accumulator
 		nativeLookup := hashmap.NativeLookup(maybe.NoInt, func(payload int) maybe.Int {
 			return maybe.JustInt(payload)
-		}, nil, word, nil, accumulator.ByWord)
+		}, nil, word, nil, counts.ByWord)
 		var seen int
 		switch nativeLookup.Tag {
 		case maybe.TagNothing:
@@ -103,13 +102,14 @@ func initializeMain_() []string {
 		default: // maybe.TagJust
 			seen = nativeLookup.Just
 		}
+		counts.ByFirst[word] = seen + 1
 		var result int
 		if word == "" {
 			result = 0
 		} else {
 			result = 1
 		}
-		accumulator = shared.Tally{ByWord: hashmap.NativeInsertOwned(nil, nil, word, seen+1, accumulator.ByWord), ByFirst: object.InsertOwned(word, seen+1, accumulator.ByFirst), Lengths: hashmap.NativeInsertWithOwned(nil, nil, semiring.Add, result, 1, accumulator.Lengths)}
+		accumulator = shared.Counts{ByWord: hashmap.NativeInsertOwned(nil, nil, word, seen+1, counts.ByWord), ByFirst: counts.ByFirst, Lengths: hashmap.NativeInsertWithOwned(nil, nil, semiring.Add, result, 1, counts.Lengths)}
 	}
 	nativeLookup2 := hashmap.NativeLookup(maybe.NoInt, func(payload int) maybe.Int {
 		return maybe.JustInt(payload)
@@ -124,7 +124,7 @@ func initializeMain_() []string {
 	field := hashmap.NativeInsert(nil, nil, 2, 2, hashmap.NativeInsert(nil, nil, 1, 1, hashmap.NativeEmpty[int, int]()))
 	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int) tuple.Tuple {
 		return tuple.Tuple{First: s, Second: i}
-	}, accumulator.ByWord)), strconv.Itoa(object.Size(accumulator.ByFirst)), result2, strconv.Itoa(hashmap.Size(hashmap.Insert(eq, hash, Point{X: 4, Y: -4}, 4, hashmap.Delete(eq, Point{X: 3, Y: -3}, 0, hashmap.Insert(eq, hash, Point{X: 3, Y: -3}, 3, hashmap.Delete(eq, Point{X: 2, Y: -2}, 0, hashmap.Insert(eq, hash, Point{X: 2, Y: -2}, 2, hashmap.Delete(eq, Point{X: 1, Y: -1}, 0, hashmap.Insert(eq, hash, Point{X: 1, Y: -1}, 1, hashmap.Delete(eq, Point{X: 0, Y: 0}, 0, hashmap.Empty[Point, int]())))))))))), "(Tuple " + strconv.Itoa(hashmap.NativeSize(hashmap.NativeInsert(nil, nil, 3, 3, field))) + " " + strconv.Itoa(hashmap.NativeSize(field)) + ")"}
+	}, accumulator.ByWord)), strconv.Itoa(len(accumulator.ByFirst)), result2, strconv.Itoa(hashmap.Size(hashmap.Insert(eq, hash, Point{X: 4, Y: -4}, 4, hashmap.Delete(eq, Point{X: 3, Y: -3}, 0, hashmap.Insert(eq, hash, Point{X: 3, Y: -3}, 3, hashmap.Delete(eq, Point{X: 2, Y: -2}, 0, hashmap.Insert(eq, hash, Point{X: 2, Y: -2}, 2, hashmap.Delete(eq, Point{X: 1, Y: -1}, 0, hashmap.Insert(eq, hash, Point{X: 1, Y: -1}, 1, hashmap.Delete(eq, Point{X: 0, Y: 0}, 0, hashmap.Empty[Point, int]())))))))))), "(Tuple " + strconv.Itoa(hashmap.NativeSize(hashmap.NativeInsert(nil, nil, 3, 3, field))) + " " + strconv.Itoa(hashmap.NativeSize(field)) + ")"}
 }
 
 func eq(ra Point, rb Point) bool {
@@ -144,13 +144,8 @@ package shared
 
 import hashmap "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
 
-type Tally struct {
-	ByFirst *struct {
-	Index map[string]int
-	Ints  int
-	Keys  []string
-	Vals  []int
-}
+type Counts struct {
+	ByFirst map[string]int
 	ByWord  hashmap.Native[string, int]
 	Lengths hashmap.Native[int, int]
 }

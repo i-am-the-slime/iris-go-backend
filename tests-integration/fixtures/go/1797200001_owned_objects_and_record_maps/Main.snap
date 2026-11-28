@@ -16,10 +16,7 @@ type Int struct {
 // main.go
 package main
 
-import (
-	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/object"
-)
+import "fixture/shared"
 
 func main() {
 	words := []string{"a", "b", "a"}
@@ -42,19 +39,20 @@ func main() {
 		window.Seen[x] = start + 1
 		accumulator = shared.Window{Start: start, Seen: window.Seen}
 	}
-	accumulator2 := object.Empty[int]()
-	accumulator2 = object.Lend(accumulator2)
+	accumulator2 := make(map[string]int)
 	for _, word := range words {
-		value, found := object.Lookup(word, accumulator2)
+		counts := accumulator2
+		value, found := counts[word]
 		var result int
 		if found {
 			result = value + 1
 		} else {
 			result = 1
 		}
-		accumulator2 = object.InsertOwned(word, result, accumulator2)
+		counts[word] = result
+		accumulator2 = counts
 	}
-	output := &shared.Ref[int]{Value: object.Size(accumulator2) + accumulator.Start + len(accumulator.Seen)}
+	output := &shared.Ref[int]{Value: len(accumulator2) + accumulator.Start + len(accumulator.Seen)}
 	output.Value = 0
 }
 

@@ -19,13 +19,18 @@ pub(super) fn presize_filled_objects(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         each_block_in_declaration(declaration, |block| {
             for position in 0..block.len() {
-                let Some((name, values)) = new_object(&block[position]) else { continue };
                 let next = (position + 1..block.len())
                     .find(|&next| !matches!(block[next], GoStatement::Line(_)));
-                let Some(array) = next.and_then(|next| filled_from(&block[next], name)) else {
+                let Some(next) = next else { continue };
+                let made = if let Some((name, values)) = new_object(&block[position]) {
+                    let Some(array) = filled_from(&block[next], name) else { continue };
+                    presized(values, array)
+                } else if let Some((name, map)) = new_map(&block[position]) {
+                    let Some(array) = stored_from(&block[next], name) else { continue };
+                    presized_map(map, array)
+                } else {
                     continue;
                 };
-                let made = presized(values, array);
                 if let GoStatement::Define { values, .. } = &mut block[position] {
                     values[0] = made;
                 }
@@ -79,4 +84,38 @@ fn presized(values: GoType, array: String) -> GoExpression {
         arguments: vec![GoExpression::Identifier(array)],
     };
     GoExpression::Call { function: Box::new(new), arguments: vec![length] }
+}
+
+fn new_map(statement: &GoStatement) -> Option<(&str, GoExpression)> {
+    let GoStatement::Define { names, values } = statement else { return None };
+    let ([name], [value]) = (names.as_slice(), values.as_slice()) else { return None };
+    let GoExpression::Call { function, arguments } = value.unattributed() else { return None };
+    if !function.unattributed().is_builtin(GoBuiltin::Make) {
+        return None;
+    }
+    match arguments.as_slice() {
+        [map @ GoExpression::Type(GoType::Map(..))] => Some((name, map.clone())),
+        _ => None,
+    }
+}
+
+fn stored_from(statement: &GoStatement, name: &str) -> Option<String> {
+    let GoStatement::Range { iterable, body, .. } = statement else { return None };
+    let GoExpression::Identifier(array) = iterable.unattributed() else { return None };
+    body.iter().any(|statement| stores(statement, name)).then(|| array.clone())
+}
+
+fn stores(statement: &GoStatement, name: &str) -> bool {
+    let GoStatement::Assign { targets, .. } = statement else { return false };
+    matches!(targets.as_slice(), [GoExpression::Index { value, .. }]
+        if matches!(value.unattributed(), GoExpression::Identifier(map) if map == name))
+}
+
+fn presized_map(map: GoExpression, array: String) -> GoExpression {
+    let length = GoExpression::Call {
+        function: Box::new(GoExpression::builtin(GoBuiltin::Len)),
+        arguments: vec![GoExpression::Identifier(array)],
+    };
+    let make = Box::new(GoExpression::builtin(GoBuiltin::Make));
+    GoExpression::Call { function: make, arguments: vec![map, length] }
 }

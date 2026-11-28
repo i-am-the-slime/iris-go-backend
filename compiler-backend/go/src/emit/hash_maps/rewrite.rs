@@ -21,6 +21,7 @@ use crate::monomorphic::{
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, RecordField};
 
 mod conversions;
+mod objects;
 
 /// The conversions between a Go map, or a map kept in order, and the tree for one map type.
 #[derive(Clone, Copy)]
@@ -53,7 +54,8 @@ impl<'r> Rewrite<'r> {
         decided: Decided,
     ) -> Rewrite<'r> {
         let next_local = crate::emit::reuse::first_unused_local(program);
-        let origin = operations.keys().next().and_then(|&id| program.function(id).origin);
+        let tree_operation = operations.iter().find(|&(_, operation)| !operation.reads_objects());
+        let origin = tree_operation.and_then(|(&id, _)| program.function(id).origin);
         Rewrite {
             program,
             monotypes,
@@ -199,10 +201,15 @@ impl<'r> Rewrite<'r> {
             }
             _ => vec![],
         };
+        let addend = self.summed(expression);
         for_each_child_mut(expression, &mut |child| self.expression(child));
         self.retype_binders(expression, &scrutinee_types);
+        if let Some(addend) = addend {
+            self.add_in_place(expression, addend);
+        }
         let Some(own) = own else {
             self.read(expression);
+            self.retype_effect(expression);
             return;
         };
         let natives = conversion.as_ref().map_or(own, |conversion| conversion.from.clone());
@@ -408,6 +415,10 @@ impl<'r> Rewrite<'r> {
 
     /// A lookup, membership test or size of a Go map, as the Go map operation.
     fn read(&mut self, expression: &mut Expression) {
+        if let ExpressionKind::Foreign { .. } = expression.kind {
+            self.read_object(expression);
+            return;
+        }
         let ExpressionKind::Apply { function, arguments } = &mut expression.kind else { return };
         let ExpressionKind::Function(id) = function.kind else { return };
         let Some(&operation) = self.operations.get(&id) else { return };
@@ -432,6 +443,12 @@ impl<'r> Rewrite<'r> {
             MapOperation::LookupLT => HashMapOperation::Below,
             MapOperation::LookupGE => HashMapOperation::AtLeast,
             MapOperation::LookupGT => HashMapOperation::Above,
+            MapOperation::AscendingEntries => {
+                let object = self.program.function(id).parameters[0].monotype;
+                let table = take(&mut arguments[0]);
+                arguments[0] = self.object_table(table, object);
+                return;
+            }
             _ => unreachable!("invariant violated: a map read that builds"),
         };
         let arguments = std::mem::take(arguments);
@@ -457,6 +474,7 @@ impl<'r> Rewrite<'r> {
                         Some(_) => self.monotypes.intern(Monotype::Effect(local.monotype)),
                         None => local.monotype,
                     };
+                    self.new_in_effect(action, local.monotype);
                 }
             }
             ExpressionKind::Lambda { parameters, body } => {
@@ -489,6 +507,30 @@ impl<'r> Rewrite<'r> {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn retype_effect(&mut self, expression: &mut Expression) {
+        let Some(result) = self.monotypes.effect_result(expression.monotype) else { return };
+        if self.layouts.layout(self.monotypes, self.shapes, result).width == 0 {
+            return;
+        }
+        let inner = match &expression.kind {
+            ExpressionKind::EffectPure(value) => {
+                self.monotypes.intern(Monotype::Effect(value.monotype))
+            }
+            ExpressionKind::EffectBind { body, .. } | ExpressionKind::Let { body, .. } => {
+                body.monotype
+            }
+            ExpressionKind::If { then, .. } => then.monotype,
+            ExpressionKind::Case { alternatives, .. } => match alternatives.first() {
+                Some(Alternative { body: Guarded::Unconditional(body), .. }) => body.monotype,
+                _ => return,
+            },
+            _ => return,
+        };
+        if self.monotypes.effect_result(inner).is_some() {
+            expression.monotype = inner;
         }
     }
 
@@ -544,6 +586,10 @@ impl<'r> Rewrite<'r> {
 
     /// A map-typed expression of a web that is a Go map: its type, and the operation it is.
     fn native(&mut self, expression: &mut Expression) {
+        if let ExpressionKind::Foreign { .. } = expression.kind {
+            self.native_object(expression);
+            return;
+        }
         let hash = expression.monotype;
         let operation = match &expression.kind {
             ExpressionKind::Apply { function, arguments } => match function.kind {
@@ -617,7 +663,8 @@ impl<'r> Rewrite<'r> {
             | MapOperation::LookupLE
             | MapOperation::LookupLT
             | MapOperation::LookupGE
-            | MapOperation::LookupGT => {
+            | MapOperation::LookupGT
+            | MapOperation::AscendingEntries => {
                 unreachable!("invariant violated: a map read answers a map")
             }
         }
