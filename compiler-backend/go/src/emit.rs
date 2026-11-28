@@ -93,6 +93,7 @@ mod scalars;
 mod scratch_keys;
 mod sharing;
 mod shorthands;
+mod singletons;
 mod sorting;
 mod standard;
 mod strings;

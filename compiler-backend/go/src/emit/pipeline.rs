@@ -13,8 +13,8 @@ use super::{
     diverging, divisions, equality, forwarders, fresh, groups, guards, hash_maps, headers,
     immediate, index_arrays, inlining, intervals, invariants, joins, known, labelled, lengths,
     lines, loads, maybe, merging, narrow_fields, prepends, presized_objects, probes, ranges,
-    references, reuse, scalars, scratch_keys, sharing, shorthands, swaps, text, unpacked,
-    unreferenced, updates, upsert, vector, wrappers,
+    references, reuse, scalars, scratch_keys, sharing, shorthands, singletons, swaps, text,
+    unpacked, unreferenced, updates, upsert, vector, wrappers,
 };
 use crate::arity::Arities;
 use crate::error::GoResult;
@@ -188,6 +188,7 @@ where
         composites::take_composites_apart(declarations);
         immediate::reduce_immediate_calls(declarations);
         conditions::assign_conditions(declarations, conditions::Arms::Literal);
+        singletons::run_bodies_of_chosen_singletons(declarations);
         aliases::substitute_aliases(declarations);
         updates::update_in_place(declarations);
         scalars::split_struct_locals(declarations, &structs);
