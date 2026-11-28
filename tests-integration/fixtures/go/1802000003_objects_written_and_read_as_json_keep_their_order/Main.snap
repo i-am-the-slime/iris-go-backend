@@ -1,0 +1,441 @@
+---
+source: tests-integration/src/fixtures/go_backend.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+type Either struct {
+	Left  exception.Error
+	Right any
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+func Left(left exception.Error) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  any
+	Second any
+}
+
+// Foreign/foreign.go
+package foreign
+
+import "fixture/Data/Maybe"
+
+type ForeignError struct {
+	Field0           string
+	Field1           string
+	ErrorAtIndex1    *ForeignError
+	ErrorAtProperty0 string
+	ErrorAtProperty1 *ForeignError
+	ErrorAtIndex0    int32
+	Tag              uint8
+}
+
+const (
+	ForeignErrorForeignError2 = iota
+	ForeignErrorTypeMismatch
+	ForeignErrorErrorAtIndex
+	ForeignErrorErrorAtProperty
+)
+
+type ListForeignError struct {
+	Cons0 *ForeignError
+	Cons1 *ListForeignError
+}
+
+type NonEmpty struct {
+	First  *ForeignError
+	Second *ListForeignError
+}
+
+type EitherObjectInt struct {
+	Left  NonEmpty
+	Right *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int
+}
+	Tag   uint8
+}
+
+const (
+	EitherObjectIntLeft = iota
+	EitherObjectIntRight
+)
+
+type EitherInt struct {
+	Left  NonEmpty
+	Right int
+	Tag   uint8
+}
+
+const (
+	EitherIntLeft = iota
+	EitherIntRight
+)
+
+type TupleString struct {
+	First  string
+	Second EitherInt
+}
+
+type ListListForeignError struct {
+	Cons0 *ListForeignError
+	Cons1 *ListListForeignError
+}
+
+type TupleTupleStringEitherNonEmptyListForeignErrorInt struct {
+	First  TupleString
+	Second int
+}
+
+type MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt struct {
+	Just TupleTupleStringEitherNonEmptyListForeignErrorInt
+	Tag  uint8
+}
+
+func JustTupleTupleStringEitherNonEmptyListForeignErrorIntInt(just TupleTupleStringEitherNonEmptyListForeignErrorInt) MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt {
+	return MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt{Tag: maybe.TagJust, Just: just}
+}
+
+var NoTupleTupleStringEitherNonEmptyListForeignErrorIntInt = MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt{Tag: maybe.TagNothing}
+
+type NonEmptyFailure struct {
+	Failed bool
+	Left   NonEmpty
+}
+
+func ForeignErrorForeignError(field0 string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorForeignError2, Field0: field0}
+}
+
+func TypeMismatch(field0 string, field1 string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorTypeMismatch, Field0: field0, Field1: field1}
+}
+
+func Left(left NonEmpty) EitherInt {
+	return EitherInt{Tag: EitherIntLeft, Left: left}
+}
+
+func Right(right int) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Right: right}
+}
+
+func ErrorAtProperty(errorAtProperty0 string, errorAtProperty1 *ForeignError) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: errorAtProperty0, ErrorAtProperty1: errorAtProperty1}
+}
+
+func Cons(cons0 *ForeignError, cons1 *ListForeignError) *ListForeignError {
+	return &ListForeignError{Cons0: cons0, Cons1: cons1}
+}
+
+// Yoga/JSON/json.go
+package json
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Maybe"
+	"fixture/Foreign"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+	"math"
+)
+
+var SharedListForeignErrorNil = &foreign.ListForeignError{}
+
+func DecodeJSONObjectInt(d *foreignvalue.Decoder) *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int
+} {
+	var keys []string
+	var values []int
+	if d.Object() {
+		for {
+			keys = append(keys, d.Key())
+			values = append(values, d.Int())
+			if !d.MoreMembers() {
+				break
+			}
+		}
+	}
+	return object.FromEntries(keys, values)
+}
+
+var SharedListListForeignErrorNil = &foreign.ListListForeignError{}
+
+func ReadJSON(text string) (*struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int
+}, foreign.NonEmptyFailure) {
+	decoded, ok := foreignvalue.Decode(text, DecodeJSONObjectInt)
+	if ok {
+		return decoded, foreign.NonEmptyFailure{}
+	}
+	performed := direct.CatchException(func(x exception.Error) either.Either {
+		return either.Left(x)
+	}, func() either.Either {
+		argument := foreignvalue.ParseJSON(text)
+		return either.Either{Tag: either.EitherRight, Right: argument}
+	})
+	switch performed.Tag {
+	case either.EitherLeft:
+		return nil, foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.ForeignErrorForeignError(exception.Message(performed.Left)), Second: SharedListForeignErrorNil}}
+	default: // either.EitherRight
+		return ReadImpl(performed.Right)
+	}
+}
+
+func ReadImpl(a any) (*struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int
+}, foreign.NonEmptyFailure) {
+	if foreignvalue.TagOf(a) == "Object" {
+		xs := object.ToArrayWithKey(func(s string, either foreign.EitherInt) foreign.TupleString {
+			return foreign.TupleString{First: s, Second: either}
+		}, object.MapWithKey(a.(*struct {
+			Index map[string]int
+			Ints  int
+			Keys  []string
+			Vals  []any
+		}), func(key string, value any) foreign.EitherInt {
+			error_ := foreign.Left(foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(value)), Second: SharedListForeignErrorNil})
+			var result foreign.EitherInt
+			if foreignvalue.TagOf(value) == "Number" {
+				number := foreignvalue.Number(value)
+				var integer maybe.Int
+				if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+					integer = maybe.JustInt(int(number))
+				} else {
+					integer = maybe.NoInt
+				}
+				switch integer.Tag {
+				case maybe.TagNothing:
+					result = error_
+				default: // maybe.TagJust
+					result = foreign.Right(integer.Just)
+				}
+			} else {
+				result = error_
+			}
+			switch result.Tag {
+			case foreign.EitherIntLeft:
+				return foreign.Left(foreign.NonEmpty{First: foreign.ErrorAtProperty(key, result.Left.First), Second: ReadImplChunkedRevMap(key, SharedListListForeignErrorNil, result.Left.Second)})
+			default: // foreign.EitherIntRight
+				return foreign.Right(result.Right)
+			}
+		}))
+		len_ := len(xs)
+		array := arraypkg.Unfoldr(func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) bool {
+			return value.Tag == maybe.TagNothing
+		}, func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt {
+			return value.Just
+		}, func(value foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt) foreign.TupleString {
+			return value.First
+		}, func(value foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt) int {
+			return value.Second
+		}, func(i int) foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt {
+			if i < len_ {
+				return foreign.JustTupleTupleStringEitherNonEmptyListForeignErrorIntInt(foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt{First: xs[i], Second: i + 1})
+			}
+			return foreign.NoTupleTupleStringEitherNonEmptyListForeignErrorIntInt
+		}, 0)
+		object_ := object.Empty[int]()
+		var err foreign.NonEmptyFailure
+		object_ = object.Lend(object_)
+		for tupleIndex := range array {
+			if err.Failed && array[tupleIndex].Second.Tag == foreign.EitherIntLeft {
+				err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: err.Left.First, Second: ReadImplGoIntReusing(foreign.Cons(array[tupleIndex].Second.Left.First, array[tupleIndex].Second.Left.Second), ReadImplGoInt(SharedListForeignErrorNil, err.Left.Second))}}
+			} else if err.Failed && array[tupleIndex].Second.Tag == foreign.EitherIntRight {
+			} else if !err.Failed && array[tupleIndex].Second.Tag == foreign.EitherIntRight {
+				object_, err = object.InsertOwned(array[tupleIndex].First, array[tupleIndex].Second.Right, object_), foreign.NonEmptyFailure{}
+			} else {
+				err = foreign.NonEmptyFailure{Failed: true, Left: array[tupleIndex].Second.Left}
+			}
+		}
+		return object_, err
+	}
+	return nil, foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Object", foreignvalue.TagOf(a)), Second: SharedListForeignErrorNil}}
+}
+
+func ReadImplGoInt(acc *foreign.ListForeignError, list *foreign.ListForeignError) *foreign.ListForeignError {
+	var listForeignErrorCells alloc.Cells[foreign.ListForeignError]
+	for {
+		if list == SharedListForeignErrorNil {
+			return acc
+		}
+		x := list.Cons0
+		xs := list.Cons1
+		acc, list = listForeignErrorCells.New(foreign.ListForeignError{Cons0: x, Cons1: acc}), xs
+	}
+}
+
+func ReadImplChunkedRevMap(key string, chunksAcc *foreign.ListListForeignError, chunk *foreign.ListForeignError) *foreign.ListForeignError {
+	var listListForeignErrorCells alloc.Cells[foreign.ListListForeignError]
+	for {
+		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 != SharedListForeignErrorNil {
+			xs := chunk.Cons1.Cons1.Cons1
+			chunksAcc, chunk = listListForeignErrorCells.New(foreign.ListListForeignError{Cons0: chunk, Cons1: chunksAcc}), xs
+			continue
+		}
+		var result *foreign.ListForeignError
+		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 == SharedListForeignErrorNil {
+			result = foreign.Cons(foreign.ErrorAtProperty(key, chunk.Cons0), foreign.Cons(foreign.ErrorAtProperty(key, chunk.Cons1.Cons0), SharedListForeignErrorNil))
+		} else if chunk != SharedListForeignErrorNil && chunk.Cons1 == SharedListForeignErrorNil {
+			result = foreign.Cons(foreign.ErrorAtProperty(key, chunk.Cons0), SharedListForeignErrorNil)
+		} else {
+			result = SharedListForeignErrorNil
+		}
+		return ReadImplChunkedRevMapReverseUnrolledMap(key, chunksAcc, result)
+	}
+}
+
+func ReadImplChunkedRevMapReverseUnrolledMap(key string, list *foreign.ListListForeignError, acc *foreign.ListForeignError) *foreign.ListForeignError {
+	var foreignErrorCells alloc.Cells[foreign.ForeignError]
+	var listForeignErrorCells alloc.Cells[foreign.ListForeignError]
+	for {
+		if list != SharedListListForeignErrorNil && list.Cons0 != SharedListForeignErrorNil && list.Cons0.Cons1 != SharedListForeignErrorNil && list.Cons0.Cons1.Cons1 != SharedListForeignErrorNil {
+			x1 := list.Cons0.Cons0
+			x2 := list.Cons0.Cons1.Cons0
+			x3 := list.Cons0.Cons1.Cons1.Cons0
+			cs := list.Cons1
+			list, acc = cs, listForeignErrorCells.New(foreign.ListForeignError{Cons0: foreignErrorCells.New(foreign.ForeignError{Tag: foreign.ForeignErrorErrorAtProperty, ErrorAtProperty0: key, ErrorAtProperty1: x1}), Cons1: listForeignErrorCells.New(foreign.ListForeignError{Cons0: foreignErrorCells.New(foreign.ForeignError{Tag: foreign.ForeignErrorErrorAtProperty, ErrorAtProperty0: key, ErrorAtProperty1: x2}), Cons1: listForeignErrorCells.New(foreign.ListForeignError{Cons0: foreignErrorCells.New(foreign.ForeignError{Tag: foreign.ForeignErrorErrorAtProperty, ErrorAtProperty0: key, ErrorAtProperty1: x3}), Cons1: acc})})})
+			continue
+		}
+		return acc
+	}
+}
+
+func ReadImplGoIntReusing(acc *foreign.ListForeignError, list *foreign.ListForeignError) *foreign.ListForeignError {
+	for {
+		if list == SharedListForeignErrorNil {
+			return acc
+		}
+		xs := list.Cons1
+		list.Cons1 = acc
+		acc, list = list, xs
+	}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Yoga/JSON"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	table := object.Insert("b", len(make(map[string]int)), object.Empty[int]())
+	table2 := object.Insert("10", object.Size(table), table)
+	table3 := object.Insert("a", object.Size(table2), table2)
+	written := foreignvalue.Encode(shared.EncodeJSONObjectInt, object.Insert("2", object.Size(table3), table3))
+	object_, err := json.ReadJSON(written)
+	var result string
+	if err.Failed {
+		result = "unreadable"
+	} else {
+		result = show.ArrayString(object.Keys(object_))
+	}
+	return []string{written, result}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+import (
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+)
+
+func EncodeJSONObjectInt(e *foreignvalue.Encoder, value *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int
+}) {
+	e.Raw("{")
+	for key, member := range object.Entries(value) {
+		e.Key(key)
+		e.Int(member)
+	}
+	e.Raw("}")
+}

@@ -1,0 +1,9 @@
+-- the keys of an object that went through inserts, array indices first
+["2","10","pear","kiwi","apple"]
+[1,1,2,9,1]
+-- shown
+(fromFoldable [(Tuple "2" 1),(Tuple "10" 1),(Tuple "pear" 2),(Tuple "fig" 2),(Tuple "kiwi" 1)])
+-- folded in order
+2=1;10=1;pear=2;fig=2;kiwi=1;
+-- one function, read in order by one caller and looked up by another
+(Just 2) [(Tuple "2" 1),(Tuple "10" 1),(Tuple "pear" 2),(Tuple "fig" 2),(Tuple "kiwi" 1)]

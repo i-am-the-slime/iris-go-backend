@@ -1,0 +1,11 @@
+-- lookups after inserts and deletes
+(Just 3) true 5 false
+Nothing false 4 false
+-- built from an array
+(Just 3) (Just 2) 5
+-- a thunk run twice builds two objects
+(Just 4) Nothing 5
+-- filled in ST
+Nothing (Just 30) 4
+-- read in the order of the keys
+[(Tuple "10" 1),(Tuple "2" 1),(Tuple "fig" 2),(Tuple "kiwi" 1),(Tuple "pear" 3)]
