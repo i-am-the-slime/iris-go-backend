@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::{env, fs};
 
-use iris_build::Workspace;
+use iris_build::{Workspace, WorkspacePackage};
 use sha2::{Digest, Sha256};
 
 use crate::{GoConfig, requirements};
@@ -52,6 +52,9 @@ pub struct ProgramConfig {
     /// Runs the program once with these arguments, or with `run.execArgs` when there are none,
     /// while recording a CPU profile, then builds it again optimised for that profile.
     pub profile: Option<Vec<String>>,
+    /// Builds the package's tests, `main` in its configured `test.main` module or in
+    /// `Test.Main`, with `test.execArgs`, instead of its program.
+    pub tests: bool,
 }
 
 /// Compiles the package's entry point and runs the executable with `arguments`, or with the
@@ -88,12 +91,13 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         .select_root_package_by_default();
     let package = workspace.require_selected().map_err(|error| error.to_string())?;
     let name = workspace.selected.clone().expect("invariant violated: a package is selected");
-    let execution = package.manifest.run.clone().unwrap_or_default();
-    let entry = config
-        .entry
-        .unwrap_or_else(|| format!("{}.main", execution.main.as_deref().unwrap_or("Main")));
+    let execution = if config.tests { tests(package)? } else { program(package) };
+    let entry = config.entry.unwrap_or_else(|| format!("{}.main", execution.main));
 
     let cache = workspace.root.join(".spago").join("go").join(&name);
+    // The tests get their own module and executable, so switching between running the program
+    // and its tests does not build either again.
+    let cache = if config.tests { cache.join("test") } else { cache };
     let module = cache.join("module");
     let previous_requirements = previous_requirements(&module)?;
     clear_generated(&module)?;
@@ -140,6 +144,29 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         workspace_root: workspace.root.clone(),
         configured_arguments: execution.exec_args,
         profiled_status,
+    })
+}
+
+/// The module whose `main` a build runs, and the arguments it runs with when it is given none.
+struct Execution {
+    main: String,
+    exec_args: Vec<String>,
+}
+
+/// The package's program, from its `run` configuration.
+fn program(package: &WorkspacePackage) -> Execution {
+    let run = package.manifest.run.clone().unwrap_or_default();
+    Execution { main: run.main.unwrap_or_else(|| "Main".to_string()), exec_args: run.exec_args }
+}
+
+/// The package's tests, from its `test` configuration, as `googoo test --js` finds them.
+fn tests(package: &WorkspacePackage) -> Result<Execution, String> {
+    if !package.has_tests {
+        return Err("no selected packages contain tests".to_string());
+    }
+    Ok(match package.manifest.test.clone() {
+        Some(test) => Execution { main: test.main, exec_args: test.exec_args },
+        None => Execution { main: "Test.Main".to_string(), exec_args: vec![] },
     })
 }
 

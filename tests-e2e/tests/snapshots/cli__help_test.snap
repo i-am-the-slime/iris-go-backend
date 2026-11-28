@@ -3,7 +3,7 @@ source: tests-e2e/tests/cli.rs
 ---
 status: 0
 --- stdout
-Build and test one or more Spago packages with Node.js.
+Build a Spago package's tests to Go and run them, or with --js test with Node.js.
 
 Usage: googoo test [FLAGS] [-- ARGUMENTS]…
 
@@ -18,5 +18,6 @@ Flags:
                         [possible values: auto, always, never]
                         (default: auto)
       --main <MODULE>   Module containing the test entry point.
+      --js              Test with Node.js instead of compiling to Go.
   -h, --help            Print help
 --- stderr

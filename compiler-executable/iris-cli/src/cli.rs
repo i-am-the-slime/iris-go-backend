@@ -32,7 +32,7 @@ pub enum Command {
     New(NewOptions),
     /// Add dependencies to a Spago package.
     Add(AddOptions),
-    /// Build a Spago workspace or package.
+    /// Build a Spago package to a Go executable, or with --js a workspace to JavaScript.
     Build(BuildOptions),
     /// Build a Spago workspace or package and rebuild when inputs change.
     Watch(WatchOptions),
@@ -47,7 +47,7 @@ pub enum Command {
         #[usage(flatten)]
         options: RunOptions,
     },
-    /// Build and test one or more Spago packages with Node.js.
+    /// Build a Spago package's tests to Go and run them, or with --js test with Node.js.
     Test {
         #[usage(flatten)]
         options: TestOptions,
@@ -164,6 +164,7 @@ impl GoOptions {
                 version,
                 pgo: self.optimisation.pgo(),
                 profile: self.optimisation.profile.then_some(self.arguments),
+                tests: false,
             }),
         })
     }
@@ -251,9 +252,20 @@ pub struct BuildOptions {
     #[usage(flatten)]
     project: ProjectBuildOptions,
 
-    /// Suppress compiler warnings and errors without hiding build progress.
+    /// Suppress compiler warnings and errors without hiding build progress. Only with --js.
     #[usage(long)]
     no_diagnostics: bool,
+
+    /// Compile the workspace to JavaScript in the output directory instead of building a Go
+    /// executable.
+    #[usage(long)]
+    js: bool,
+}
+
+/// What `googoo build` builds.
+pub enum Build {
+    JavaScript(BuildConfig),
+    Go(iris_go::ProgramConfig),
 }
 
 #[derive(Debug, Args)]
@@ -284,6 +296,25 @@ pub enum ColorChoice {
 }
 
 impl BuildOptions {
+    /// A Go executable, as `googoo go` builds it, unless --js or --output asks for JavaScript.
+    pub fn into_build(self) -> Result<Build, String> {
+        if self.js || self.project.output.is_some() {
+            return Ok(Build::JavaScript(self.into_config()));
+        }
+        if self.no_diagnostics {
+            return Err("--no-diagnostics is for JavaScript builds, so it needs --js".to_string());
+        }
+        Ok(Build::Go(iris_go::ProgramConfig {
+            package: self.project.package,
+            entry: None,
+            quiet: self.project.quiet,
+            version: crate::VERSION.to_string(),
+            pgo: iris_go::Pgo::Recorded,
+            profile: None,
+            tests: false,
+        }))
+    }
+
     pub fn into_config(self) -> BuildConfig {
         BuildConfig {
             package: self.project.package,
@@ -352,6 +383,7 @@ impl RunOptions {
                 version: crate::VERSION.to_string(),
                 pgo: self.optimisation.pgo(),
                 profile: self.optimisation.profile.then(|| self.arguments.clone()),
+                tests: false,
             };
             return Ok(Run::Go { config, arguments: self.arguments });
         }
@@ -379,13 +411,41 @@ pub struct TestOptions {
     #[usage(long, value_name = "MODULE")]
     main: Option<String>,
 
+    /// Test with Node.js instead of compiling to Go.
+    #[usage(long)]
+    js: bool,
+
     /// Arguments passed to each test program.
     #[usage(double_dash = "required")]
     arguments: Vec<String>,
 }
 
+/// How `googoo test` runs the tests.
+pub enum Test {
+    Node(TestConfig),
+    Go { config: iris_go::ProgramConfig, arguments: Vec<String> },
+}
+
 impl TestOptions {
-    pub fn into_config(self) -> TestConfig {
+    /// The tests on Go, as `googoo run --main Test.Main` runs them, unless --js or --output asks
+    /// for Node.js.
+    pub fn into_test(self) -> Test {
+        if self.js || self.build.output.is_some() {
+            return Test::Node(self.into_config());
+        }
+        let config = iris_go::ProgramConfig {
+            package: self.build.package,
+            entry: self.main.map(|main| format!("{main}.main")),
+            quiet: self.build.quiet,
+            version: crate::VERSION.to_string(),
+            pgo: iris_go::Pgo::Off,
+            profile: None,
+            tests: true,
+        };
+        Test::Go { config, arguments: self.arguments }
+    }
+
+    fn into_config(self) -> TestConfig {
         let (project, color) = self.build.into_project_config();
         TestConfig {
             project,
@@ -850,15 +910,49 @@ mod tests {
 
     #[test]
     fn maps_build_options_to_configuration() {
-        let arguments = ["googoo", "build", "--quiet", "--no-diagnostics"];
-        let arguments = arguments.iter().map(OsStr::new).collect_vec();
-        let program = Program::try_parse_from(&arguments).unwrap();
-        let Command::Build(options) = program.command else {
-            panic!("invariant violated: expected build command");
+        let Ok(Build::JavaScript(config)) =
+            build(&["build", "--js", "--quiet", "--no-diagnostics"]).into_build()
+        else {
+            panic!("invariant violated: expected a JavaScript build");
         };
-        let config = options.into_config();
 
         assert!(config.quiet);
         assert!(!config.diagnostics);
+    }
+
+    #[test]
+    fn builds_go_unless_javascript_is_asked_for() {
+        assert!(matches!(build(&["build"]).into_build(), Ok(Build::Go(_))));
+        assert!(matches!(
+            build(&["build", "--output", "js"]).into_build(),
+            Ok(Build::JavaScript(_))
+        ));
+        assert!(build(&["build", "--no-diagnostics"]).into_build().is_err());
+    }
+
+    #[test]
+    fn tests_on_go_unless_node_is_asked_for() {
+        assert!(matches!(test(&["test"]).into_test(), Test::Go { .. }));
+        assert!(matches!(test(&["test", "--js"]).into_test(), Test::Node(_)));
+    }
+
+    fn build(arguments: &[&str]) -> BuildOptions {
+        match parse(arguments).command {
+            Command::Build(options) => options,
+            _ => panic!("invariant violated: expected build command"),
+        }
+    }
+
+    fn test(arguments: &[&str]) -> TestOptions {
+        match parse(arguments).command {
+            Command::Test { options } => options,
+            _ => panic!("invariant violated: expected test command"),
+        }
+    }
+
+    fn parse(arguments: &[&str]) -> Program {
+        let arguments = std::iter::once("googoo").chain(arguments.iter().copied());
+        let arguments = arguments.map(OsStr::new).collect_vec();
+        Program::try_parse_from(&arguments).unwrap()
     }
 }

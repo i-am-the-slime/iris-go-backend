@@ -16,7 +16,7 @@ mod workspace;
 
 pub use compile::BuildStage;
 pub use packages::{DiscoveredPackage, DiscoveredPackages, PackagesError, discover_packages};
-pub use workspace::{Workspace, WorkspaceError};
+pub use workspace::{Workspace, WorkspaceError, WorkspacePackage};
 
 pub use project::{
     BuildConfig, BuildError, ExecutionError, InitializedProject, PreparedProject, ProjectConfig,

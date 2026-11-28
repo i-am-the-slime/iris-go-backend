@@ -30,7 +30,7 @@ foreign import main :: Effect Unit
 "#,
     );
 
-    let output = workspace.command(&["test", "--quiet"]);
+    let output = workspace.command(&["test", "--js", "--quiet"]);
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
     --- stdout
@@ -73,7 +73,7 @@ main = fail Unit
         "export const fail = () => { throw new Error(\"failed\"); };\n",
     );
 
-    let output = workspace.command(&["test", "--quiet"]);
+    let output = workspace.command(&["test", "--js", "--quiet"]);
 
     assert!(!output.status.success());
     insta::assert_snapshot!(workspace.workspace_stack_frames(&output), @"
@@ -104,4 +104,69 @@ package:
     no selected packages contain tests
     ");
     insta::assert_snapshot!(workspace.spago_calls(), @"");
+}
+
+#[test]
+fn tests_the_configured_module_on_go() {
+    let workspace = TestWorkspace::empty();
+    workspace.write(
+        "spago.yaml",
+        r#"workspace: {}
+package:
+  name: application
+  dependencies: []
+  test:
+    main: Application.Test
+    dependencies: []
+    execArgs: [from-manifest]
+"#,
+    );
+    workspace.write(
+        "src/Effect.purs",
+        "module Effect where\n\nforeign import data Effect :: Type -> Type\n",
+    );
+    workspace.write(
+        "test/Application/Test.purs",
+        r#"module Application.Test where
+
+import Effect (Effect)
+
+foreign import check :: Effect Int
+
+main :: Effect Int
+main = check
+"#,
+    );
+    workspace.write(
+        "test/Application/Test.go",
+        r#"package ffi
+
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
+func Check() int {
+	fmt.Println("tests ran: " + strings.Join(os.Args[1:], ","))
+	return 1
+}
+"#,
+    );
+
+    let output = workspace.command(&["test", "--quiet"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 1
+    --- stdout
+    tests ran: from-manifest
+    --- stderr
+    ");
+
+    let output = workspace.command(&["test", "--quiet", "--", "given"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 1
+    --- stdout
+    tests ran: given
+    --- stderr
+    ");
 }

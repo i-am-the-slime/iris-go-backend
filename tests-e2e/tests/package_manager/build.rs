@@ -33,7 +33,7 @@ value = 42
     );
     workspace.write("packages/library/src/Library.purs", "module Library where\n");
 
-    let output = workspace.command_in("packages/application/src", &["build", "--quiet"]);
+    let output = workspace.command_in("packages/application/src", &["build", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
@@ -79,7 +79,7 @@ library = 42
 "#,
     );
 
-    let output = workspace.command_in("src", &["build", "--quiet"]);
+    let output = workspace.command_in("src", &["build", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
@@ -117,7 +117,7 @@ value = unit
     );
     workspace.write(".spago/p/prelude-999.0.0/src/Stale.purs", "module Stale where\n");
 
-    let output = workspace.command(&["build", "--quiet"]);
+    let output = workspace.command(&["build", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
@@ -173,7 +173,7 @@ package:
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet", "--package", "ignored"]);
+    let output = workspace.command(&["build", "--js", "--quiet", "--package", "ignored"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 1
@@ -211,7 +211,7 @@ package:
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet", "--package", "child"]);
+    let output = workspace.command(&["build", "--js", "--quiet", "--package", "child"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 1
@@ -241,7 +241,7 @@ broken = missing
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet", "--no-diagnostics"]);
+    let output = workspace.command(&["build", "--js", "--quiet", "--no-diagnostics"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 1
@@ -270,7 +270,7 @@ value = if true then 1
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet"]);
+    let output = workspace.command(&["build", "--js", "--quiet"]);
 
     insta::with_settings!({omit_expression => true}, {
         insta::assert_snapshot!("parse_error_diagnostics", workspace.report(&output));
@@ -298,7 +298,7 @@ data Box a = Box a
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet"]);
+    let output = workspace.command(&["build", "--js", "--quiet"]);
 
     insta::with_settings!({omit_expression => true}, {
         insta::assert_snapshot!("indexing_error_diagnostics", workspace.report(&output));
@@ -335,7 +335,7 @@ answer = value
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet"]);
+    let output = workspace.command(&["build", "--js", "--quiet"]);
 
     insta::with_settings!({omit_expression => true}, {
         insta::assert_snapshot!("indexing_warning_diagnostics", workspace.report(&output));
@@ -369,7 +369,7 @@ failure = fail Unit
     workspace.write("src/Main.js", "export const fail = () => { throw new Error(\"failed\"); };\n");
     workspace.write("main.mjs", "import \"./output/Main/index.js\";\n");
 
-    assert_success(&workspace.command(&["build", "--quiet"]));
+    assert_success(&workspace.command(&["build", "--js", "--quiet"]));
     let source_map = workspace.read("output/Main/index.js.map");
     let source_map: serde_json::Value = serde_json::from_str(&source_map).unwrap();
     insta::assert_snapshot!(source_map["sources"], @r#"["../../src/Main.purs"]"#);
@@ -436,7 +436,7 @@ foreign import render :: Int -> Int
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet", "--package", "library"]);
+    let output = workspace.command(&["build", "--js", "--quiet", "--package", "library"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
@@ -449,7 +449,7 @@ foreign import render :: Int -> Int
     ");
     assert!(!workspace.path().join("output/Main").exists());
 
-    assert_success(&workspace.command(&["build", "--quiet"]));
+    assert_success(&workspace.command(&["build", "--js", "--quiet"]));
     insta::with_settings!({omit_expression => true}, {
         insta::assert_snapshot!("module_metadata", workspace.normalized_metadata());
     });
@@ -492,7 +492,7 @@ console.log(greeting, getService({ getService: (services) => services.name })({ 
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet"]);
+    let output = workspace.command(&["build", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
@@ -514,7 +514,7 @@ console.log(greeting, getService({ getService: (services) => services.name })({ 
     ");
 
     let source_map = workspace.read("output/Iris.Effect/index.js.map");
-    assert_success(&workspace.command(&["build", "--quiet"]));
+    assert_success(&workspace.command(&["build", "--js", "--quiet"]));
     assert_eq!(workspace.read("output/Iris.Effect/index.js.map"), source_map);
     let source_map: serde_json::Value = serde_json::from_str(&source_map).unwrap();
     insta::assert_snapshot!(source_map["sources"], @r#"["Iris.Effect.purs"]"#);
@@ -540,7 +540,7 @@ package:
 value = 1
 "#,
     );
-    assert_success(&workspace.command(&["build", "--quiet"]));
+    assert_success(&workspace.command(&["build", "--js", "--quiet"]));
 
     workspace.write(
         "src/Main.purs",
@@ -554,7 +554,7 @@ value = missing
         r#"module Extra where
 "#,
     );
-    let failed = workspace.command(&["build", "--quiet", "--no-diagnostics"]);
+    let failed = workspace.command(&["build", "--js", "--quiet", "--no-diagnostics"]);
     insta::assert_snapshot!(workspace.report(&failed), @"
     status: 1
     --- stdout
@@ -572,7 +572,7 @@ value = missing
 value = 2
 "#,
     );
-    assert_success(&workspace.command(&["build", "--quiet"]));
+    assert_success(&workspace.command(&["build", "--js", "--quiet"]));
     assert!(workspace.read("output/Main/index.js").contains("value = 2"));
     assert!(workspace.module_metadata("Extra").is_some());
     let modified = fs::metadata(&metadata_path).unwrap().modified().unwrap();
@@ -592,9 +592,40 @@ foreign import value :: Int
         r#"export const value = 3;
 "#,
     );
-    assert_success(&workspace.command(&["build", "--quiet"]));
+    assert_success(&workspace.command(&["build", "--js", "--quiet"]));
     insta::assert_snapshot!(workspace.module_metadata("Main").unwrap()["foreign"], @r#""foreign.js""#);
     let mut read = String::new();
     reader.read_to_string(&mut read).unwrap();
     assert_eq!(read, previous, "a build rewrote the metadata of Main in place");
+}
+
+#[test]
+fn builds_a_go_executable_unless_asked_for_javascript() {
+    let workspace = TestWorkspace::empty();
+    workspace.write("spago.yaml", "workspace: {}\npackage:\n  name: greeter\n  dependencies: []\n");
+    workspace.write(
+        "src/Effect.purs",
+        "module Effect where\n\nforeign import data Effect :: Type -> Type\n",
+    );
+    workspace.write(
+        "src/Main.purs",
+        "module Main where\n\nimport Effect (Effect)\n\nforeign import greet :: Effect Int\n\nmain :: Effect Int\nmain = greet\n",
+    );
+    workspace.write("src/Main.go", "package ffi\n\nfunc Greet() int {\n\treturn 0\n}\n");
+
+    let output = workspace.command(&["build", "--quiet"]);
+    assert_success(&output);
+    let executable = workspace
+        .path()
+        .join(format!(".spago/go/greeter/bin/greeter{}", std::env::consts::EXE_SUFFIX));
+    assert!(executable.is_file());
+    assert!(!workspace.path().join("output/Main/index.js").exists());
+
+    let output = workspace.command(&["build", "--quiet", "--no-diagnostics"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 2
+    --- stdout
+    --- stderr
+    --no-diagnostics is for JavaScript builds, so it needs --js
+    ");
 }

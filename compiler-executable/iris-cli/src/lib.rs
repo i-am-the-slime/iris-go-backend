@@ -61,14 +61,30 @@ pub fn run() -> i32 {
                 1
             }
         },
-        cli::Command::Build(options) => match iris_build::build(options.into_config()) {
-            Ok(()) => 0,
+        cli::Command::Build(options) => match options.into_build() {
             Err(error) => {
-                if !error.diagnostics_were_suppressed() {
-                    eprintln!("{error}");
-                }
-                1
+                eprintln!("{error}");
+                2
             }
+            Ok(cli::Build::JavaScript(config)) => match iris_build::build(config) {
+                Ok(()) => 0,
+                Err(error) => {
+                    if !error.diagnostics_were_suppressed() {
+                        eprintln!("{error}");
+                    }
+                    1
+                }
+            },
+            Ok(cli::Build::Go(config)) => match iris_go::build_program(config) {
+                Ok(program) => {
+                    println!("{}", program.executable.display());
+                    0
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    1
+                }
+            },
         },
         cli::Command::Watch(mut options) => {
             if let Some(command) = options.take_command() {
@@ -162,12 +178,21 @@ pub fn run() -> i32 {
                 }
             },
         },
-        cli::Command::Test { options } => match iris_build::test(options.into_config()) {
-            Ok(()) => 0,
-            Err(error) => {
-                eprintln!("{error}");
-                error.exit_code()
-            }
+        cli::Command::Test { options } => match options.into_test() {
+            cli::Test::Node(config) => match iris_build::test(config) {
+                Ok(()) => 0,
+                Err(error) => {
+                    eprintln!("{error}");
+                    error.exit_code()
+                }
+            },
+            cli::Test::Go { config, arguments } => match iris_go::run_program(config, arguments) {
+                Ok(status) => status,
+                Err(error) => {
+                    eprintln!("{error}");
+                    1
+                }
+            },
         },
         cli::Command::Installation(options) => match options.command {
             cli::InstallationCommand::Update(options) => self_update(options),

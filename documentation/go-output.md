@@ -25,14 +25,15 @@ gets you one.
 - **An entry that isn't an `Effect`**: an `Int`, `Number`, `Boolean`, `Char` or `String`, or an
   array of them, gets printed, arrays as `[1 2 3]`. Anything else (a record, a `Maybe`, a
   function) is computed but not printed, and `googoo go` says so.
-- **Tests**: `googoo run --main Test.Main` runs your test suite, and a failing test exits with a
-  non-zero status. `googoo test` runs tests with Node.js, so it fails on Go-only packages.
+- **Tests**: `googoo test` runs `main` in `Test.Main`, or in the module your `spago.yaml` names
+  under `test.main`, and a failing test exits with a non-zero status. `googoo test --js` runs them
+  with Node.js instead.
 - **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
 - **Packages**: `-p my-app` in a workspace with several.
 - **Fast reruns**: the first run downloads the Go runtime. After that, if your program compiles to
   the same Go, it starts right away without building again.
-- **Just the executable**: `googoo go` builds it and prints its path. It lives under
-  `.spago/go/<package>/bin/`.
+- **Just the executable**: `googoo build` builds it and prints its path. It lives under
+  `.spago/go/<package>/bin/`. `googoo build --js` compiles to JavaScript in `output/` instead.
 
 Want the Go source in a directory of your own instead? `googoo go out` writes it to `out/`. If
 `out/` has no `go.mod` yet, you get one naming the module `iris.local/<package>`; change the

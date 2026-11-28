@@ -152,7 +152,7 @@ main = runSpecAndExitProcess [ consoleReporter ] do
 ```
 
 ```
-$ googoo run --main Test.Main
+$ googoo test
 countWords
   ✓︎ counts every word, sorted
 
@@ -160,14 +160,13 @@ Summary
 1/1 test passed
 ```
 
-A failing spec exits with 1. Tests are just another program, so they run with `googoo run`:
-`googoo test` and `googoo build` still go the JavaScript way, and a project with Go-only packages
-fails there with `MissingFFIModule`.
+A failing spec exits with 1. `googoo test` runs `Test.Main` on Go, `googoo test --js` runs it with
+Node.js instead.
 
 ### Build a binary
 
 ```
-$ googoo go
+$ googoo build
 /home/you/words/.spago/go/words/bin/words
 $ .spago/go/words/bin/words to be
 be: 1

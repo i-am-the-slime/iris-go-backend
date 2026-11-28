@@ -91,7 +91,8 @@ fn builds_a_new_project_with_local_spago() {
     let path = env::join_paths(search_directories).unwrap();
 
     for current_directory in ["", "src"] {
-        let mut command = workspace.command_builder(current_directory, &["build", "--quiet"]);
+        let mut command =
+            workspace.command_builder(current_directory, &["build", "--js", "--quiet"]);
         command.env("PATH", &path).env_remove("IRIS_SPAGO");
         let output = command.output().unwrap();
         assert_success(&output);
@@ -121,7 +122,7 @@ fn ignores_spago_installed_above_the_workspace() {
         std::iter::once(global_directory).chain(env::split_paths(&inherited_path));
     let path = env::join_paths(search_directories).unwrap();
 
-    let mut command = workspace.command_builder("project/src", &["build", "--quiet"]);
+    let mut command = workspace.command_builder("project/src", &["build", "--js", "--quiet"]);
     command.env("PATH", path).env_remove("IRIS_SPAGO");
     let output = command.output().unwrap();
     insta::assert_snapshot!(workspace.report(&output), @"
@@ -205,7 +206,7 @@ fn discovers_windows_spago_launchers_and_preserves_explicit_overrides() {
         let inherited_path = env::var_os("PATH").unwrap_or_default();
         let search_directories =
             path_directories.iter().cloned().chain(env::split_paths(&inherited_path));
-        let mut command = workspace.command_builder("", &["build", "--quiet"]);
+        let mut command = workspace.command_builder("", &["build", "--js", "--quiet"]);
         command.env("PATH", env::join_paths(search_directories).unwrap()).env_remove("IRIS_SPAGO");
         if case.use_explicit_override {
             install_failing_spago_launcher(&workspace.path().join("node_modules/.bin"));

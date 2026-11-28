@@ -121,7 +121,7 @@ conditionalProps enabled = StyleX.props
 "#,
     );
 
-    let output = workspace.command(&["build", "--quiet"]);
+    let output = workspace.command(&["build", "--js", "--quiet"]);
     assert_success(&output);
     let generated = workspace.read("output/Main/index.js");
     assert!(
