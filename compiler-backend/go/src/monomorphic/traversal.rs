@@ -1,9 +1,10 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{
-    Alternative, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, Program,
-    RecordUpdate,
+    Alternative, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId,
+    Program, RecordUpdate,
 };
+use crate::monotype::MonotypeId;
 
 /// The guards and bodies of a case's alternatives.
 pub(crate) fn for_each_alternative_child<'e>(
@@ -200,6 +201,77 @@ pub(crate) fn for_each_binder_mut(expression: &mut Expression, visit: &mut impl 
         _ => {}
     }
     for_each_child_mut(expression, &mut |child| for_each_binder_mut(child, visit));
+}
+
+pub(crate) fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
+    let mut bind = |local: &Local| {
+        binders.insert(local.id, local.clone());
+    };
+    visit(expression, &mut |node| match &node.kind {
+        ExpressionKind::Lambda { parameters, .. } => parameters.iter().for_each(&mut bind),
+        ExpressionKind::Let { bindings, .. } => {
+            bindings.iter().for_each(|binding| bind(&binding.local))
+        }
+        ExpressionKind::EffectBind { local, .. }
+        | ExpressionKind::EffectEach { element: local, .. } => bind(local),
+        ExpressionKind::Case { alternatives, .. } => {
+            alternatives.iter().for_each(|alternative| alternative.for_each_local(&mut bind))
+        }
+        _ => {}
+    });
+}
+
+pub(crate) fn mentions_local(expression: &Expression, local: LocalId) -> bool {
+    let mut mentioned = false;
+    visit(expression, &mut |node| {
+        mentioned |= matches!(node.kind, ExpressionKind::Local(id) if id == local);
+    });
+    mentioned
+}
+
+pub(crate) fn all_locals(expression: &Expression) -> Vec<(LocalId, MonotypeId)> {
+    let mut locals = vec![];
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Local(id) = node.kind {
+            locals.push((id, node.monotype));
+        }
+    });
+    locals
+}
+
+pub(crate) fn free_locals(expression: &Expression) -> Vec<LocalId> {
+    let mut free = vec![];
+    for_each_free_local(expression, &mut |id, _| free.push(id));
+    free
+}
+
+pub(crate) fn free_local_references(expression: &Expression) -> Vec<Expression> {
+    let mut references = vec![];
+    for_each_free_local(expression, &mut |_, reference| references.push(reference.clone()));
+    references
+}
+
+fn for_each_free_local(expression: &Expression, visitor: &mut impl FnMut(LocalId, &Expression)) {
+    let mut bound = FxHashMap::default();
+    collect_binders(expression, &mut bound);
+    let mut seen = FxHashSet::default();
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Local(id) = node.kind
+            && !bound.contains_key(&id)
+            && seen.insert(id)
+        {
+            visitor(id, node);
+        }
+    });
+}
+
+pub(crate) fn rename_local(expression: &mut Expression, from: LocalId, to: LocalId) {
+    if let ExpressionKind::Local(id) = &mut expression.kind
+        && *id == from
+    {
+        *id = to;
+    }
+    for_each_child_mut(expression, &mut |child| rename_local(child, from, to));
 }
 
 fn for_each_update_mut(updates: &mut [RecordUpdate], visitor: &mut impl FnMut(&mut Expression)) {

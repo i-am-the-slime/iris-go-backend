@@ -3,9 +3,9 @@ use smol_str::{SmolStr, format_smolstr};
 
 use super::{INLINE_FUEL, INLINE_SIZE, Simplifier};
 use crate::foreign::Foreign;
-use crate::lift::collect_binders;
 use crate::monomorphic::traversal::{
-    for_each_binder_mut, for_each_child, for_each_child_mut, visit,
+    collect_binders, for_each_binder_mut, for_each_child, for_each_child_mut,
+    free_local_references, free_locals, mentions_local,
 };
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
@@ -63,7 +63,7 @@ impl Simplifier<'_> {
         let mut given = vec![];
         for (index, argument) in arguments.into_iter().enumerate() {
             match specialization.arguments.get(index) {
-                Some(Some(_)) => given.extend(free_locals(&argument)),
+                Some(Some(_)) => given.extend(free_local_references(&argument)),
                 _ => given.push(argument),
             }
         }
@@ -202,7 +202,7 @@ impl Simplifier<'_> {
                 continue;
             };
             let mut passed = FxHashMap::default();
-            for free in free_locals(argument) {
+            for free in free_local_references(argument) {
                 let ExpressionKind::Local(id) = free.kind else { continue };
                 let name = self.monotypes.value_name(free.monotype);
                 let template = Local { id: LocalId(0), name, monotype: free.monotype };
@@ -344,10 +344,7 @@ impl Simplifier<'_> {
                         Some(KnownFunction::Built) => uses.only_called,
                         Some(KnownFunction::Moved) | None => false,
                     };
-                    let in_scope = free_locals(argument).iter().all(|free| {
-                        !matches!(free.kind, ExpressionKind::Local(id) if bound.contains_key(&id))
-                    });
-                    used && in_scope
+                    used && free_locals(argument).iter().all(|free| !bound.contains_key(free))
                 });
                 if specializable {
                     return Some(KnownLocalParameter { position, index, arguments });
@@ -437,20 +434,11 @@ struct LocalArgument {
 
 impl LocalArgument {
     fn of(argument: &Expression) -> LocalArgument {
-        let free = free_locals(argument).into_iter().filter_map(|free| match free.kind {
-            ExpressionKind::Local(id) => Some(id),
-            _ => None,
-        });
-        LocalArgument { template: template(argument, argument.monotype), free: free.collect() }
+        LocalArgument {
+            template: template(argument, argument.monotype),
+            free: free_locals(argument),
+        }
     }
-}
-
-fn mentions_local(expression: &Expression, local: LocalId) -> bool {
-    let mut mentioned = false;
-    visit(expression, &mut |node| {
-        mentioned |= matches!(node.kind, ExpressionKind::Local(id) if id == local);
-    });
-    mentioned
 }
 
 /// The arguments at `index` of every call of `local`, or false when `local` is used otherwise
@@ -615,21 +603,4 @@ fn number_locals(expression: &mut Expression, slots: &mut FxHashMap<LocalId, Loc
         return;
     }
     for_each_child_mut(expression, &mut |child| number_locals(child, slots));
-}
-
-pub(super) fn free_locals(argument: &Expression) -> Vec<Expression> {
-    let mut bound = FxHashMap::default();
-    collect_binders(argument, &mut bound);
-    let mut seen = vec![];
-    let mut locals = vec![];
-    visit(argument, &mut |node| {
-        if let ExpressionKind::Local(id) = node.kind
-            && !bound.contains_key(&id)
-            && !seen.contains(&id)
-        {
-            seen.push(id);
-            locals.push(node.clone());
-        }
-    });
-    locals
 }

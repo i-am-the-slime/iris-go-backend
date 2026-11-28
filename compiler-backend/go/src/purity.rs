@@ -317,7 +317,7 @@ pub(crate) fn captures_free(
         return false;
     }
     let mut bound = FxHashMap::default();
-    crate::lift::collect_binders(lambda, &mut bound);
+    crate::monomorphic::traversal::collect_binders(lambda, &mut bound);
     cells.iter().any(|id| !bound.contains_key(id))
 }
 

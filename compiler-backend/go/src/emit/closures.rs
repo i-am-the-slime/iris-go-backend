@@ -42,8 +42,7 @@ use crate::arity::Arities;
 use crate::context::Context;
 use crate::error::GoResult;
 use crate::foreign::Foreign;
-use crate::lift::collect_binders;
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::traversal::{collect_binders, for_each_child, for_each_child_mut};
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,

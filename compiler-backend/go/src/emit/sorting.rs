@@ -1,11 +1,12 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::iteration::Found;
-use super::{Emitter, binary, call, identifier_expression, uses_local};
+use super::{Emitter, binary, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::{Comparison, Foreign, GoFunction, GoPackage, Operator};
-use crate::lift::collect_binders;
-use crate::monomorphic::traversal::{for_each_binder_mut, for_each_child_mut, visit};
+use crate::monomorphic::traversal::{
+    for_each_binder_mut, for_each_child_mut, free_locals, mentions_local, rename_local,
+};
 use crate::monomorphic::{
     Expression, ExpressionKind, Guarded, Literal, Local, LocalId, PatternKind,
 };
@@ -221,13 +222,12 @@ where
         let (left, right, ordered) = match self.callback(compare, 2) {
             Some(Found::Inline { parameters, body: compared }) => {
                 let saved = self.tail_loop.take();
-                let [left, right] =
-                    [parameters[0], parameters[1]].map(|parameter| {
-                        match uses_local(compared, parameter.id) {
-                            true => self.bind_local(parameter),
-                            false => "_".to_string(),
-                        }
-                    });
+                let [left, right] = [parameters[0], parameters[1]].map(|parameter| {
+                    match mentions_local(compared, parameter.id) {
+                        true => self.bind_local(parameter),
+                        false => "_".to_string(),
+                    }
+                });
                 let ordered = self.value(compared, &mut body);
                 self.tail_loop = saved;
                 (left, right, ordered?)
@@ -526,17 +526,8 @@ fn substitute(expression: &mut Expression, aliases: &FxHashMap<LocalId, &Express
 
 fn renamed(expression: &Expression, from: LocalId, to: LocalId) -> Expression {
     let mut renamed = expression.clone();
-    rename(&mut renamed, from, to);
+    rename_local(&mut renamed, from, to);
     renamed
-}
-
-fn rename(expression: &mut Expression, from: LocalId, to: LocalId) {
-    if let ExpressionKind::Local(id) = &mut expression.kind
-        && *id == from
-    {
-        *id = to;
-    }
-    for_each_child_mut(expression, &mut |child| rename(child, from, to));
 }
 
 /// Whether two keys are one expression but for the locals each binds inside, as the field that
@@ -550,7 +541,7 @@ fn same_but_for_binders(key: &Expression, mut other: Expression) -> bool {
         return false;
     }
     for (from, to) in theirs.into_iter().zip(ours) {
-        rename(&mut other, from, to.id);
+        rename_local(&mut other, from, to.id);
         for_each_binder_mut(&mut other, &mut |local| {
             if local.id == from {
                 *local = to.clone();
@@ -558,20 +549,6 @@ fn same_but_for_binders(key: &Expression, mut other: Expression) -> bool {
         });
     }
     other == *key
-}
-
-fn free_locals(expression: &Expression) -> Vec<LocalId> {
-    let mut bound = FxHashMap::default();
-    collect_binders(expression, &mut bound);
-    let mut free = vec![];
-    visit(expression, &mut |node| {
-        if let ExpressionKind::Local(id) = node.kind
-            && !bound.contains_key(&id)
-        {
-            free.push(id);
-        }
-    });
-    free
 }
 
 const SORT_NUMBERS_SOURCE: &str = "func {name}(xs []float64) []float64 {

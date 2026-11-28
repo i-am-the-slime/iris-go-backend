@@ -7,7 +7,9 @@ use super::kept::mark_kept_fields;
 use super::uniqueness::{self, Branch, Forced, Scope, Shapes, guarded_expressions};
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration, Operator};
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, prune_unreachable, visit};
+use crate::monomorphic::traversal::{
+    all_locals, for_each_child, for_each_child_mut, prune_unreachable, visit,
+};
 use crate::monomorphic::{
     Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded,
     GuardedBranch, Kept, Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
@@ -1473,7 +1475,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         }
         let mut decidable = |expression: &Expression| {
             is_decidable(expression)
-                && free_locals(expression).iter().all(|&(local, monotype)| {
+                && all_locals(expression).iter().all(|&(local, monotype)| {
                     (!search.bound.contains(&local) || site.in_scope.contains(&local))
                         && self.cells.cell(monotype).is_none()
                 })
@@ -1717,16 +1719,6 @@ fn is_decidable(expression: &Expression) -> bool {
         && is_deferrable(expression)
         && !can_fail(expression)
         && is_within_size(expression, DECIDING_SIZE)
-}
-
-fn free_locals(expression: &Expression) -> Vec<(LocalId, MonotypeId)> {
-    let mut locals = vec![];
-    visit(expression, &mut |inner| {
-        if let ExpressionKind::Local(id) = inner.kind {
-            locals.push((id, inner.monotype));
-        }
-    });
-    locals
 }
 
 fn shape(pattern: &Pattern) -> Pattern {

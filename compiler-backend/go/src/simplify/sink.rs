@@ -10,7 +10,7 @@
 use rustc_hash::FxHashMap;
 
 use super::Simplifier;
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::traversal::{for_each_child_mut, mentions_local, rename_local};
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Guarded, LocalId};
 use crate::purity::{KnownFunctions, is_deferrable, is_within_size, runs_effect};
 
@@ -52,7 +52,7 @@ impl Simplifier<'_> {
     /// copies it would take.
     fn sinkable(&self, binding: &Binding, body: &Expression) -> bool {
         let id = binding.local.id;
-        mentions(body, id)
+        mentions_local(body, id)
             && !needed_on_every_path(self, body, id)
             && is_deferrable(&binding.value)
             && calls_only_deferrable_functions(self, &binding.value, 4)
@@ -69,7 +69,7 @@ impl Simplifier<'_> {
 
     fn place(&mut self, binding: &Binding, expression: &mut Expression, copies: &mut usize) {
         let id = binding.local.id;
-        if !mentions(expression, id) {
+        if !mentions_local(expression, id) {
             return;
         }
         if needed_on_every_path(self, expression, id) {
@@ -120,7 +120,7 @@ impl Simplifier<'_> {
         let mut value = binding.value.clone();
         self.rename(&mut value, &mut renaming);
         let local = self.fresh(&binding.local);
-        replace_local(place, binding.local.id, local.id);
+        rename_local(place, binding.local.id, local.id);
         Binding { local, value }
     }
 }
@@ -130,7 +130,7 @@ impl Simplifier<'_> {
 fn needed_on_every_path(known: &impl KnownFunctions, expression: &Expression, id: LocalId) -> bool {
     match &expression.kind {
         ExpressionKind::If { condition, then, otherwise } => {
-            mentions(condition, id)
+            mentions_local(condition, id)
                 || runs_effect(known, condition)
                 || (needed_on_every_path(known, then, id)
                     && needed_on_every_path(known, otherwise, id))
@@ -138,12 +138,12 @@ fn needed_on_every_path(known: &impl KnownFunctions, expression: &Expression, id
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees
                 .iter()
-                .any(|scrutinee| mentions(scrutinee, id) || runs_effect(known, scrutinee))
+                .any(|scrutinee| mentions_local(scrutinee, id) || runs_effect(known, scrutinee))
                 || alternatives.iter().any(|alternative| match &alternative.body {
                     Guarded::Unconditional(_) => false,
                     Guarded::Guards(branches) => branches.iter().any(|branch| {
                         branch.guards.iter().any(|guard| {
-                            mentions(guard.value(), id) || runs_effect(known, guard.value())
+                            mentions_local(guard.value(), id) || runs_effect(known, guard.value())
                         })
                     }),
                 })
@@ -157,17 +157,17 @@ fn needed_on_every_path(known: &impl KnownFunctions, expression: &Expression, id
         ExpressionKind::Let { bindings, body } => {
             is_recursive_group(bindings)
                 || bindings.iter().any(|binding| {
-                    mentions(&binding.value, id) || runs_effect(known, &binding.value)
+                    mentions_local(&binding.value, id) || runs_effect(known, &binding.value)
                 })
                 || needed_on_every_path(known, body, id)
         }
-        _ => mentions(expression, id),
+        _ => mentions_local(expression, id),
     }
 }
 
 /// The number of copies placing the local's binding in the expression takes.
 fn places(known: &impl KnownFunctions, expression: &Expression, id: LocalId) -> usize {
-    if !mentions(expression, id) {
+    if !mentions_local(expression, id) {
         return 0;
     }
     if needed_on_every_path(known, expression, id) {
@@ -221,23 +221,4 @@ fn calls_only_deferrable_functions(
 /// A let group whose bindings refer to each other, which the simplifier keeps as written.
 fn is_recursive_group(bindings: &[Binding]) -> bool {
     bindings.iter().any(|binding| crate::purity::mentions_any(&binding.value, bindings))
-}
-
-fn mentions(expression: &Expression, id: LocalId) -> bool {
-    if matches!(expression.kind, ExpressionKind::Local(local) if local == id) {
-        return true;
-    }
-    let mut mentioned = false;
-    for_each_child(expression, &mut |child| mentioned = mentioned || mentions(child, id));
-    mentioned
-}
-
-fn replace_local(expression: &mut Expression, from: LocalId, to: LocalId) {
-    if let ExpressionKind::Local(local) = &mut expression.kind
-        && *local == from
-    {
-        *local = to;
-        return;
-    }
-    for_each_child_mut(expression, &mut |child| replace_local(child, from, to));
 }

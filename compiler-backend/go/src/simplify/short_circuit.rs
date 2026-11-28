@@ -1,6 +1,6 @@
 use super::Simplifier;
 use crate::foreign::{ARRAY_ALL, ARRAY_ANY, Foreign, Iteration, Operator};
-use crate::monomorphic::traversal::visit;
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, GuardedBranch, Literal, LocalId,
 };
@@ -61,7 +61,7 @@ impl Simplifier<'_> {
     ) -> Option<Expression> {
         let monotype = expression.monotype;
         let deciding = operator == Operator::BooleanOr;
-        if !mentions(expression, accumulator) {
+        if !mentions_local(expression, accumulator) {
             return match expression.kind {
                 ExpressionKind::Literal(Literal::Boolean(value)) if value == deciding => {
                     Some(expression.clone())
@@ -80,7 +80,7 @@ impl Simplifier<'_> {
             {
                 let [left, right] = arguments.as_slice() else { return None };
                 let (left, right) =
-                    match (mentions(left, accumulator), mentions(right, accumulator)) {
+                    match (mentions_local(left, accumulator), mentions_local(right, accumulator)) {
                         (false, true) => {
                             (left.clone(), self.decided(right, accumulator, operator)?)
                         }
@@ -96,7 +96,7 @@ impl Simplifier<'_> {
                 ))
             }
             ExpressionKind::Let { bindings, body } => {
-                if bindings.iter().any(|binding| mentions(&binding.value, accumulator)) {
+                if bindings.iter().any(|binding| mentions_local(&binding.value, accumulator)) {
                     return None;
                 }
                 let body = self.decided(body, accumulator, operator)?;
@@ -107,7 +107,7 @@ impl Simplifier<'_> {
                 ))
             }
             ExpressionKind::If { condition, then, otherwise } => {
-                if mentions(condition, accumulator) {
+                if mentions_local(condition, accumulator) {
                     return None;
                 }
                 let then = self.decided(then, accumulator, operator)?;
@@ -115,7 +115,7 @@ impl Simplifier<'_> {
                 Some(self.boolean_choice((**condition).clone(), then, otherwise, monotype))
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
-                if scrutinees.iter().any(|scrutinee| mentions(scrutinee, accumulator)) {
+                if scrutinees.iter().any(|scrutinee| mentions_local(scrutinee, accumulator)) {
                     return None;
                 }
                 let alternatives = alternatives
@@ -147,7 +147,11 @@ impl Simplifier<'_> {
                 let branches = branches
                     .iter()
                     .map(|branch| {
-                        if branch.guards.iter().any(|guard| mentions(guard.value(), accumulator)) {
+                        if branch
+                            .guards
+                            .iter()
+                            .any(|guard| mentions_local(guard.value(), accumulator))
+                        {
                             return None;
                         }
                         let body = self.decided(&branch.body, accumulator, operator)?;
@@ -158,12 +162,4 @@ impl Simplifier<'_> {
             }
         }
     }
-}
-
-pub(super) fn mentions(expression: &Expression, local: LocalId) -> bool {
-    let mut mentioned = false;
-    visit(expression, &mut |node| {
-        mentioned |= matches!(node.kind, ExpressionKind::Local(id) if id == local);
-    });
-    mentioned
 }

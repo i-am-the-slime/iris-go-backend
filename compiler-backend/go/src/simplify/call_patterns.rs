@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 use smol_str::{SmolStr, format_smolstr};
 
 use super::Simplifier;
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, mentions_local};
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
     PatternKind,
@@ -146,10 +146,10 @@ impl Simplifier<'_> {
             binding.value = value;
         }
         let mentioned = |local: LocalId, bindings: &[Binding], body: &Expression| {
-            mentions(body, local)
-                || bindings
-                    .iter()
-                    .any(|binding| binding.local.id != local && mentions(&binding.value, local))
+            mentions_local(body, local)
+                || bindings.iter().any(|binding| {
+                    binding.local.id != local && mentions_local(&binding.value, local)
+                })
         };
         loop {
             let unused =
@@ -492,14 +492,6 @@ fn redirect_call_patterns(expression: &mut Expression, made: &[LocalCopy]) {
     }
 }
 
-fn mentions(expression: &Expression, local: LocalId) -> bool {
-    let mut mentioned = false;
-    crate::monomorphic::traversal::visit(expression, &mut |node| {
-        mentioned |= matches!(node.kind, ExpressionKind::Local(id) if id == local);
-    });
-    mentioned
-}
-
 #[derive(Clone, Copy)]
 enum Loop {
     Local(LocalId),
@@ -669,7 +661,7 @@ impl Simplifier<'_> {
         }
         let taken = made.kept.iter().filter(|&&kept| kept).count();
         let unread: Vec<usize> = (index..index + taken)
-            .filter(|&position| !mentions(&function.body, function.parameters[position].id))
+            .filter(|&position| !mentions_local(&function.body, function.parameters[position].id))
             .collect();
         let called_elsewhere = self.functions.iter().flatten().any(|other| {
             let mut called = false;

@@ -10,7 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::foreign::{Boundary, Foreign, LineCoverage};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::monomorphic::traversal::{
-    for_each_binder_mut, for_each_child_mut, prune_unreachable, reference_graph, visit,
+    for_each_binder_mut, for_each_child_mut, free_locals, prune_unreachable, reference_graph, visit,
 };
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
@@ -1426,7 +1426,7 @@ impl Simplifier<'_> {
             && only_computes(value)
             && !can_fail(value)
             && !runs_any_effect(value)
-            && arguments::free_locals(value).is_empty()
+            && free_locals(value).is_empty()
     }
 
     /// The body with each call of the binding's lambda given a copy of the lambda with fresh

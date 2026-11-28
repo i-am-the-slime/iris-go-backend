@@ -2,9 +2,8 @@ use rustc_hash::FxHashSet;
 
 use super::Simplifier;
 use super::choice::operation;
-use super::short_circuit::mentions;
 use crate::foreign::{Comparison, Foreign, Iteration, Operator};
-use crate::monomorphic::traversal::for_each_child_mut;
+use crate::monomorphic::traversal::{for_each_child_mut, mentions_local};
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, GuardedBranch, Literal, Local,
     LocalId, Pattern, PatternKind, Results,
@@ -133,7 +132,7 @@ impl Simplifier<'_> {
                 };
                 let performs_accumulator =
                     matches!(action.kind, ExpressionKind::Local(id) if id == first.id);
-                if !performs_accumulator || mentions(step, first.id) {
+                if !performs_accumulator || mentions_local(step, first.id) {
                     return Err(arguments);
                 }
                 let (element, state, step) = (second.clone(), local.clone(), (**step).clone());
@@ -171,13 +170,13 @@ impl Simplifier<'_> {
         let ExpressionKind::EffectBind { action, local, body: step } = &body.kind else {
             return Err(arguments);
         };
-        if leading.iter().any(|binding| mentions(&binding.value, accumulator)) {
+        if leading.iter().any(|binding| mentions_local(&binding.value, accumulator)) {
             return Err(arguments);
         }
         let reads_accumulator = matches!(&action.kind, ExpressionKind::Apply { function, arguments }
             if matches!(function.kind, ExpressionKind::Local(id) if id == accumulator)
                 && matches!(arguments.as_slice(), [argument] if matches!(argument.kind, ExpressionKind::Local(id) if id == read.id)));
-        if !reads_accumulator || mentions(step, accumulator) {
+        if !reads_accumulator || mentions_local(step, accumulator) {
             return Err(arguments);
         }
         let with_leading = |step: Expression| match leading.is_empty() {
@@ -385,7 +384,7 @@ impl Simplifier<'_> {
         }
         if let ExpressionKind::EffectBind { action, local, body } = &mut expression.kind
             && matches!(action.kind, ExpressionKind::Foreign { foreign, .. } if *foreign == crate::foreign::APPENDER)
-            && !mentions(body, local.id)
+            && !mentions_local(body, local.id)
         {
             let monotype = body.monotype;
             let body =
@@ -496,7 +495,9 @@ fn performed_before(
         {
             return Some(finished.clone());
         }
-        ExpressionKind::EffectBind { action, local, body } if !mentions(action, continuation) => {
+        ExpressionKind::EffectBind { action, local, body }
+            if !mentions_local(action, continuation) =>
+        {
             ExpressionKind::EffectBind {
                 action: action.clone(),
                 local: local.clone(),
@@ -504,14 +505,16 @@ fn performed_before(
             }
         }
         ExpressionKind::Let { bindings, body }
-            if !bindings.iter().any(|binding| mentions(&binding.value, continuation)) =>
+            if !bindings.iter().any(|binding| mentions_local(&binding.value, continuation)) =>
         {
             ExpressionKind::Let {
                 bindings: bindings.clone(),
                 body: Box::new(performed_before(body, continuation, finished)?),
             }
         }
-        ExpressionKind::If { condition, then, otherwise } if !mentions(condition, continuation) => {
+        ExpressionKind::If { condition, then, otherwise }
+            if !mentions_local(condition, continuation) =>
+        {
             ExpressionKind::If {
                 condition: condition.clone(),
                 then: Box::new(performed_before(then, continuation, finished)?),
@@ -519,7 +522,7 @@ fn performed_before(
             }
         }
         ExpressionKind::Case { scrutinees, alternatives }
-            if !scrutinees.iter().any(|scrutinee| mentions(scrutinee, continuation)) =>
+            if !scrutinees.iter().any(|scrutinee| mentions_local(scrutinee, continuation)) =>
         {
             let alternatives = alternatives
                 .iter()
@@ -548,7 +551,8 @@ fn guarded_before(
             let branches = branches
                 .iter()
                 .map(|branch| {
-                    if branch.guards.iter().any(|guard| mentions(guard.value(), continuation)) {
+                    if branch.guards.iter().any(|guard| mentions_local(guard.value(), continuation))
+                    {
                         return None;
                     }
                     let body = performed_before(&branch.body, continuation, finished)?;
@@ -636,7 +640,7 @@ fn propagated_failure(step: &Expression, state: LocalId) -> Option<Propagation> 
     } else {
         return None;
     };
-    if mentions(step, state) {
+    if mentions_local(step, state) {
         return None;
     }
     Some(Propagation { failed, succeeded, value, step: step.clone() })

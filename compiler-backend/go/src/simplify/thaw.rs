@@ -1,9 +1,8 @@
-use super::short_circuit::mentions;
 use crate::foreign::{
     ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_THAW, ARRAY_THAW_OWNED, Boundary, Foreign, Iteration,
     Operator,
 };
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, mentions_local};
 use crate::monomorphic::{Expression, ExpressionKind, Local, LocalId};
 use crate::monotype::{Monotype, Monotypes};
 
@@ -95,7 +94,7 @@ fn count_uses(
             recurse(body, repeated);
         }
         ExpressionKind::EffectEach { array, element, body, .. } => {
-            if !is_local(array, local) || mentions(body, element.id) {
+            if !is_local(array, local) || mentions_local(body, element.id) {
                 recurse(array, repeated);
             }
             recurse(body, true);
@@ -134,7 +133,7 @@ fn length_only_callback<'e>(
                 _ => return None,
             };
             let (parameters, body) = lambda_parameters(callback, arity)?;
-            (!mentions(body, parameters[element].id)).then_some(Some(callback))
+            (!mentions_local(body, parameters[element].id)).then_some(Some(callback))
         }
         _ => None,
     }

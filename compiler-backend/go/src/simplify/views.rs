@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 use super::Simplifier;
 use super::choice::operation;
 use crate::foreign::{ARRAY_SLICE, Comparison, Foreign, Iteration, Operator};
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, mentions_local};
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::purity::is_within_size;
@@ -107,7 +107,7 @@ fn only_measured_and_read(expression: &Expression, local: LocalId, reads: &mut u
             if is_local(&arguments[0]) =>
         {
             *reads += 1;
-            !mentions(&arguments[1], local)
+            !mentions_local(&arguments[1], local)
         }
         _ => {
             let mut only = true;
@@ -327,14 +327,6 @@ fn is_plain(expression: &Expression) -> bool {
         }
         _ => false,
     }
-}
-
-fn mentions(expression: &Expression, local: LocalId) -> bool {
-    let mut mentioned = false;
-    crate::monomorphic::traversal::visit(expression, &mut |node| {
-        mentioned |= matches!(node.kind, ExpressionKind::Local(id) if id == local);
-    });
-    mentioned
 }
 
 /// Whether the array is built by combinators a view can stand in for.

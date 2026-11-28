@@ -2,8 +2,8 @@ use rustc_hash::FxHashMap;
 
 use super::Simplifier;
 use super::choice::operation;
-use super::short_circuit::mentions;
 use crate::foreign::{self, Comparison, Foreign, Iteration, Operator};
+use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, PatternKind,
 };
@@ -417,7 +417,7 @@ fn seeded(arguments: &[Expression]) -> Option<Seeded> {
         }
     }
     let (previous, chosen) = continued.filter(|_| started)?;
-    if mentions(&chosen, accumulator.id) {
+    if mentions_local(&chosen, accumulator.id) {
         return None;
     }
     Some(Seeded { nothing: *nothing, just, previous, element: element.clone(), chosen })
@@ -468,8 +468,8 @@ fn combines(body: &Expression, accumulator: LocalId) -> bool {
     let is_accumulator = |expression: &Expression| matches!(expression.kind, ExpressionKind::Local(id) if id == accumulator);
     associative
         && match (is_accumulator(left), is_accumulator(right)) {
-            (true, false) => !mentions(right, accumulator),
-            (false, true) => !mentions(left, accumulator),
+            (true, false) => !mentions_local(right, accumulator),
+            (false, true) => !mentions_local(left, accumulator),
             _ => false,
         }
 }

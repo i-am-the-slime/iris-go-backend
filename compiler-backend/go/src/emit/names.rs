@@ -627,7 +627,7 @@ where
                 }
             }
             let mut binders = FxHashMap::default();
-            crate::lift::collect_binders(&function.body, &mut binders);
+            crate::monomorphic::traversal::collect_binders(&function.body, &mut binders);
             let mut binders: Vec<_> = binders.into_values().collect();
             binders.sort_by_key(|binder| binder.id);
             for binder in binders {

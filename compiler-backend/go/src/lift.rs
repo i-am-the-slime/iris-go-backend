@@ -2,7 +2,9 @@ use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
-use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, visit};
+use crate::monomorphic::traversal::{
+    collect_binders, for_each_child, for_each_child_mut, free_locals,
+};
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
     Program,
@@ -67,7 +69,7 @@ fn inline_called_partial_applications(expression: &mut Expression, arities: &[us
     let ExpressionKind::Let { bindings, body } = &mut expression.kind else { return };
     let mut free = FxHashSet::default();
     for binding in bindings.iter() {
-        free_locals(&binding.value, &mut free);
+        free.extend(free_locals(&binding.value));
     }
     let (inlined, kept): (Vec<Binding>, Vec<Binding>) =
         std::mem::take(bindings).into_iter().partition(|binding| {
@@ -181,11 +183,10 @@ impl Lifter<'_> {
     }
 
     fn captures_initializing(&self, bindings: &[Binding]) -> bool {
-        let mut captured = FxHashSet::default();
-        for binding in bindings {
-            free_locals(&binding.value, &mut captured);
-        }
-        captured.iter().any(|id| self.initializing.contains(id))
+        bindings
+            .iter()
+            .flat_map(|binding| free_locals(&binding.value))
+            .any(|id| self.initializing.contains(&id))
     }
 
     fn expression(&mut self, mut expression: Expression, base: &str) -> Expression {
@@ -226,7 +227,7 @@ impl Lifter<'_> {
         let group: FxHashSet<LocalId> = bindings.iter().map(|binding| binding.local.id).collect();
         let mut captured = FxHashSet::default();
         for binding in &bindings {
-            free_locals(&binding.value, &mut captured);
+            captured.extend(free_locals(&binding.value));
         }
         let mut captured: Vec<Local> = captured
             .into_iter()
@@ -292,10 +293,8 @@ impl Lifter<'_> {
 fn evaluates_itself(bindings: &[Binding]) -> bool {
     let group: FxHashSet<LocalId> = bindings.iter().map(|binding| binding.local.id).collect();
     bindings.iter().any(|binding| {
-        let mut used = FxHashSet::default();
-        free_locals(&binding.value, &mut used);
         !matches!(binding.value.kind, ExpressionKind::Lambda { .. })
-            && used.iter().any(|id| group.contains(id))
+            && free_locals(&binding.value).iter().any(|id| group.contains(id))
     })
 }
 
@@ -381,39 +380,6 @@ fn flatten_applications(expression: &mut Expression) {
     leading.append(arguments);
     *function = inner;
     *arguments = leading;
-}
-
-fn free_locals(expression: &Expression, free: &mut FxHashSet<LocalId>) {
-    let mut used = FxHashSet::default();
-    let mut bound = FxHashMap::default();
-    collect_uses(expression, &mut used);
-    collect_binders(expression, &mut bound);
-    free.extend(used.into_iter().filter(|id| !bound.contains_key(id)));
-}
-
-fn collect_uses(expression: &Expression, used: &mut FxHashSet<LocalId>) {
-    if let ExpressionKind::Local(id) = expression.kind {
-        used.insert(id);
-    }
-    for_each_child(expression, &mut |child| collect_uses(child, used));
-}
-
-pub(crate) fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
-    let mut bind = |local: &Local| {
-        binders.insert(local.id, local.clone());
-    };
-    visit(expression, &mut |node| match &node.kind {
-        ExpressionKind::Lambda { parameters, .. } => parameters.iter().for_each(&mut bind),
-        ExpressionKind::Let { bindings, .. } => {
-            bindings.iter().for_each(|binding| bind(&binding.local))
-        }
-        ExpressionKind::EffectBind { local, .. }
-        | ExpressionKind::EffectEach { element: local, .. } => bind(local),
-        ExpressionKind::Case { alternatives, .. } => {
-            alternatives.iter().for_each(|alternative| alternative.for_each_local(&mut bind))
-        }
-        _ => {}
-    });
 }
 
 pub(crate) fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
