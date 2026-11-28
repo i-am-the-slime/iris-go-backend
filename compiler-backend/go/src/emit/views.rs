@@ -313,6 +313,19 @@ impl ByteReads {
             );
             return Some(2);
         }
+        if let Some(present) = tested_next(block, position, &char, &found, &byte) {
+            moved.insert(found.clone());
+            let asked = block.drain(position..position + 2).collect::<Vec<_>>();
+            block.insert(
+                position,
+                GoStatement::If {
+                    condition: self.condition(&index),
+                    then: present,
+                    otherwise: asked,
+                },
+            );
+            return Some(1);
+        }
         let asked = block[position].clone();
         let GoStatement::Define { values, .. } = asked else { unreachable!() };
         let targets = [&char, &found].map(|name| GoExpression::Identifier(name.clone())).to_vec();
@@ -557,6 +570,46 @@ fn built_from_char(
         }
     });
     Some(BuiltFromChar { variable, from_byte })
+}
+
+fn tested_next(
+    block: &mut [GoStatement],
+    position: usize,
+    char: &str,
+    found: &str,
+    byte: &GoExpression,
+) -> Option<Vec<GoStatement>> {
+    let Some(GoStatement::If { condition: GoExpression::Identifier(tested), then, .. }) =
+        block.get(position + 1)
+    else {
+        return None;
+    };
+    if tested != found {
+        return None;
+    }
+    let mut present = then.clone();
+    let mut read_later = false;
+    statements_names(&mut block[position + 2..], &mut |name| {
+        if let Name::Reference(name) | Name::Written(name) = name {
+            read_later |= name == char || name == found;
+        }
+    });
+    let mut rebound = false;
+    statements_names(&mut present, &mut |name| match name {
+        Name::Binder(name) | Name::Written(name) => rebound |= name == char || name == found,
+        Name::Reference(name) => rebound |= name == found,
+    });
+    if read_later || rebound {
+        return None;
+    }
+    for statement in &mut present {
+        each_expression_in_statement(statement, |value| {
+            if matches!(value, GoExpression::Identifier(name) if name == char) {
+                *value = byte.clone();
+            }
+        });
+    }
+    Some(present)
 }
 
 /// `char, found := view.CharAt(i)`, whose `i` is as cheap to repeat as to read, as its two
