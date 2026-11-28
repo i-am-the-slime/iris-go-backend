@@ -236,6 +236,7 @@ where
             Type::Application(function, argument) | Type::Function(function, argument) => {
                 self.contains_erased(*function) || self.contains_erased(*argument)
             }
+            Type::Forall(_, inner) => self.contains_erased(*inner),
             Type::Row(row) => {
                 let row = self.queries.lookup_row_type(*row);
                 row.fields.iter().any(|field| self.contains_erased(field.id))
