@@ -48,11 +48,6 @@ pub(super) struct Reused {
 }
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
-    if !uniqueness::enabled() {
-        let program = Program { functions: program.functions.clone(), entry: program.entry };
-        let (materialized, candidates) = (FxHashSet::default(), FxHashSet::default());
-        return Reused { program, materialized, candidates };
-    }
     let inspecting = timed("find inspecting functions", || inspecting_functions(program));
     let hoisted = timed("hoist field reads", || hoist_field_reads(program, cells));
     let sequenced = timed("sequence", || sequence_inspections(&hoisted, &inspecting, cells));

@@ -63,9 +63,6 @@ pub fn choose(program: &Program, monotypes: &mut Monotypes) -> Arities {
             break;
         }
     }
-    if std::env::var_os("IRIS_GO_ARITY_STATISTICS").is_some() {
-        uses.report(&arities, &known, monotypes);
-    }
     arities
 }
 
@@ -435,62 +432,6 @@ impl<'p> Uses<'p> {
             }
         }
         caps
-    }
-
-    fn report(&self, arities: &Arities, known: &Known<'_>, monotypes: &Monotypes) {
-        let mut saturated = 0;
-        let mut partial = 0;
-        let mut chained = 0;
-        let mut curried_calls = 0;
-        for &(monotype, arguments) in &self.calls {
-            let arity = arities.of(monotype);
-            if arguments > 1 {
-                curried_calls += 1;
-            }
-            match arguments.cmp(&arity) {
-                std::cmp::Ordering::Equal => saturated += 1,
-                std::cmp::Ordering::Less => partial += 1,
-                std::cmp::Ordering::Greater => chained += 1,
-            }
-        }
-        let widened = arities.widened.len();
-        let demand = self.demand(arities, monotypes);
-        let wanted = demand.values().filter(|&&n| n > 1).count();
-        let mut narrowed: FxHashMap<&'static str, usize> = FxHashMap::default();
-        for (&monotype, &arguments) in &demand {
-            let possible = arguments.min(arrows(monotypes, monotype));
-            if arities.of(monotype) >= possible {
-                continue;
-            }
-            let reason = if self.foreign.contains(&monotype) {
-                "received from foreign code or a coercion"
-            } else {
-                self.creations
-                    .iter()
-                    .filter(|creation| monotypes.same_without_causes(creation.monotype, monotype))
-                    .filter_map(|creation| {
-                        let free = free(creation, arities, known, monotypes)?;
-                        let kind = match creation.kind {
-                            ExpressionKind::Lambda { .. } => {
-                                "a lambda that works between parameters"
-                            }
-                            ExpressionKind::Function(_) => "a known function with fewer parameters",
-                            _ => "a partial application",
-                        };
-                        (free < possible).then_some(kind)
-                    })
-                    .next()
-                    .unwrap_or("a narrower result type")
-            };
-            *narrowed.entry(reason).or_insert(0) += 1;
-        }
-        eprintln!("arity: narrowed {narrowed:?}");
-        eprintln!(
-            "arity: {} value call sites: {saturated} saturated, {partial} partial, {chained} \
-             over-applied ({curried_calls} pass several arguments); {widened} of {wanted} \
-             function types called with several arguments take them together",
-            self.calls.len()
-        );
     }
 }
 

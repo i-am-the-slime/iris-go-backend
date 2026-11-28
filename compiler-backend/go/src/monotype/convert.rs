@@ -678,11 +678,6 @@ impl Monotypes {
             }
         }
         if converted[0] != converted[1] {
-            if std::env::var_os("IRIS_GO_DEBUG_RANK_N").is_some() {
-                let mut suffix = String::new();
-                let _ = context.type_suffix(scheme.body, &mut suffix);
-                eprintln!("rank-N field of {owner}: forall {} . {suffix}", scheme.names.len());
-            }
             self.new_rank_n_keys.push((scheme.key, owner.to_string()));
         }
         Ok(())

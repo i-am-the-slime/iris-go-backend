@@ -210,9 +210,6 @@ where
     analysis.open_arities_reaching_inside();
     let Analysis { uses, highest_local, .. } = analysis;
     let closed = closed_types(&uses);
-    if std::env::var_os("IRIS_GO_CLOSURE_STATISTICS").is_some() {
-        report(&uses, &closed, types.monotypes);
-    }
     if closed.is_empty() {
         return Ok(FxHashMap::default());
     }
@@ -1162,31 +1159,6 @@ fn rename(expression: &mut Expression, renamed: &FxHashMap<LocalId, Expression>)
         return;
     }
     for_each_child_mut(expression, &mut |child| rename(child, renamed));
-}
-
-fn report(uses: &Uses, closed: &[MonotypeId], monotypes: &Monotypes) {
-    let mut reasons: FxHashMap<&'static str, usize> = FxHashMap::default();
-    let mut not_linked = 0;
-    let mut too_many = 0;
-    for (monotype, creations) in &uses.creations {
-        if let Some(reason) = uses.open.get(monotype) {
-            *reasons.entry(reason).or_insert(0) += 1;
-        } else if !uses.linked.contains(monotype) {
-            not_linked += 1;
-        } else if creations.len() > MOST_TAGS {
-            too_many += 1;
-        }
-    }
-    eprintln!(
-        "closures: {} of {} created function types become cells; {not_linked} closed but not \
-         linked, {too_many} with more than {MOST_TAGS} shapes; open: {reasons:?}",
-        closed.len(),
-        uses.creations.len()
-    );
-    for &monotype in closed {
-        let shapes = uses.creations[&monotype].len();
-        eprintln!("closures:   {monotype:?} {:?}: {shapes} shapes", monotypes.get(monotype));
-    }
 }
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>

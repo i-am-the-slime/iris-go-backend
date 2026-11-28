@@ -10,18 +10,15 @@ use crate::foreign::{ForeignSource, OpaqueDeclaration};
 
 struct ForeignFunction {
     key: (FileId, TermItemId),
-    name: String,
-    generic: bool,
-    boxed: Option<String>,
+    boxed: bool,
     mentioned: Vec<(FileId, TypeItemId)>,
     mentioned_at_quantified: Vec<(FileId, TypeItemId)>,
     names_a_row: bool,
 }
 
 struct ForeignData {
-    name: String,
     generic: bool,
-    boxed: Option<String>,
+    boxed: bool,
     empty_interface: bool,
 }
 
@@ -39,10 +36,10 @@ where
             functions.extend(self.foreign_functions(file_id, source)?);
         }
         let mut native_data: FxHashSet<(FileId, TypeItemId)> =
-            data.iter().filter(|(_, data)| data.boxed.is_none()).map(|(&key, _)| key).collect();
+            data.iter().filter(|(_, data)| !data.boxed).map(|(&key, _)| key).collect();
         let mut native_functions: FxHashSet<(FileId, TermItemId)> = functions
             .iter()
-            .filter(|function| function.boxed.is_none())
+            .filter(|function| !function.boxed)
             .map(|function| function.key)
             .collect();
         loop {
@@ -63,9 +60,6 @@ where
             if (native_data.len(), native_functions.len()) == before {
                 break;
             }
-        }
-        if std::env::var_os("IRIS_GO_FOREIGN_BOXING").is_some() {
-            report_boxing(&functions, &data, &native_functions, &native_data);
         }
         self.monotypes.row_free_foreigns = functions
             .iter()
@@ -92,10 +86,9 @@ where
             let go_name = module.foreign_type_name(name);
             let declaration = source.opacity.data_type(&go_name);
             let generic = declaration.is_some_and(|declaration| !declaration.parameters.is_empty());
-            let boxed = boxed_reason(source, declaration, &go_name, None).filter(|_| generic);
-            let name = format!("{}.{name}", module.name);
+            let boxed = generic && boxes_type_arguments(source, declaration, None);
             let empty_interface = source.opacity.interface_aliases.contains(&go_name);
-            data.push(((file_id, item), ForeignData { name, generic, boxed, empty_interface }));
+            data.push(((file_id, item), ForeignData { generic, boxed, empty_interface }));
         }
         Ok(data)
     }
@@ -119,12 +112,10 @@ where
             self.foreign_data_at_quantified(declared, &mut mentioned_at_quantified)?;
             let go_name = crate::naming::exported(name);
             let declaration = source.opacity.function(&go_name);
-            let boxed = boxed_reason(source, declaration, &go_name, Some(quantifiers));
+            let boxed = boxes_type_arguments(source, declaration, Some(quantifiers));
             let names_a_row = self.names_a_row(declared)?;
             functions.push(ForeignFunction {
                 key: (file_id, term),
-                name: format!("{}.{name}", module.name),
-                generic: quantifiers > 0,
                 boxed,
                 mentioned,
                 mentioned_at_quantified,
@@ -264,17 +255,16 @@ where
     }
 }
 
-fn boxed_reason(
+fn boxes_type_arguments(
     source: &ForeignSource,
     declaration: Option<&OpaqueDeclaration>,
-    go_name: &str,
     quantifiers: Option<usize>,
-) -> Option<String> {
-    if let Some(reason) = &source.opacity.unreadable {
-        return Some(format!("its Go could not be read: {reason}"));
+) -> bool {
+    if source.opacity.unreadable.is_some() {
+        return true;
     }
     let Some(declaration) = declaration else {
-        return Some(format!("its Go declares no generic `{go_name}`"));
+        return true;
     };
     // Go infers the type parameters after the quantified ones from the arguments.
     if let Some(quantifiers) = quantifiers
@@ -282,45 +272,7 @@ fn boxed_reason(
             extra.iter().all(|parameter| declaration.inferred.contains(parameter))
         })
     {
-        let parameters = declaration.parameters.len();
-        return Some(format!(
-            "`{go_name}` takes {parameters} type parameters for {quantifiers} quantified types"
-        ));
+        return true;
     }
-    let escape = declaration.escapes.first()?;
-    Some(format!("in `{go_name}`, {escape}"))
-}
-
-fn report_boxing(
-    functions: &[ForeignFunction],
-    data: &FxHashMap<(FileId, TypeItemId), ForeignData>,
-    native_functions: &FxHashSet<(FileId, TermItemId)>,
-    native_data: &FxHashSet<(FileId, TypeItemId)>,
-) {
-    for function in functions {
-        if !function.generic || native_functions.contains(&function.key) {
-            continue;
-        }
-        let reason = function.boxed.clone().unwrap_or_else(|| {
-            let boxed = function.mentioned.iter().find(|key| !native_data.contains(*key));
-            let name = boxed.and_then(|key| data.get(key)).map(|data| data.name.as_str());
-            format!("it takes or returns {}, whose values are boxed", name.unwrap_or("a type"))
-        });
-        eprintln!("go: foreign {} boxes its type arguments: {reason}", function.name);
-    }
-    let mut boxed_data: Vec<_> = data
-        .iter()
-        .filter(|(key, foreign_data)| foreign_data.generic && !native_data.contains(*key))
-        .collect();
-    boxed_data.sort_by(|(_, left), (_, right)| left.name.cmp(&right.name));
-    for (key, foreign_data) in boxed_data {
-        let reason = foreign_data.boxed.clone().unwrap_or_else(|| {
-            let boxing = functions.iter().find(|function| {
-                function.mentioned.contains(key) && !native_functions.contains(&function.key)
-            });
-            let name = boxing.map(|function| function.name.as_str()).unwrap_or("a foreign");
-            format!("{name} boxes its type arguments")
-        });
-        eprintln!("go: foreign data {} holds boxed values: {reason}", foreign_data.name);
-    }
+    !declaration.escapes.is_empty()
 }

@@ -63,7 +63,7 @@ pub(crate) fn operations_used(
     monotypes: &Monotypes,
     operations: &FxHashMap<FunctionId, MapOperation>,
 ) -> FxHashSet<SmolStr> {
-    if operations.is_empty() || !uniqueness::enabled() {
+    if operations.is_empty() {
         return FxHashSet::default();
     }
     let shapes = map_shapes(program, operations);
@@ -92,7 +92,7 @@ pub(super) fn choose_hash_maps(
     monotypes: &mut Monotypes,
     operations: &FxHashMap<FunctionId, MapOperation>,
 ) {
-    if operations.is_empty() || !uniqueness::enabled() {
+    if operations.is_empty() {
         return;
     }
     let shapes = map_shapes(program, operations);

@@ -13,8 +13,6 @@
 //!   ([`is_unique`], [`relatives`]);
 //! - `recycling.rs` writes a tail loop's next array into the one it built an iteration before
 //!   ([`next_iterations`]).
-//!
-//! `IRIS_GO_REUSE=0` turns both off, to measure what they buy. The switch is temporary.
 
 mod iteration;
 mod linearity;
@@ -25,9 +23,3 @@ pub(super) use linearity::{
     Branch, Forced, Scope, Shapes, guarded_expressions, is_only_read, is_unique, is_unique_field,
     is_unique_path, relatives,
 };
-
-/// Whether code may reuse the memory of the values it owns. `IRIS_GO_REUSE=0` turns reuse off.
-pub(super) fn enabled() -> bool {
-    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("IRIS_GO_REUSE").is_none_or(|value| value != "0"))
-}

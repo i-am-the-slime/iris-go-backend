@@ -30,7 +30,7 @@
 
 use rustc_hash::FxHashSet;
 
-use super::uniqueness::{self, TailLoop, next_iterations};
+use super::uniqueness::{TailLoop, next_iterations};
 use super::{Emitter, call, identifier_expression, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId};
@@ -57,9 +57,6 @@ where
         function: &Function,
         position: usize,
     ) -> Option<Vec<*const Expression>> {
-        if !uniqueness::enabled() {
-            return None;
-        }
         let parameter = &function.parameters[position];
         let Monotype::Array(element) = *self.monotypes.get(parameter.monotype) else {
             return None;

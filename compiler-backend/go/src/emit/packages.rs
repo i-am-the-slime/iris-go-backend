@@ -174,14 +174,6 @@ impl Places<'_> {
     }
 }
 
-#[derive(Default, Debug)]
-pub(super) struct PlacementCensus {
-    pub in_a_module: usize,
-    pub with_their_user: usize,
-    pub shared: usize,
-    pub meeting: usize,
-}
-
 impl Packaging<'_> {
     pub(super) fn split(
         &self,
@@ -267,7 +259,6 @@ impl Packaging<'_> {
                 }
             }
         }
-        let mut census = PlacementCensus::default();
         let mut placements: Vec<Option<Place>> = vec![None; components.len()];
         let entry = places.module(self.modules.entry());
         // Users come before what they use.
@@ -289,34 +280,14 @@ impl Packaging<'_> {
             let homeless = components[index].iter().all(|&unit| units[unit].home.is_none());
             let place = match (places.meeting(natural), only_user) {
                 // Code of a module's own lives there.
-                ([_], _) if !homeless => {
-                    census.in_a_module += 1;
-                    natural
-                }
+                ([_], _) if !homeless => natural,
                 // Code of no module's own, or of modules that do not see each
                 // other, that one package alone uses lives there, like a
                 // private helper.
-                (_, Some(user)) => {
-                    census.with_their_user += 1;
-                    user
-                }
-                ([_], None) => {
-                    census.in_a_module += 1;
-                    natural
-                }
-                ([], None) => {
-                    census.shared += 1;
-                    natural
-                }
-                (_, None) => {
-                    census.meeting += 1;
-                    natural
-                }
+                (_, Some(user)) => user,
+                _ => natural,
             };
             placements[index] = Some(place);
-        }
-        if std::env::var_os("IRIS_GO_PLACEMENT_CENSUS").is_some() {
-            eprintln!("{census:?}");
         }
         (0..units.len())
             .map(|unit| {
