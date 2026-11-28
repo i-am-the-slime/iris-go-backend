@@ -128,22 +128,24 @@ func charAtLoopViewsTheText(text string, i int, count int) int {
 		if i >= textUnits.Length() {
 			return count
 		}
-		var result2 bool
+		var result int
 		if uint(i) < uint(len(textASCII)) {
-			result2 = rune(textASCII[i]) == 'a'
+			if rune(textASCII[i]) == 'a' {
+				result = count + 1
+			} else {
+				result = count
+			}
 		} else {
 			left0, found := textUnits.CharAt(i)
 			if found {
-				result2 = left0 == 'a'
+				if left0 == 'a' {
+					result = count + 1
+				} else {
+					result = count
+				}
 			} else {
-				result2 = false
+				result = count
 			}
-		}
-		var result int
-		if result2 {
-			result = count + 1
-		} else {
-			result = count
 		}
 		i, count = i+1, result
 	}

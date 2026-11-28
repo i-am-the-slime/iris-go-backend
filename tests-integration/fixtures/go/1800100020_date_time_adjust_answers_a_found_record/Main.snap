@@ -596,19 +596,17 @@ func AdjustJoin(n int, n2 int, x component.Month) date.MaybeMaybeDate {
 	if n2 >= 1 && n2 <= 31 {
 		dt := date.Date{First: n, Second: x, Third: n2}
 		scrutinee := date.CanonicalDate(n, x, n2)
-		var result2 bool
+		var result date.MaybeDate
 		if scrutinee.First == dt.First {
 			if scrutinee.Second == dt.Second {
-				result2 = scrutinee.Third == dt.Third
+				if scrutinee.Third == dt.Third {
+					result = date.JustDate(dt)
+				} else {
+					result = date.NoDate
+				}
 			} else {
-				result2 = false
+				result = date.NoDate
 			}
-		} else {
-			result2 = false
-		}
-		var result date.MaybeDate
-		if result2 {
-			result = date.JustDate(dt)
 		} else {
 			result = date.NoDate
 		}

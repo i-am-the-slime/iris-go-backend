@@ -16,7 +16,10 @@ pub(super) fn test_in_each_branch(declarations: &mut [GoDeclaration]) {
         go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position + 2 < block.len() {
-                if test_in_branches(block, position) || switch_in_branches(block, position) {
+                if test_in_branches(block, position)
+                    || test_after_declarations(block, position)
+                    || switch_in_branches(block, position)
+                {
                     tested = true;
                 } else {
                     position += 1;
@@ -30,6 +33,42 @@ pub(super) fn test_in_each_branch(declarations: &mut [GoDeclaration]) {
             go_traversal::each_block_in_declaration(declaration, define_assigned_variables);
         }
     }
+}
+
+fn test_after_declarations(block: &mut Vec<GoStatement>, position: usize) -> bool {
+    let (Some(GoStatement::Variable { name, value: None, .. }), Some(GoStatement::If { .. })) =
+        (block.get(position), block.get(position + 1))
+    else {
+        return false;
+    };
+    let declared = block[position + 2..]
+        .iter()
+        .take_while(|statement| matches!(statement, GoStatement::Variable { value: None, .. }))
+        .count();
+    let tests_whole = matches!(block.get(position + 2 + declared),
+        Some(GoStatement::If { condition: GoExpression::Identifier(tested), .. }) if tested == name);
+    if declared == 0 || !tests_whole {
+        return false;
+    }
+    let mut chain = block[position..position + 2].to_vec();
+    let declarations = &block[position + 2..position + 2 + declared];
+    let names = declarations.iter().filter_map(|declaration| match declaration {
+        GoStatement::Variable { name, .. } => Some(name.clone()),
+        _ => None,
+    });
+    let names: Vec<String> = names.collect();
+    if names.iter().any(|name| references(&mut chain, name)) {
+        return false;
+    }
+    let mut moved = block.clone();
+    let declarations: Vec<GoStatement> =
+        moved.drain(position + 2..position + 2 + declared).collect();
+    moved.splice(position..position, declarations);
+    if !test_in_branches(&mut moved, position + declared) {
+        return false;
+    }
+    *block = moved;
+    true
 }
 
 fn test_in_branches(block: &mut Vec<GoStatement>, position: usize) -> bool {
