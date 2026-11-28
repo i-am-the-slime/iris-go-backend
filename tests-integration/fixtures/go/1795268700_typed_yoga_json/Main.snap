@@ -952,7 +952,7 @@ func ReadJSON(text string) ([]maybe.Item, foreign.NonEmptyFailure) {
 			array := r.([]any)
 			array_ := maybe.MemptyItem
 			var err foreign.NonEmptyFailure
-			array_ = slices.Clip(array_)
+			array_ = slices.Grow(slices.Clip(array_), len(array))
 			for index, element := range array {
 				elem := foreign.EitherItemFromResults(ReadAtIdxItem(index, element))
 				if err.Failed && elem.Tag == foreign.EitherItemLeft {
@@ -1113,7 +1113,7 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 		if foreignvalue.IsArray(b) {
 			array := b.([]any)
 			accumulator := foreign.RightEitherArrayMaybeBoolean(maybe.MemptyMaybeBoolean)
-			accumulator.Right = slices.Clip(accumulator.Right)
+			accumulator.Right = slices.Grow(slices.Clip(accumulator.Right), len(array))
 			for index, element := range array {
 				elem := foreign.EitherMaybeBooleanFromResults(ReadAtIdxMaybeBoolean(index, element))
 				if accumulator.Tag == foreign.EitherArrayMaybeBooleanLeft && elem.Tag == foreign.EitherMaybeBooleanLeft {

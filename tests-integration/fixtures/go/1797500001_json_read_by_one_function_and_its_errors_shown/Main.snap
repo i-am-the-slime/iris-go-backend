@@ -484,7 +484,7 @@ func ReadImpl(o any) (shared.Todo, foreign.NonEmptyFailure) {
 		if foreignvalue.IsArray(b) {
 			array := b.([]any)
 			accumulator := foreign.RightEitherArrayString(monoid.Mempty)
-			accumulator.Right = slices.Clip(accumulator.Right)
+			accumulator.Right = slices.Grow(slices.Clip(accumulator.Right), len(array))
 			for index, element := range array {
 				elem := foreign.EitherStringFromResults(ReadAtIdx(index, element))
 				if accumulator.Tag == foreign.EitherArrayStringLeft && elem.Tag == foreign.EitherStringLeft {

@@ -34,7 +34,8 @@ import (
 
 func TraversePositive(array []int) either.Either {
 	accumulator := either.Right([]int{})
-	accumulator.Right = slices.Clip(accumulator.Right)
+	accumulator.Right = slices.Grow(slices.Clip(accumulator.Right), len(array))
+	carried := accumulator.Right
 	for _, element := range array {
 		if accumulator.Tag == either.EitherLeft {
 			break
@@ -44,11 +45,14 @@ func TraversePositive(array []int) either.Either {
 			accumulator = either.Left(accumulator.Left)
 		default: // either.EitherRight
 			if element > 0 {
-				accumulator = either.Right(append(accumulator.Right, element))
+				carried = append(carried, element)
 			} else {
 				accumulator = either.Left("not positive: " + strconv.Itoa(element))
 			}
 		}
+	}
+	if accumulator.Tag != either.EitherLeft {
+		accumulator.Right = carried
 	}
 	return accumulator
 }

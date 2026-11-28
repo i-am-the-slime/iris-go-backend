@@ -39,12 +39,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() either.MainResult {
-	accumulator := []int{}
+	accumulator := make([]int, 0, 5)
 	for x := 1; x < 6; x++ {
 		accumulator = append(accumulator, x)
 	}
 	accumulator2 := []int{1}
-	accumulator2 = slices.Clip(accumulator2)
+	accumulator2 = slices.Grow(slices.Clip(accumulator2), 5)
 	for x := 1; x < 6; x++ {
 		accumulator2 = append(accumulator2, x*2)
 	}

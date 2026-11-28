@@ -1,0 +1,6 @@
+{ rest: [1,2,3,4], total: 11 }
+{ rest: [], total: 20 }
+{ rest: [], total: 0 }
+[3,2,1,0]
+[0]
+{ left: [], total: 98 }

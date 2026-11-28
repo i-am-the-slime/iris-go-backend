@@ -603,3 +603,30 @@ fn alternative_bodies(alternatives: &[Alternative]) -> Vec<&Expression> {
     }
     bodies
 }
+
+pub(super) fn appends_every_step(carried: Carried<'_>, step: &Expression) -> bool {
+    let Some(aliases) = aliases(carried, step) else { return false };
+    let carried = Carried { aliases: &aliases, ..carried };
+    every_result_appends(carried, step)
+}
+
+fn every_result_appends(carried: Carried<'_>, expression: &Expression) -> bool {
+    if let Some(branches) = branches(expression) {
+        return branches.into_iter().all(|branch| every_result_appends(carried, branch));
+    }
+    match (&expression.kind, carried.place) {
+        (_, Place::Whole) => appends_to_carried(carried, expression),
+        (
+            ExpressionKind::Construct { constructor, arguments, .. },
+            Place::Constructor { constructor: carrying, index, .. },
+        ) => *constructor != *carrying || appends_to_carried(carried, &arguments[*index]),
+        _ => false,
+    }
+}
+
+fn appends_to_carried(carried: Carried<'_>, value: &Expression) -> bool {
+    match branches(value) {
+        Some(branches) => branches.into_iter().all(|branch| appends_to_carried(carried, branch)),
+        None => snoc_of_carried(carried, value).is_some(),
+    }
+}

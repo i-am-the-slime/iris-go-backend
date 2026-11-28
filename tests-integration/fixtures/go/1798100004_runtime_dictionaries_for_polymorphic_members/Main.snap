@@ -524,7 +524,8 @@ func checked(depth int, values []int) maybe.Int {
 	switch depth {
 	case 0:
 		accumulator := maybe.JustArrayInt([]int{})
-		accumulator.Just = slices.Clip(accumulator.Just)
+		accumulator.Just = slices.Grow(slices.Clip(accumulator.Just), len(values))
+		carried := accumulator.Just
 		for _, element := range values {
 			if accumulator.Tag == maybe.TagNothing {
 				break
@@ -532,13 +533,16 @@ func checked(depth int, values []int) maybe.Int {
 			switch accumulator.Tag {
 			case maybe.TagJust:
 				if element > 0 {
-					accumulator = maybe.JustArrayInt(append(accumulator.Just, element))
+					carried = append(carried, element)
 				} else {
 					accumulator = maybe.NoArrayInt
 				}
 			default:
 				accumulator = maybe.NoArrayInt
 			}
+		}
+		if accumulator.Tag != maybe.TagNothing {
+			accumulator.Just = carried
 		}
 		switch accumulator.Tag {
 		case maybe.TagJust:

@@ -6,12 +6,14 @@
 
 mod aliases;
 mod application;
+mod array_parameters;
 mod blocks;
 mod boxing;
 mod branches;
 mod buffers;
 mod build;
 mod builders;
+mod carried_apart;
 mod cases;
 mod cells;
 mod chunks;
@@ -259,6 +261,15 @@ where
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     let helpers: FxHashSet<String> = emitter.support_functions.values().cloned().collect();
+    let constructors =
+        emitter.type_declarations.iter().filter_map(|declaration| match declaration {
+            GoDeclaration::Function { name, .. } => Some(name.clone()),
+            _ => None,
+        });
+    let safe_callees: FxHashSet<String> = helpers.iter().cloned().chain(constructors).collect();
+    timed("array parameters", || {
+        array_parameters::promote_array_parameters(&mut declarations, &safe_callees)
+    });
     let never_recovering = emitter.foreign_packages.packages_that_never_recover();
     timed("cells", || {
         cells::keep_parameter_cells_in_locals(
