@@ -1413,7 +1413,7 @@ where
             && !matches!(self.monotypes.get(monotype), Monotype::String | Monotype::Boolean)
         {
             let type_ = self.go_type(monotype)?;
-            let value = (!is_nil(&value)).then_some(value);
+            let value = (!value.is_nil()).then_some(value);
             return Ok(GoStatement::Variable { name, type_, value });
         }
         Ok(GoStatement::Define { names: vec![name], values: vec![value] })

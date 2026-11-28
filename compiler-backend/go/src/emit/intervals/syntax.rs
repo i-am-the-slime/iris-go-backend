@@ -1,4 +1,4 @@
-use crate::syntax::{GoBinaryOperator, GoExpression, GoUnaryOperator};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoUnaryOperator};
 
 /// A comparison, a combination of comparisons, or a constant.
 pub(super) fn is_test(value: &GoExpression) -> bool {
@@ -28,8 +28,7 @@ pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
     fn is_length(value: &GoExpression) -> bool {
         match value {
             GoExpression::Call { function, arguments } => {
-                matches!(&**function, GoExpression::Identifier(name) if name == "len")
-                    && arguments.len() == 1
+                function.is_builtin(GoBuiltin::Len) && arguments.len() == 1
             }
             GoExpression::Conversion { value, .. } => is_length(value),
             _ => false,

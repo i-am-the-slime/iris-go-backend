@@ -17,9 +17,10 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::mutable::in_bounds;
-use super::{binary, call, identifier_expression};
+use super::{binary, builtin_call, call};
 use crate::syntax::{
-    GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator, Name, statements_names,
+    GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator, Name,
+    statements_names,
 };
 
 use crate::go_traversal::{each_block, each_expression_in_statement};
@@ -383,7 +384,7 @@ impl Cut {
     /// and for a drop `n >= 0 && n < len(textASCII)` and `textASCII[n:]`.
     fn statements(self, name: &str, ascii: &str) -> [GoStatement; 2] {
         let text = || Box::new(GoExpression::Identifier(ascii.to_string()));
-        let length = || call(identifier_expression("len"), vec![*text()]);
+        let length = || builtin_call(GoBuiltin::Len, vec![*text()]);
         let (condition, sliced) = match self.kind {
             CutKind::Take(count) => {
                 let positive =

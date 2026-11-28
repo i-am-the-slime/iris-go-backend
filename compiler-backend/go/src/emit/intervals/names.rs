@@ -5,7 +5,7 @@ use super::syntax::{each_subexpression, is_bounds_test, is_test};
 use super::written_field;
 use crate::emit::{aliases, headers};
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Shape {
@@ -243,13 +243,13 @@ fn shape_of_expression(
             shape_of_type(type_).filter(|shape| *shape == Shape::Fixed)
         }
         GoExpression::Call { function, arguments } => match &**function {
-            GoExpression::Identifier(name) if name == "append" => Some(Shape::Fixed),
+            _ if function.is_builtin(GoBuiltin::Append) => Some(Shape::Fixed),
             GoExpression::Qualified { package, name }
                 if package == "array" && name == "Bounded" =>
             {
                 Some(Shape::Fixed)
             }
-            GoExpression::Identifier(name) if name == "make" => match arguments.first() {
+            _ if function.is_builtin(GoBuiltin::Make) => match arguments.first() {
                 Some(GoExpression::Type(GoType::Slice(_))) => Some(Shape::Fixed),
                 _ => None,
             },
@@ -379,7 +379,7 @@ impl Walk for Collect<'_> {
                             self.evidence.push((name.clone(), Some(shape)));
                         }
                     }
-                    if callee == "len"
+                    if function.is_builtin(GoBuiltin::Len)
                         && let [
                             GoExpression::Unary { operator: GoUnaryOperator::Dereference, operand },
                         ] = arguments.as_slice()

@@ -6,13 +6,15 @@
 //! ([`super::hash_maps`] decided so), so the program cannot tell.
 
 use super::packages::Spelling;
-use super::{DataKind, Emitter, binary, call, field, identifier_expression};
+use super::{DataKind, Emitter, binary, builtin_call, call, field, identifier_expression};
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
+};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -63,7 +65,7 @@ where
                 let key = self.value(&arguments[0], out)?;
                 let table = self.value(&arguments[1], out)?;
                 let table = self.named(table, out);
-                let delete = call(identifier_expression("delete"), vec![table.clone(), key]);
+                let delete = builtin_call(GoBuiltin::Delete, vec![table.clone(), key]);
                 out.push(GoStatement::Expression(delete));
                 table
             }
@@ -72,8 +74,8 @@ where
                 let table = self.named(table, out);
                 let other = self.value(&arguments[1], out)?;
                 let key = self.temporary("key");
-                let delete = call(
-                    identifier_expression("delete"),
+                let delete = builtin_call(
+                    GoBuiltin::Delete,
                     vec![table.clone(), identifier_expression(&key)],
                 );
                 out.push(GoStatement::Range {
@@ -142,7 +144,7 @@ where
             GoExpression::Integer(0) => vec![type_],
             hint => vec![type_, hint],
         };
-        Ok(call(identifier_expression("make"), arguments))
+        Ok(builtin_call(GoBuiltin::Make, arguments))
     }
 
     fn named(&mut self, table: GoExpression, out: &mut Vec<GoStatement>) -> GoExpression {

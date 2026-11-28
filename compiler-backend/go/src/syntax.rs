@@ -1,11 +1,13 @@
 //! A small Go syntax tree with a printer that follows `gofmt` layout.
 
+mod builtins;
 mod directives;
 mod names;
 mod operators;
 mod printer;
 pub mod tokens;
 
+pub use builtins::GoBuiltin;
 pub use names::{DeclarationNames, Name, Reference, statements_names};
 pub use operators::{GoBinaryOperator, GoUnaryOperator};
 pub use printer::{GoFile, GoImport};
@@ -309,7 +311,7 @@ impl GoStatement {
         matches!(
             self,
             GoStatement::Expression(GoExpression::Call { function, .. })
-                if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
+                if function.is_builtin(GoBuiltin::Panic)
         )
     }
 }

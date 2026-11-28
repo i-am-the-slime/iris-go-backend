@@ -83,7 +83,7 @@ where
                 fields.push((None, self.coerce(read, *field_type, opaque, &mut branch)?));
             }
             let fields = if fields.is_empty() {
-                identifier_expression("nil")
+                GoExpression::nil()
             } else {
                 GoExpression::Composite { type_: GoType::Slice(Box::new(GoType::Any)), fields }
             };

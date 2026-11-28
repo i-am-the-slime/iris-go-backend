@@ -8,7 +8,7 @@ use super::headers::{BUILTINS, Effects};
 use super::inlining::fresh;
 use super::scalars::Structs;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Cell {
@@ -553,8 +553,7 @@ struct ThrowingCalls {
 impl Walk for ThrowingCalls {
     fn expression(&mut self, value: &mut GoExpression) {
         if let GoExpression::Call { function, .. } = value {
-            let builtin = matches!(function.as_ref(), GoExpression::Identifier(name)
-                if name != "panic" && BUILTINS.contains(&name.as_str()));
+            let builtin = !function.is_builtin(GoBuiltin::Panic) && function.is_one_of(BUILTINS);
             self.found |= !builtin;
         }
         go_traversal::expression(self, value);
@@ -637,9 +636,9 @@ impl Calls<'_> {
     pub(super) fn keeps_cells(&self, function: &GoExpression) -> bool {
         match function {
             GoExpression::Identifier(name) if self.declared.contains(name.as_str()) => false,
-            GoExpression::Identifier(name) if name == "panic" => false,
+            _ if function.is_builtin(GoBuiltin::Panic) => false,
             GoExpression::Identifier(name) => {
-                BUILTINS.contains(&name.as_str()) || self.helpers.contains(name.as_str())
+                function.is_one_of(BUILTINS) || self.helpers.contains(name.as_str())
             }
             GoExpression::Qualified { package, name } => {
                 !self.effects.contains(&(package.clone(), name.clone()))

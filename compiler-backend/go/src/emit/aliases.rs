@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType};
 
 pub(super) fn substitute_aliases(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -243,7 +243,7 @@ impl Walk for Writes<'_> {
             self.written = true;
         }
         if let GoExpression::Call { function, arguments } = value
-            && matches!(&**function, GoExpression::Identifier(builtin) if builtin == "delete" || builtin == "clear")
+            && (function.is_builtin(GoBuiltin::Delete) || function.is_builtin(GoBuiltin::Clear))
             && arguments.first().is_some_and(|changed| is_named(changed, self.name))
         {
             self.written = true;

@@ -11,7 +11,9 @@ use crate::foreign::{Foreign, GoFunction, GoPackage, Operator};
 use crate::go_traversal;
 use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Literal};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
+};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -237,7 +239,7 @@ where
         let array_name = self.local_name("array".into());
         let written = call(
             identifier_expression(&writer),
-            vec![identifier_expression("nil"), identifier_expression(&array_name)],
+            vec![GoExpression::nil(), identifier_expression(&array_name)],
         );
         let body = vec![GoStatement::Return(Some(to_string(written)))];
         let parameters = vec![(array_name, self.go_type(array)?)];
@@ -393,7 +395,7 @@ where
             && let [GoExpression::Identifier(target)] = targets.as_slice()
             && target == buffer
             && let [GoExpression::Call { function, arguments }] = values.as_mut_slice()
-            && matches!(&**function, GoExpression::Identifier(append) if append == "append")
+            && function.is_builtin(GoBuiltin::Append)
             && let [GoExpression::Identifier(appended), GoExpression::Spread(spread)] =
                 arguments.as_mut_slice()
             && appended == buffer
@@ -512,7 +514,7 @@ where
                 continue;
             };
             let Some(writer) = delegated.get(name.as_str()) else { continue };
-            let mut arguments = vec![identifier_expression("nil")];
+            let mut arguments = vec![GoExpression::nil()];
             arguments
                 .extend(parameters.iter().map(|(parameter, _)| identifier_expression(parameter)));
             let written = call(identifier_expression(writer), arguments);
@@ -585,9 +587,7 @@ fn starting_value(statement: &GoStatement, buffer: &str) -> Option<GoExpression>
     {
         return None;
     }
-    if let GoExpression::Identifier(append) = &**function
-        && append == "append"
-    {
+    if function.is_builtin(GoBuiltin::Append) {
         let text = match arguments.as_slice() {
             [_, GoExpression::Spread(text)] => (**text).clone(),
             [_, GoExpression::Rune(byte)] => GoExpression::String(byte.to_string()),
@@ -596,7 +596,7 @@ fn starting_value(statement: &GoStatement, buffer: &str) -> Option<GoExpression>
         return Some(GoExpression::Conversion { type_: byte_slice(), value: Box::new(text) });
     }
     let mut arguments = arguments.clone();
-    arguments[0] = identifier_expression("nil");
+    arguments[0] = GoExpression::nil();
     Some(call((**function).clone(), arguments))
 }
 

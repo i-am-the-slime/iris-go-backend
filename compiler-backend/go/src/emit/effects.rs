@@ -1,14 +1,14 @@
 use super::sorting::Placement;
 use super::{
-    Emitter, Mode, Sink, call, field, field_name, identifier_expression, mutable, reference_type,
-    unit_value,
+    Emitter, Mode, Sink, builtin_call, call, field, field_name, identifier_expression, mutable,
+    reference_type, unit_value,
 };
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Foreign, GoFunction, GoPackage};
 use crate::monomorphic::traversal::mentions_local;
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -30,8 +30,8 @@ where
             Foreign::WithMutex => return self.with_mutex(arguments, result, sink, out),
             Foreign::MutexNew => {
                 self.imports.insert("sync".into());
-                let mutex = call(
-                    identifier_expression("new"),
+                let mutex = builtin_call(
+                    GoBuiltin::New,
                     vec![GoExpression::Type(GoType::Named("sync.Mutex".into()))],
                 );
                 return self.deliver(mutex, result, sink, out);
@@ -217,8 +217,8 @@ where
                 self.deliver(value, result, sink, out)
             }
             Foreign::Throw => {
-                out.push(GoStatement::Expression(call(
-                    identifier_expression("panic"),
+                out.push(GoStatement::Expression(builtin_call(
+                    GoBuiltin::Panic,
                     vec![values.remove(0)],
                 )));
                 if let Sink::Define(name) = sink
@@ -476,9 +476,9 @@ where
         let array = self.value(array, out)?;
         let array = self.hoist(array, "array", out);
         let name = self.temporary("collected");
-        let length = call(identifier_expression("len"), vec![array.clone()]);
+        let length = builtin_call(GoBuiltin::Len, vec![array.clone()]);
         let allocation = GoExpression::Type(self.go_type(collected)?);
-        let allocation = call(identifier_expression("make"), vec![allocation, length]);
+        let allocation = builtin_call(GoBuiltin::Make, vec![allocation, length]);
         out.push(GoStatement::Define { names: vec![name.clone()], values: vec![allocation] });
         let element_name = if mentions_local(body, element.id) {
             self.bind_local(element)

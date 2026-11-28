@@ -4,7 +4,7 @@ use super::Analysis;
 use crate::emit::intervals::constraints::{State, kind_of_type};
 use crate::emit::intervals::syntax::is_bounds_test;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoUnaryOperator};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     /// Rewrites the statement at `position` by what the state proves. True when the block
@@ -154,7 +154,7 @@ impl Analysis<'_, '_, '_> {
                 kind_of_type(type_).is_some() && self.is_inert(value, state)
             }
             GoExpression::Call { function, arguments } => {
-                matches!(&**function, GoExpression::Identifier(name) if name == "len")
+                function.is_builtin(GoBuiltin::Len)
                     && arguments.len() == 1
                     && match &arguments[0] {
                         GoExpression::Identifier(_) | GoExpression::String(_) => true,

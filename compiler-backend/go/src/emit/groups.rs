@@ -357,7 +357,7 @@ fn zero_value(type_: &GoType) -> Option<GoExpression> {
         | GoType::Slice(_)
         | GoType::Function { .. }
         | GoType::Any
-        | GoType::Erased(_) => Some(identifier_expression("nil")),
+        | GoType::Erased(_) => Some(GoExpression::nil()),
         _ => None,
     }
 }

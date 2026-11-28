@@ -79,7 +79,7 @@ fn local(statement: GoStatement) -> GoStatement {
     let value = fields.remove(0).1;
     if super::is_untyped_constant(&value) {
         let type_ = arguments.remove(0);
-        let value = (!super::is_nil(&value)).then_some(value);
+        let value = (!value.is_nil()).then_some(value);
         return GoStatement::Variable { name, type_, value };
     }
     GoStatement::Define { names: vec![name], values: vec![value] }

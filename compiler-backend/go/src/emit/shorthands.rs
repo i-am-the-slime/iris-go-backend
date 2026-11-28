@@ -7,7 +7,9 @@
 //!   variable given one, `var n int = 0`, is `n := 0`.
 
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
+};
 
 pub(super) fn use_shorthands(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -108,9 +110,9 @@ fn extremum(declared: &GoStatement, chosen: &GoStatement) -> Option<GoStatement>
     } else {
         return None;
     };
-    let function = if larger { "max" } else { "min" };
+    let function = if larger { GoBuiltin::Max } else { GoBuiltin::Min };
     let call = GoExpression::Call {
-        function: Box::new(GoExpression::Identifier(function.into())),
+        function: Box::new(GoExpression::builtin(function)),
         arguments: vec![(**left).clone(), (**right).clone()],
     };
     // Two untyped constants would give the result an untyped constant's default type.
@@ -165,5 +167,5 @@ fn is_float_constant(value: &GoExpression) -> bool {
 /// `len(xs)`.
 fn is_length(value: &GoExpression) -> bool {
     let GoExpression::Call { function, arguments } = value else { return false };
-    matches!(&**function, GoExpression::Identifier(name) if name == "len") && arguments.len() == 1
+    function.is_builtin(GoBuiltin::Len) && arguments.len() == 1
 }

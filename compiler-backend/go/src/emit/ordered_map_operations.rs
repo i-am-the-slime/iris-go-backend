@@ -9,13 +9,13 @@
 //! it sees its writes. Its keys are in the order of their `Ord`: Go's own for Ints and Chars,
 //! JavaScript's code-unit order for Strings, as `prim.CompareString` has it.
 
-use super::{Emitter, binary, call, identifier_expression};
+use super::{Emitter, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage};
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType};
 use smol_str::SmolStr;
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -202,7 +202,7 @@ where
             unreachable!("invariant violated: a map kept in order of no ordered map type")
         };
         if !matches!(self.monotypes.get(key), Monotype::Data(_) | Monotype::Record(_)) {
-            return Ok(call(identifier_expression("new"), vec![GoExpression::Type(*map)]));
+            return Ok(builtin_call(GoBuiltin::New, vec![GoExpression::Type(*map)]));
         }
         let leaves = self.key_leaves(key)?;
         let compare = identifier_expression(&self.map_key_comparison(key, &leaves)?);

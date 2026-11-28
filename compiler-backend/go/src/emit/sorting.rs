@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::iteration::Found;
-use super::{Emitter, binary, call, identifier_expression};
+use super::{Emitter, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::{Comparison, Foreign, GoFunction, GoPackage, Operator};
 use crate::monomorphic::traversal::{
@@ -12,7 +12,9 @@ use crate::monomorphic::{
 };
 use crate::monotype::Monotype;
 use crate::purity::is_trivial;
-use crate::syntax::{GoBinaryOperator, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 const INLINING_DEPTH: usize = 4;
 
@@ -108,7 +110,7 @@ where
         if ordering.primitive == Primitive::Number {
             let sort = self.support_function("sortNumbers", SORT_NUMBERS_SOURCE);
             let sorted = call(identifier_expression(&sort), vec![sorted_expression.clone()]);
-            let copied = call(identifier_expression("copy"), vec![sorted_expression, sorted]);
+            let copied = builtin_call(GoBuiltin::Copy, vec![sorted_expression, sorted]);
             out.push(GoStatement::Expression(copied));
             return Ok(Some(result));
         }
@@ -162,7 +164,7 @@ where
                     operand: Box::new(array.clone()),
                 };
                 let sorted = call(sort, vec![elements.clone(), key]);
-                let copied = call(identifier_expression("copy"), vec![elements, sorted]);
+                let copied = builtin_call(GoBuiltin::Copy, vec![elements, sorted]);
                 out.push(GoStatement::Expression(copied));
                 Ok(array)
             }

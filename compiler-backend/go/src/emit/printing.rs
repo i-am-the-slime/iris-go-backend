@@ -3,10 +3,10 @@
 //! and `strings` calls and written with `console.Print`, so a program links neither `fmt` nor
 //! `reflect`. A value of another type (a record, a data type, a function) has no such text.
 
-use super::{Emitter, binary, call, identifier_expression, length};
+use super::{Emitter, binary, builtin_call, call, identifier_expression, length};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -89,16 +89,15 @@ where
         let mut body = vec![];
         let text =
             self.text_of(identifier_expression(&item), element, entry, depth + 1, &mut body)?;
-        let make = call(
-            identifier_expression("make"),
+        let make = builtin_call(
+            GoBuiltin::Make,
             vec![
                 GoExpression::Type(GoType::Slice(Box::new(GoType::String))),
                 GoExpression::Integer(0),
                 length(array.clone()),
             ],
         );
-        let append =
-            call(identifier_expression("append"), vec![identifier_expression(&texts), text]);
+        let append = builtin_call(GoBuiltin::Append, vec![identifier_expression(&texts), text]);
         body.push(GoStatement::Assign {
             targets: vec![identifier_expression(&texts)],
             values: vec![append],

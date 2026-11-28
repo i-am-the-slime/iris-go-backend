@@ -4,7 +4,9 @@ use super::foreign_values::updated_arrays;
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, appends_every_step, owned_snocs};
 use super::recycling::Recycled;
-use super::{Emitter, Mode, Sink, binary, call, conjunction, identifier_expression, unit_value};
+use super::{
+    Emitter, Mode, Sink, binary, builtin_call, call, conjunction, identifier_expression, unit_value,
+};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, Iteration};
 use crate::monomorphic::traversal::mentions_local;
@@ -12,7 +14,7 @@ use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Guarded, Local, LocalId, Pattern, PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType};
 
 pub(super) enum Callback<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
@@ -484,7 +486,7 @@ where
         let allocation = match (&recycled, positional_length) {
             (Some(recycled), count) => self.recycled_buffer(recycled, count),
             (None, Some(count)) => {
-                call(identifier_expression("make"), vec![GoExpression::Type(mapped_type), count])
+                builtin_call(GoBuiltin::Make, vec![GoExpression::Type(mapped_type), count])
             }
             (None, None) => GoExpression::Composite { type_: mapped_type, fields: vec![] },
         };
@@ -532,8 +534,8 @@ where
             },
             None => GoStatement::Assign {
                 targets: vec![identifier_expression(mapped)],
-                values: vec![call(
-                    identifier_expression("append"),
+                values: vec![builtin_call(
+                    GoBuiltin::Append,
                     vec![identifier_expression(mapped), value],
                 )],
             },
@@ -574,8 +576,7 @@ where
         let mut opened = self.open(pipeline, need, None)?;
         let element = opened.element.clone();
         let condition = self.callback_value(callback, vec![element.clone()], opened.body.body())?;
-        let appended =
-            call(identifier_expression("append"), vec![identifier_expression(kept), element]);
+        let appended = builtin_call(GoBuiltin::Append, vec![identifier_expression(kept), element]);
         opened.body.body().push(GoStatement::If {
             condition,
             then: vec![GoStatement::Assign {
@@ -652,8 +653,8 @@ where
         let bound_type = self.go_type(monotype)?;
         let bound = self.temporary("bound");
         let allocation = match bound_capacity(&callback, &pipeline) {
-            Some(capacity) => call(
-                identifier_expression("make"),
+            Some(capacity) => builtin_call(
+                GoBuiltin::Make,
                 vec![GoExpression::Type(bound_type), GoExpression::Integer(0), capacity],
             ),
             None => GoExpression::Composite { type_: bound_type, fields: vec![] },
@@ -683,8 +684,7 @@ where
         } else {
             opened.element
         };
-        let value =
-            call(identifier_expression("append"), vec![identifier_expression(appended), element]);
+        let value = builtin_call(GoBuiltin::Append, vec![identifier_expression(appended), element]);
         opened.body.body().push(GoStatement::Assign {
             targets: vec![identifier_expression(appended)],
             values: vec![value],
@@ -706,8 +706,8 @@ where
             return Ok(self.close(opened.body));
         }
         let produced = self.callback_value(callback, vec![opened.element], opened.body.body())?;
-        let appended = call(
-            identifier_expression("append"),
+        let appended = builtin_call(
+            GoBuiltin::Append,
             vec![identifier_expression(bound), GoExpression::Spread(Box::new(produced))],
         );
         opened.body.body().push(GoStatement::Assign {
@@ -774,7 +774,7 @@ where
         absent: GoExpression,
         monotype: MonotypeId,
     ) -> GoResult<GoStatement> {
-        if !super::build::is_nil(&absent) {
+        if !absent.is_nil() {
             return Ok(GoStatement::Define { names: vec![found], values: vec![absent] });
         }
         Ok(GoStatement::Variable { name: found, type_: self.go_type(monotype)?, value: None })

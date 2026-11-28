@@ -13,7 +13,7 @@
 //! nothing else, the loop may not write its element or the array it counts up to, and a slice of
 //! it must start at a constant and end at its length.
 
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType};
 
 use super::aliases::{mentions, writes};
 
@@ -67,7 +67,7 @@ fn indices_at(block: &[GoStatement], position: usize) -> Option<Indices> {
     else {
         return None;
     };
-    let is_make = matches!(function.as_ref(), GoExpression::Identifier(name) if name == "make");
+    let is_make = function.is_builtin(GoBuiltin::Make);
     let [GoExpression::Type(GoType::Slice(element)), length] = arguments.as_slice() else {
         return None;
     };
@@ -132,7 +132,7 @@ fn walk_after(block: &mut [GoStatement], indices: &Indices) -> Option<usize> {
 /// The array whose length `len(array)` is.
 fn counted_by(length: &GoExpression) -> Option<String> {
     let GoExpression::Call { function, arguments } = length else { return None };
-    let is_len = matches!(function.as_ref(), GoExpression::Identifier(name) if name == "len");
+    let is_len = function.is_builtin(GoBuiltin::Len);
     match arguments.as_slice() {
         [GoExpression::Identifier(array)] if is_len => Some(array.clone()),
         _ => None,
@@ -141,7 +141,7 @@ fn counted_by(length: &GoExpression) -> Option<String> {
 
 fn length_of(array: &str) -> GoExpression {
     GoExpression::Call {
-        function: Box::new(GoExpression::Identifier("len".into())),
+        function: Box::new(GoExpression::builtin(GoBuiltin::Len)),
         arguments: vec![GoExpression::Identifier(array.into())],
     }
 }

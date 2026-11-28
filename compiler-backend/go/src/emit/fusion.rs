@@ -38,7 +38,9 @@ use std::collections::VecDeque;
 
 use super::conditions::negated;
 use super::iteration::{Callback, Found};
-use super::{Emitter, Mode, Sink, binary, call, identifier_expression, is_simple, length, lines};
+use super::{
+    Emitter, Mode, Sink, binary, builtin_call, identifier_expression, is_simple, length, lines,
+};
 use crate::error::GoResult;
 use crate::foreign::{
     ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, GoPackage, Iteration,
@@ -49,7 +51,9 @@ use crate::monomorphic::{
 };
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoUnaryOperator, SourceLine};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoUnaryOperator, SourceLine,
+};
 
 /// The most elements of a literal prefix stored in one assignment.
 const PREFIX_ON_ONE_LINE: usize = 4;
@@ -475,10 +479,8 @@ where
                     GoExpression::Integer(count) => GoExpression::Integer(count.max(0)),
                     count if is_go_length(&count) => count,
                     count => {
-                        let count = call(
-                            identifier_expression("max"),
-                            vec![count, GoExpression::Integer(0)],
-                        );
+                        let count =
+                            builtin_call(GoBuiltin::Max, vec![count, GoExpression::Integer(0)]);
                         self.hoist(count, "count", out)
                     }
                 };
@@ -512,7 +514,7 @@ where
                 let count = match shortest {
                     Some(shortest) => GoExpression::Integer(shortest),
                     None => {
-                        let count = call(identifier_expression("min"), lengths);
+                        let count = builtin_call(GoBuiltin::Min, lengths);
                         self.hoist(count, "count", out)
                     }
                 };
@@ -1182,7 +1184,7 @@ where
                 if spare > 0 {
                     arguments.push(plus(count, offset + spare));
                 }
-                call(identifier_expression("make"), arguments)
+                builtin_call(GoBuiltin::Make, arguments)
             }
             None => {
                 let fields = prefix.iter().map(|value| (None, value.clone())).collect();
@@ -1231,10 +1233,8 @@ where
                 } else {
                     opened.element
                 };
-                let appended = call(
-                    identifier_expression("append"),
-                    vec![identifier_expression(&built), element],
-                );
+                let appended =
+                    builtin_call(GoBuiltin::Append, vec![identifier_expression(&built), element]);
                 GoStatement::Assign {
                     targets: vec![identifier_expression(&built)],
                     values: vec![appended],
@@ -1377,9 +1377,7 @@ fn stepped_value(steps: &Steps, index: &str) -> GoExpression {
 fn is_go_length(value: &GoExpression) -> bool {
     match value {
         GoExpression::Conversion { value, .. } => is_go_length(value),
-        GoExpression::Call { function, .. } => {
-            matches!(&**function, GoExpression::Identifier(name) if name == "len")
-        }
+        GoExpression::Call { function, .. } => function.is_builtin(GoBuiltin::Len),
         _ => false,
     }
 }

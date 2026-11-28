@@ -34,7 +34,7 @@ use rustc_hash::FxHashSet;
 use crate::go_traversal::{self, Walk};
 use crate::naming::{lower_first, numbered};
 use crate::syntax::{
-    DeclarationNames, GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType,
+    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
 };
 
 /// The fewest cells of one type in one expression that are allocated together.
@@ -136,7 +136,7 @@ impl Function<'_> {
         };
         self.number(*root, &type_, &slice, &mut cells);
         let allocation = GoExpression::Call {
-            function: Box::new(GoExpression::Identifier("make".into())),
+            function: Box::new(GoExpression::builtin(GoBuiltin::Make)),
             arguments: vec![
                 GoExpression::Type(GoType::Slice(Box::new(type_))),
                 GoExpression::Integer(cells.len() as i64),

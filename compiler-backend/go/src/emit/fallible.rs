@@ -132,7 +132,7 @@ const FAILED: &str = "Failed";
 const LEFT: &str = "Left";
 
 fn nil() -> GoExpression {
-    identifier_expression("nil")
+    GoExpression::nil()
 }
 
 /// `err.Failed`, or `!err.Failed` for a test that there is no failure.

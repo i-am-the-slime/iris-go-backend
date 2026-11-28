@@ -43,7 +43,7 @@ impl MaybeLayout {
             MaybeLayout::Char { nothing, .. }
             | MaybeLayout::Boolean { nothing, .. }
             | MaybeLayout::Struct { nothing, .. } => name == nothing,
-            MaybeLayout::Pointer { .. } => name == "nil",
+            MaybeLayout::Pointer { .. } => value.is_nil(),
         }
     }
 
@@ -355,7 +355,7 @@ where
                 if is_just {
                     values.remove(0)
                 } else {
-                    identifier_expression("nil")
+                    GoExpression::nil()
                 }
             }
             MaybeLayout::Struct { nothing, literal, .. } => {
@@ -479,7 +479,7 @@ where
             Some(MaybeLayout::Char { nothing, .. } | MaybeLayout::Boolean { nothing, .. }) => {
                 identifier_expression(nothing)
             }
-            Some(MaybeLayout::Pointer { .. }) => identifier_expression("nil"),
+            Some(MaybeLayout::Pointer { .. }) => GoExpression::nil(),
         };
         Some(binary(
             if is_just { GoBinaryOperator::NotEqual } else { GoBinaryOperator::Equal },
@@ -621,7 +621,7 @@ where
             result: Some(GoType::Pointer(Box::new(payload_type))),
             body: vec![
                 GoStatement::If { condition: is_just, then, otherwise: vec![] },
-                GoStatement::Return(Some(identifier_expression("nil"))),
+                GoStatement::Return(Some(GoExpression::nil())),
             ],
         })
     }

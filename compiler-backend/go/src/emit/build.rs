@@ -1,7 +1,9 @@
 use rustc_hash::FxHashSet;
 
 use crate::naming::{is_vague, lower_first, numbered};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 pub(super) fn unique(base: String, taken: &mut FxHashSet<String>) -> String {
     numbered(&base, |name| !taken.insert(name.to_string()))
@@ -11,8 +13,12 @@ pub(super) fn call(function: GoExpression, arguments: Vec<GoExpression>) -> GoEx
     GoExpression::Call { function: Box::new(function), arguments }
 }
 
+pub(super) fn builtin_call(builtin: GoBuiltin, arguments: Vec<GoExpression>) -> GoExpression {
+    call(GoExpression::builtin(builtin), arguments)
+}
+
 pub(super) fn length(array: GoExpression) -> GoExpression {
-    call(identifier_expression("len"), vec![array])
+    builtin_call(GoBuiltin::Len, vec![array])
 }
 
 pub(super) fn identifier_expression(name: &str) -> GoExpression {
@@ -75,8 +81,8 @@ pub(super) fn unit_value() -> GoExpression {
 }
 
 pub(super) fn panic_statement(message: &str) -> GoStatement {
-    GoStatement::Expression(call(
-        identifier_expression("panic"),
+    GoStatement::Expression(builtin_call(
+        GoBuiltin::Panic,
         vec![GoExpression::String(message.to_string())],
     ))
 }
@@ -109,9 +115,7 @@ pub(super) fn is_simple(expression: &GoExpression) -> bool {
 
 pub(super) fn is_effectful_call(expression: &GoExpression) -> bool {
     match expression {
-        GoExpression::Call { function, .. } => {
-            !matches!(function.as_ref(), GoExpression::Identifier(name) if name == "len")
-        }
+        GoExpression::Call { function, .. } => !function.is_builtin(GoBuiltin::Len),
         GoExpression::Conversion { value, .. } => is_effectful_call(value),
         _ => false,
     }
@@ -141,10 +145,6 @@ pub(super) fn scrutinee_name(value: &GoExpression) -> String {
         Some(name) if !is_vague(&lower_first(name)) => lower_first(name),
         _ => "scrutinee".into(),
     }
-}
-
-pub(super) fn is_nil(expression: &GoExpression) -> bool {
-    matches!(expression, GoExpression::Identifier(name) if name == "nil")
 }
 
 pub(super) fn ends_in_panic(statements: &[GoStatement]) -> bool {

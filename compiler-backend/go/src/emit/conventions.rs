@@ -174,11 +174,7 @@ where
                     value: None,
                 });
                 out.push(GoStatement::If {
-                    condition: binary(
-                        GoBinaryOperator::NotEqual,
-                        value,
-                        identifier_expression("nil"),
-                    ),
+                    condition: binary(GoBinaryOperator::NotEqual, value, GoExpression::nil()),
                     then: present,
                     otherwise: vec![],
                 });
@@ -361,7 +357,7 @@ where
                     }
                     self.just_value_function(witness)?
                 }
-                _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
+                _ if boundary.ignored.contains(&position) => GoExpression::nil(),
                 _ if boundary.lazy.contains(&position) => self.lazy_argument(argument, out)?,
                 _ if boundary.foreign_arguments.contains(&position) => {
                     let value = self.value(argument, out)?;

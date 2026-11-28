@@ -1,9 +1,9 @@
 use super::build::binary;
-use super::{Emitter, call, identifier_expression, length};
+use super::{Emitter, builtin_call, identifier_expression, length};
 use crate::error::GoResult;
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -33,7 +33,7 @@ where
         let array_type = self.go_type(monotype)?;
         let count =
             binary(GoBinaryOperator::Multiply, length(functions.clone()), length(values.clone()));
-        let made = call(identifier_expression("make"), vec![GoExpression::Type(array_type), count]);
+        let made = builtin_call(GoBuiltin::Make, vec![GoExpression::Type(array_type), count]);
         out.push(GoStatement::Define { names: vec![units.clone()], values: vec![made] });
         let function = self.temporary("function");
         let value = self.temporary("value");

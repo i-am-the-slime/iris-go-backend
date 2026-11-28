@@ -1,14 +1,16 @@
 use super::operators::float_constant;
 use super::sorting::Placement;
 use super::{
-    Emitter, Mode, Sink, binary, call, coerce, field, fusion, identifier_expression, mutable,
-    unit_value,
+    Emitter, Mode, Sink, binary, builtin_call, call, coerce, field, fusion, identifier_expression,
+    mutable, unit_value,
 };
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, GoPackage, Operator};
 use crate::monomorphic::{Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoBinaryOperator, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoCase, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -302,9 +304,9 @@ where
     ) -> GoResult<GoExpression> {
         let elements = self.value(array, out)?;
         let elements = self.hoist(elements, "elements", out);
-        let length = call(identifier_expression("len"), vec![elements.clone()]);
+        let length = builtin_call(GoBuiltin::Len, vec![elements.clone()]);
         let shortened = binary(GoBinaryOperator::Subtract, length, GoExpression::Integer(dropped));
-        let end = call(identifier_expression("max"), vec![shortened, GoExpression::Integer(0)]);
+        let end = builtin_call(GoBuiltin::Max, vec![shortened, GoExpression::Integer(0)]);
         Ok(self.slices("Clip", vec![slice_of(&elements, None, Some(end))]))
     }
 
@@ -502,7 +504,7 @@ where
                 let value = self.value(element, out)?;
                 values.push(self.typed_constant(value, element.monotype)?);
             }
-            return Ok(call(identifier_expression("append"), values));
+            return Ok(builtin_call(GoBuiltin::Append, values));
         }
         if let Some(position) = super::ownership::object_write_position(foreign)
             && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[position]))
@@ -532,14 +534,14 @@ where
         {
             // The slice gives an appended constant its type.
             let element = self.value(&arguments[1], out)?;
-            return Ok(call(identifier_expression("append"), vec![built, element]));
+            return Ok(builtin_call(GoBuiltin::Append, vec![built, element]));
         }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
             let element = self.value(&arguments[1], out)?;
             let element = self.typed_constant(element, arguments[1].monotype)?;
             if self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0])) {
-                return Ok(call(identifier_expression("append"), vec![array, element]));
+                return Ok(builtin_call(GoBuiltin::Append, vec![array, element]));
             }
             let snoc = self.go_function(GoFunction { package: GoPackage::Array, name: "Snoc" });
             let element_type = self.go_type(arguments[1].monotype)?;
@@ -617,7 +619,7 @@ where
         }
         if let Foreign::Crash = foreign {
             let message = self.value(&arguments[0], out)?;
-            out.push(GoStatement::Expression(call(identifier_expression("panic"), vec![message])));
+            out.push(GoStatement::Expression(builtin_call(GoBuiltin::Panic, vec![message])));
             let type_ = self.go_type(monotype)?;
             let name = self.temporary("unreachable");
             out.push(GoStatement::Variable { name: name.clone(), type_, value: None });

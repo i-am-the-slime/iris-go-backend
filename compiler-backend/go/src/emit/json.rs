@@ -14,15 +14,15 @@
 use smol_str::SmolStr;
 
 use super::names::{NamePart, PendingSpelling};
-use super::{Emitter, Mode, Sink, binary, call, identifier_expression};
+use super::{Emitter, Mode, Sink, binary, builtin_call, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::{GoPackage, JsonCodec};
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier, lower_camel};
 use crate::syntax::{
-    GoBinaryOperator, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType,
-    GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement,
+    GoType, GoUnaryOperator,
 };
 
 /// The decoder's or the encoder's parameter.
@@ -440,7 +440,7 @@ where
         let mut otherwise = vec![];
         let (null, value) = match self.monotypes.get(monotype).clone() {
             Monotype::Nullable(payload) => {
-                let null = identifier_expression("nil");
+                let null = GoExpression::nil();
                 let value = self.json_decode(payload, locals, &mut otherwise)?;
                 self.imports.insert(GoPackage::Nullable.path().into());
                 let not_null =
@@ -724,7 +724,7 @@ where
                     condition: binary(
                         GoBinaryOperator::Equal,
                         identifier_expression(&name),
-                        identifier_expression("nil"),
+                        GoExpression::nil(),
                     ),
                     then: vec![raw_statement("null")],
                     otherwise: present,
@@ -864,7 +864,7 @@ fn assign(name: &str, value: GoExpression) -> GoStatement {
 }
 
 fn append(name: &str, value: GoExpression) -> GoStatement {
-    let appended = call(identifier_expression("append"), vec![identifier_expression(name), value]);
+    let appended = builtin_call(GoBuiltin::Append, vec![identifier_expression(name), value]);
     assign(name, appended)
 }
 

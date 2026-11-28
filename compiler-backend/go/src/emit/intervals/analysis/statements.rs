@@ -6,7 +6,7 @@ use super::{Analysis, Frame};
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO, kind_of_type};
 use crate::emit::intervals::names::shape_of_type;
 use crate::emit::intervals::syntax::{is_bounds_test, is_test};
-use crate::syntax::{GoExpression, GoStatement, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoExpression, GoStatement, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn block(&mut self, body: &mut Vec<GoStatement>, state: &mut State) {
@@ -82,7 +82,7 @@ impl Analysis<'_, '_, '_> {
             }
             GoStatement::Expression(value) => {
                 let panics = matches!(value, GoExpression::Call { function, .. }
-                    if matches!(&**function, GoExpression::Identifier(name) if name == "panic"));
+                    if function.is_builtin(GoBuiltin::Panic));
                 self.visit(value, state);
                 if !keeps {
                     self.forget_heap(state);

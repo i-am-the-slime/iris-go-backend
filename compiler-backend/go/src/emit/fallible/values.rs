@@ -18,7 +18,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::EitherShape;
 use super::variants::Variants;
 use crate::foreign::{ForeignPackages, ForeignShape};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
 /// The head of `§call:E(f, x)`, a call of a function value that returns two results.
 pub(super) const CALL_MARK: &str = "§call:";
@@ -31,9 +31,19 @@ const READING_METHODS: &[&str] = &["Load", "Swap"];
 /// The methods of a foreign holder that replace the value it holds with the one they are given.
 const WRITING_METHODS: &[&str] = &["Store"];
 
-const BUILTINS: &[&str] = &[
-    "append", "cap", "clear", "close", "copy", "delete", "len", "make", "max", "min", "new",
-    "panic",
+const BUILTINS: &[GoBuiltin] = &[
+    GoBuiltin::Append,
+    GoBuiltin::Cap,
+    GoBuiltin::Clear,
+    GoBuiltin::Close,
+    GoBuiltin::Copy,
+    GoBuiltin::Delete,
+    GoBuiltin::Len,
+    GoBuiltin::Make,
+    GoBuiltin::Max,
+    GoBuiltin::Min,
+    GoBuiltin::New,
+    GoBuiltin::Panic,
 ];
 
 /// Lowers the function types whose values only generated code makes and calls, marking their
@@ -999,11 +1009,13 @@ impl<'t> Typer<'t> {
             if let Some(type_) = self.program.variables.get(&name).cloned() {
                 return self.dynamic_call(function, arguments, Ty::Known(type_));
             }
-            return match (name.as_str(), types.as_slice()) {
-                ("make", [Ty::Known(type_), ..]) => Ty::Known(type_.clone()),
-                ("new", [Ty::Known(type_)]) => Ty::Known(GoType::Pointer(Box::new(type_.clone()))),
-                ("append", [first, ..]) => first.clone(),
-                _ if BUILTINS.contains(&name.as_str()) => Ty::unknown(),
+            return match (GoBuiltin::named(&name), types.as_slice()) {
+                (Some(GoBuiltin::Make), [Ty::Known(type_), ..]) => Ty::Known(type_.clone()),
+                (Some(GoBuiltin::New), [Ty::Known(type_)]) => {
+                    Ty::Known(GoType::Pointer(Box::new(type_.clone())))
+                }
+                (Some(GoBuiltin::Append), [first, ..]) => first.clone(),
+                (Some(builtin), _) if BUILTINS.contains(&builtin) => Ty::unknown(),
                 _ => {
                     let mut all = FxHashSet::default();
                     for ty in &types {

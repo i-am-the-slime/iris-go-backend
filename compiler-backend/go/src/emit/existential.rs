@@ -39,7 +39,7 @@ where
             });
         }
         let body = match (layout.kind, cases.as_mut_slice()) {
-            (_, []) => vec![GoStatement::Return(Some(identifier_expression("nil")))],
+            (_, []) => vec![GoStatement::Return(Some(GoExpression::nil()))],
             (DataKind::Product, [case]) => std::mem::take(&mut case.body),
             (DataKind::Sentinel, _) => {
                 let last = cases.len() - 1;

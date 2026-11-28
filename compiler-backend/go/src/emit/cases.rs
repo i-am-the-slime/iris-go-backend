@@ -1,7 +1,7 @@
 //! Pattern matching: cases compiled to `if` chains and `switch` statements.
 
 use super::{
-    DataKind, DataLayout, Emitter, Exit, GuardChain, Mode, Sink, binary, breaks_to, call,
+    DataKind, DataLayout, Emitter, Exit, GuardChain, Mode, Sink, binary, breaks_to, builtin_call,
     conjunction, ends_in_panic, field, guarded_local_uses, identifier_expression, lines,
     local_uses, unit_value,
 };
@@ -12,7 +12,8 @@ use crate::monomorphic::{
 use crate::monotype::Monotype;
 use crate::naming::is_vague;
 use crate::syntax::{
-    GoBinaryOperator, GoCase, GoDefault, GoExpression, GoStatement, GoUnaryOperator, SourceLine,
+    GoBinaryOperator, GoBuiltin, GoCase, GoDefault, GoExpression, GoStatement, GoUnaryOperator,
+    SourceLine,
 };
 
 type Bindings = Vec<(Local, GoExpression)>;
@@ -477,7 +478,7 @@ where
                 tests.push(binary(GoBinaryOperator::Equal, path, literal));
             }
             PatternKind::Array(elements) => {
-                let length = call(identifier_expression("len"), vec![path.clone()]);
+                let length = builtin_call(GoBuiltin::Len, vec![path.clone()]);
                 tests.push(binary(
                     GoBinaryOperator::Equal,
                     length,

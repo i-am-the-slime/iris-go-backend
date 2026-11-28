@@ -31,7 +31,7 @@ use super::aliases::target_root;
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{
-    GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator,
 };
 
 /// The Go functions, as `(package, name)`, that the emitted code calls to run
@@ -39,9 +39,21 @@ use crate::syntax::{
 pub(super) type Effects = FxHashSet<(String, String)>;
 
 /// The builtins of the Go language: none runs an effect of the program.
-pub(super) const BUILTINS: &[&str] = &[
-    "len", "cap", "append", "make", "new", "copy", "min", "max", "panic", "delete", "clear",
-    "complex", "real", "imag",
+pub(super) const BUILTINS: &[GoBuiltin] = &[
+    GoBuiltin::Len,
+    GoBuiltin::Cap,
+    GoBuiltin::Append,
+    GoBuiltin::Make,
+    GoBuiltin::New,
+    GoBuiltin::Copy,
+    GoBuiltin::Min,
+    GoBuiltin::Max,
+    GoBuiltin::Panic,
+    GoBuiltin::Delete,
+    GoBuiltin::Clear,
+    GoBuiltin::Complex,
+    GoBuiltin::Real,
+    GoBuiltin::Imag,
 ];
 
 pub(super) fn read_headers_once(
@@ -139,7 +151,7 @@ impl<'e> Keeping<'e> {
                 self.functions.contains(name.as_str())
             }
             GoExpression::Identifier(name) => {
-                BUILTINS.contains(&name.as_str()) || self.helpers.contains(name.as_str())
+                function.is_one_of(BUILTINS) || self.helpers.contains(name.as_str())
             }
             GoExpression::Qualified { package, name } => {
                 !self.effects.contains(&(package.clone(), name.clone()))
@@ -275,9 +287,7 @@ fn only_indexed(
                 }
                 GoExpression::Call { function, arguments } => {
                     let positions = match &**function {
-                        GoExpression::Identifier(name)
-                            if matches!(name.as_str(), "len" | "cap") =>
-                        {
+                        _ if function.is_one_of(&[GoBuiltin::Len, GoBuiltin::Cap]) => {
                             Some(vec![true; arguments.len()])
                         }
                         GoExpression::Identifier(name) => self.sliced.get(name.as_str()).cloned(),
@@ -539,7 +549,7 @@ pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
     let below = |value: &GoExpression| {
         matches!(value, GoExpression::Binary { operator: GoBinaryOperator::LessThan, right, .. }
             if matches!(&**right, GoExpression::Call { function, .. }
-                if matches!(&**function, GoExpression::Identifier(name) if name == "len")))
+                if function.is_builtin(GoBuiltin::Len)))
     };
     match test {
         GoExpression::Binary { operator: GoBinaryOperator::LogicalAnd, left, right } => {

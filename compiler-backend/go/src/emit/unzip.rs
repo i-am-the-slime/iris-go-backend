@@ -1,10 +1,10 @@
 use smol_str::SmolStr;
 
-use super::{Emitter, call, identifier_expression, length};
+use super::{Emitter, builtin_call, identifier_expression, length};
 use crate::error::GoResult;
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{DataType, Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBuiltin, GoExpression, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -83,8 +83,8 @@ where
         let array = self.monotypes.intern(Monotype::Array(element));
         let array_type = self.go_type(array)?;
         let allocated = self.temporary(name);
-        let made = call(
-            identifier_expression("make"),
+        let made = builtin_call(
+            GoBuiltin::Make,
             vec![GoExpression::Type(array_type), length(pairs.clone())],
         );
         out.push(GoStatement::Define { names: vec![allocated.clone()], values: vec![made] });

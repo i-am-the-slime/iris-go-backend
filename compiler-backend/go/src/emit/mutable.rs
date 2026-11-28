@@ -1,9 +1,11 @@
 use super::iteration::Found;
-use super::{Emitter, Mode, Sink, binary, call, identifier_expression, unit_value};
+use super::{Emitter, Mode, Sink, binary, builtin_call, call, identifier_expression, unit_value};
 use crate::error::GoResult;
 use crate::monomorphic::Expression;
 use crate::monotype::MonotypeId;
-use crate::syntax::{GoBinaryOperator, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{
+    GoBinaryOperator, GoBuiltin, GoExpression, GoStatement, GoType, GoUnaryOperator,
+};
 
 pub(super) const ACCESSES: &[&str] = &[
     "Peek",
@@ -99,7 +101,7 @@ where
             "Push" => {
                 let value = self.value(&arguments[0], out)?;
                 let elements = self.elements(&arguments[1], out)?;
-                let appended = call(identifier_expression("append"), vec![elements.clone(), value]);
+                let appended = builtin_call(GoBuiltin::Append, vec![elements.clone(), value]);
                 let targets = vec![elements.clone()];
                 out.push(GoStatement::Assign { targets, values: vec![appended] });
                 if let Sink::Discard = sink {
@@ -263,7 +265,7 @@ where
 
 /// The length of the elements, which is a PureScript Int as Go gives it.
 fn call_length(elements: GoExpression) -> GoExpression {
-    call(identifier_expression("len"), vec![elements])
+    builtin_call(GoBuiltin::Len, vec![elements])
 }
 
 fn non_empty(elements: GoExpression) -> GoExpression {
@@ -280,7 +282,7 @@ fn indexed(elements: GoExpression, index: GoExpression) -> GoExpression {
 }
 
 pub(super) fn in_bounds(index: &GoExpression, elements: GoExpression) -> GoExpression {
-    let length = call(identifier_expression("len"), vec![elements]);
+    let length = builtin_call(GoBuiltin::Len, vec![elements]);
     let below = binary(GoBinaryOperator::LessThan, index.clone(), length);
     match index {
         GoExpression::Integer(constant) if *constant >= 0 => below,

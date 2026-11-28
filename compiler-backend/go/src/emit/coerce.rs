@@ -2,8 +2,8 @@ use rustc_hash::FxHashSet;
 
 use super::packages::Spelling;
 use super::{
-    DataKind, Emitter, binary, call, field, identifier_expression, is_simple, is_untyped_constant,
-    length, path_root, unit_value,
+    DataKind, Emitter, binary, builtin_call, call, field, identifier_expression, is_simple,
+    is_untyped_constant, length, path_root, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, RepresentationChange, UnsupportedState};
@@ -12,8 +12,8 @@ use crate::go_traversal::each_block;
 use crate::monomorphic::{Expression, ExpressionKind, SourcePosition};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
 use crate::syntax::{
-    GoBinaryOperator, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType,
-    GoUnaryOperator,
+    GoBinaryOperator, GoBuiltin, GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement,
+    GoType, GoUnaryOperator,
 };
 use smol_str::SmolStr;
 
@@ -314,7 +314,7 @@ where
             (Monotype::Unit, Monotype::Boolean) => Ok(GoExpression::Boolean(false)),
             (Monotype::Unit, _) => {
                 let type_ = self.go_type(to)?;
-                let allocated = call(identifier_expression("new"), vec![GoExpression::Type(type_)]);
+                let allocated = builtin_call(GoBuiltin::New, vec![GoExpression::Type(type_)]);
                 Ok(GoExpression::Unary {
                     operator: GoUnaryOperator::Dereference,
                     operand: Box::new(allocated),
@@ -726,11 +726,10 @@ where
                 body.push(GoStatement::Return(Some(call(map, vec![value, convert]))));
             }
             (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
-                let absent =
-                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
+                let absent = binary(GoBinaryOperator::Equal, value.clone(), GoExpression::nil());
                 body.push(GoStatement::If {
                     condition: absent,
-                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    then: vec![GoStatement::Return(Some(GoExpression::nil()))],
                     otherwise: vec![],
                 });
                 let present = GoExpression::Unary {
@@ -748,11 +747,10 @@ where
                 body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Nullable(from_element), Monotype::Opaque) => {
-                let absent =
-                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
+                let absent = binary(GoBinaryOperator::Equal, value.clone(), GoExpression::nil());
                 body.push(GoStatement::If {
                     condition: absent,
-                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    then: vec![GoStatement::Return(Some(GoExpression::nil()))],
                     otherwise: vec![],
                 });
                 let present = GoExpression::Unary {
@@ -763,11 +761,10 @@ where
                 body.push(GoStatement::Return(Some(element)));
             }
             (Monotype::Opaque, Monotype::Nullable(to_element)) => {
-                let absent =
-                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
+                let absent = binary(GoBinaryOperator::Equal, value.clone(), GoExpression::nil());
                 body.push(GoStatement::If {
                     condition: absent,
-                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    then: vec![GoStatement::Return(Some(GoExpression::nil()))],
                     otherwise: vec![],
                 });
                 let element = self.coerce(value, from, to_element, &mut body)?;
@@ -781,8 +778,7 @@ where
                 body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Nullable(from_element), _) => {
-                let absent =
-                    binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
+                let absent = binary(GoBinaryOperator::Equal, value.clone(), GoExpression::nil());
                 let type_ = self.go_type(to)?;
                 body.push(GoStatement::If {
                     condition: absent,
@@ -901,8 +897,8 @@ where
         result_type: &GoType,
         body: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        let allocation = call(
-            identifier_expression("make"),
+        let allocation = builtin_call(
+            GoBuiltin::Make,
             vec![GoExpression::Type(result_type.clone()), length(array.clone())],
         );
         let names = vec!["converted".into()];
@@ -947,11 +943,10 @@ where
             return Ok(None);
         }
         if from_layout.boxed && to_layout.boxed {
-            let absent =
-                binary(GoBinaryOperator::Equal, value.clone(), identifier_expression("nil"));
+            let absent = binary(GoBinaryOperator::Equal, value.clone(), GoExpression::nil());
             body.push(GoStatement::If {
                 condition: absent,
-                then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                then: vec![GoStatement::Return(Some(GoExpression::nil()))],
                 otherwise: vec![],
             });
         }

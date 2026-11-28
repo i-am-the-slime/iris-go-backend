@@ -2,11 +2,11 @@ use rustc_hash::FxHashSet;
 
 use super::lengths::written_by_literals;
 use super::views::evaluated_first;
-use super::{binary, call, identifier_expression};
+use super::{binary, builtin_call, identifier_expression};
 use crate::go_traversal::{self, Walk};
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, GoType,
+    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType,
 };
 
 pub fn read_ascii_heads(
@@ -315,7 +315,7 @@ fn ascii_through(text: &str, last: i64) -> GoExpression {
         0 => byte(0),
         last => binary(GoBinaryOperator::BitwiseOr, byte(0), byte(last)),
     };
-    let length = call(identifier_expression("len"), vec![identifier_expression(text)]);
+    let length = builtin_call(GoBuiltin::Len, vec![identifier_expression(text)]);
     binary(
         GoBinaryOperator::LogicalAnd,
         binary(GoBinaryOperator::GreaterThan, length, GoExpression::Integer(last)),

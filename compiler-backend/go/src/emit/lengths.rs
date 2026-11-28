@@ -19,7 +19,7 @@ use rustc_hash::FxHashSet;
 
 use crate::naming::numbered;
 use crate::syntax::{
-    DeclarationNames, GoBinaryOperator, GoDeclaration, GoExpression, GoStatement, Name,
+    DeclarationNames, GoBinaryOperator, GoBuiltin, GoDeclaration, GoExpression, GoStatement, Name,
     statements_names,
 };
 
@@ -65,7 +65,7 @@ impl Walk for Capped {
 /// building the array.
 fn counted_code_points(value: &mut GoExpression) {
     let GoExpression::Call { function, arguments } = value else { return };
-    if !matches!(&**function, GoExpression::Identifier(name) if name == "len") {
+    if !function.is_builtin(GoBuiltin::Len) {
         return;
     }
     let [GoExpression::Call { function: converted, arguments: converted_arguments }] =

@@ -1,6 +1,6 @@
 use super::Analysis;
 use crate::emit::intervals::constraints::{Kind, State, Symbol, Typing, Value, ZERO, kind_of_type};
-use crate::syntax::{GoBinaryOperator, GoExpression, GoType, GoUnaryOperator};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoType, GoUnaryOperator};
 
 impl Analysis<'_, '_, '_> {
     pub(super) fn typing(&self, value: &GoExpression) -> Option<Typing> {
@@ -43,10 +43,10 @@ impl Analysis<'_, '_, '_> {
                 }
             }
             GoExpression::Call { function, arguments } => match &**function {
-                GoExpression::Identifier(name) if matches!(name.as_str(), "len" | "cap") => {
+                _ if function.is_one_of(&[GoBuiltin::Len, GoBuiltin::Cap]) => {
                     Some(Typing::Typed(Kind::Int))
                 }
-                GoExpression::Identifier(name) if matches!(name.as_str(), "min" | "max") => {
+                _ if function.is_one_of(&[GoBuiltin::Min, GoBuiltin::Max]) => {
                     self.typing_of_extremum(arguments)
                 }
                 GoExpression::Identifier(name) => {
@@ -169,13 +169,19 @@ impl Analysis<'_, '_, '_> {
                 }
             }
             GoExpression::Call { function, arguments } => match &**function {
-                GoExpression::Identifier(name) if name == "len" && arguments.len() == 1 => {
+                _ if function.is_builtin(GoBuiltin::Len) && arguments.len() == 1 => {
                     self.length(&arguments[0], state)
                 }
-                GoExpression::Identifier(name)
-                    if matches!(name.as_str(), "min" | "max") && !arguments.is_empty() =>
+                _ if function.is_one_of(&[GoBuiltin::Min, GoBuiltin::Max])
+                    && !arguments.is_empty() =>
                 {
-                    self.extremum(name == "min", arguments, kind?, state, blank)
+                    self.extremum(
+                        function.is_builtin(GoBuiltin::Min),
+                        arguments,
+                        kind?,
+                        state,
+                        blank,
+                    )
                 }
                 GoExpression::Qualified { package, name }
                     if package == "prim" && arguments.len() == 2 =>
@@ -416,14 +422,14 @@ impl Analysis<'_, '_, '_> {
                     self.length_of(&arguments[0], state)
                 }
                 // `append` panics rather than wrap a length.
-                GoExpression::Identifier(name) if name == "append" && !arguments.is_empty() => {
+                _ if function.is_builtin(GoBuiltin::Append) && !arguments.is_empty() => {
                     if arguments.iter().any(|argument| matches!(argument, GoExpression::Spread(_)))
                     {
                         return None;
                     }
                     self.length_of(&arguments[0], state)?.shifted(arguments.len() as i128 - 1)
                 }
-                GoExpression::Identifier(name) if name == "make" && arguments.len() >= 2 => {
+                _ if function.is_builtin(GoBuiltin::Make) && arguments.len() >= 2 => {
                     matches!(arguments[0], GoExpression::Type(GoType::Slice(_)))
                         .then(|| self.value(&arguments[1], state))
                         .flatten()

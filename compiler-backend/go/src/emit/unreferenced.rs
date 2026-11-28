@@ -10,7 +10,7 @@ use rustc_hash::FxHashSet;
 
 use super::discarded;
 use crate::go_traversal::{self, Walk, each_block_in_declaration};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoUnaryOperator};
 
 pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -166,10 +166,7 @@ fn effects(value: GoExpression, out: &mut Vec<GoStatement>) {
 }
 
 fn is_value_only_builtin(function: &GoExpression) -> bool {
-    matches!(
-        function,
-        GoExpression::Identifier(name) if matches!(name.as_str(), "append" | "len" | "make" | "new")
-    )
+    function.is_one_of(&[GoBuiltin::Append, GoBuiltin::Len, GoBuiltin::Make, GoBuiltin::New])
 }
 
 /// Whether evaluating the value has no effect and cannot panic.

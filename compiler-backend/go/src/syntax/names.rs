@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 
-use super::{GoDeclaration, GoExpression, GoStatement, GoType};
+use super::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::go_traversal::{self, Walk};
 
 /// A name as a declaration uses it: a reference to another declaration or a
@@ -286,7 +286,8 @@ impl<F: FnMut(Name<'_>)> Walk for Names<'_, F> {
             GoExpression::Address(value) => self.written(value),
             // `delete(m, k)` and `clear(m)` change the map `m` in place.
             GoExpression::Call { function, arguments }
-                if matches!(&**function, GoExpression::Identifier(builtin) if builtin == "delete" || builtin == "clear")
+                if (function.is_builtin(GoBuiltin::Delete)
+                    || function.is_builtin(GoBuiltin::Clear))
                     && !arguments.is_empty() =>
             {
                 self.expression(function);

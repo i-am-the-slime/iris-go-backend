@@ -207,7 +207,7 @@ fn definition(
         _ => false,
     };
     match value {
-        Some(GoExpression::Identifier(nil)) if nil == "nil" => {
+        Some(nil) if nil.is_nil() => {
             GoStatement::Variable { name, type_: type_.clone(), value: None }
         }
         Some(value)
@@ -738,7 +738,7 @@ fn may_name_constant(value: &GoExpression) -> bool {
 
 fn is_place(value: &GoExpression) -> bool {
     match value {
-        GoExpression::Identifier(name) => name != "nil",
+        GoExpression::Identifier(_) => !value.is_nil(),
         GoExpression::Field { value, .. } => is_place(value),
         GoExpression::Index { value, index } => {
             is_place(value)

@@ -1,7 +1,7 @@
-use super::{Emitter, binary, call, identifier_expression, negated};
+use super::{Emitter, binary, builtin_call, call, negated};
 use crate::foreign::{Comparison, GoPackage, Operator};
 use crate::numeric::fold_bitwise;
-use crate::syntax::{GoBinaryOperator, GoExpression, GoType, GoUnaryOperator};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression, GoType, GoUnaryOperator};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -86,7 +86,7 @@ where
                     None => negated(values.remove(0)),
                 },
                 Operator::BooleanNot => unary(GoUnaryOperator::Not, &mut values),
-                Operator::ArrayLength => call(identifier_expression("len"), values),
+                Operator::ArrayLength => builtin_call(GoBuiltin::Len, values),
                 Operator::IntToNumber => GoExpression::Conversion {
                     type_: GoType::Float64,
                     value: Box::new(values.remove(0)),
@@ -262,7 +262,7 @@ fn int_constant(expression: &GoExpression) -> Option<i64> {
 pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Integer(_) | GoExpression::Float(_) | GoExpression::Rune(_) => true,
-        GoExpression::Identifier(name) => name == "nil",
+        GoExpression::Identifier(_) => expression.is_nil(),
         GoExpression::Unary { operand, .. } => is_untyped_constant(operand),
         GoExpression::Binary { left, right, .. } => {
             is_untyped_constant(left) && is_untyped_constant(right)

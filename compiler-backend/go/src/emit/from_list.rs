@@ -1,11 +1,11 @@
 use smol_str::SmolStr;
 
 use super::conditions::negated;
-use super::{Emitter, call, conjunction, identifier_expression};
+use super::{Emitter, builtin_call, conjunction, identifier_expression};
 use crate::error::GoResult;
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoBuiltin, GoExpression, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -55,7 +55,7 @@ where
             values: vec![GoExpression::Composite { type_: array_type, fields: vec![] }],
         });
         let appended =
-            call(identifier_expression("append"), vec![identifier_expression(&elements), head]);
+            builtin_call(GoBuiltin::Append, vec![identifier_expression(&elements), head]);
         let body = vec![
             GoStatement::If {
                 condition: negated(&is_cons),

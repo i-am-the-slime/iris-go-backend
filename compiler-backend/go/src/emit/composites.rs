@@ -76,7 +76,7 @@ fn defined_composite(statement: &GoStatement) -> Option<(String, Vec<(String, Go
 }
 
 fn is_plain(value: &GoExpression) -> bool {
-    matches!(value, GoExpression::Identifier(name) if name != "nil")
+    matches!(value, GoExpression::Identifier(_)) && !value.is_nil()
 }
 
 fn local(value: &GoExpression, guarded: &Guarded) -> bool {

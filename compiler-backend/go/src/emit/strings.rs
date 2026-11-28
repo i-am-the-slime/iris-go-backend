@@ -7,9 +7,9 @@
 //! operand on one side, and `prim.Append` or `prim.Concat`, which join the halves, otherwise. Text leaving
 //! the program goes through `prim.ToUTF8`, which writes each lone surrogate as U+FFFD.
 
-use super::{Emitter, binary, call, identifier_expression};
+use super::{Emitter, binary, builtin_call, call};
 use crate::foreign::{GoFunction, GoPackage};
-use crate::syntax::{GoBinaryOperator, GoExpression};
+use crate::syntax::{GoBinaryOperator, GoBuiltin, GoExpression};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -50,11 +50,11 @@ where
             && byte.is_ascii()
         {
             let byte = GoExpression::Rune(char::from(*byte));
-            return call(identifier_expression("append"), vec![buffer, byte]);
+            return builtin_call(GoBuiltin::Append, vec![buffer, byte]);
         }
         if has_whole_ends(&suffix) {
             let spread = GoExpression::Spread(Box::new(suffix));
-            return call(identifier_expression("append"), vec![buffer, spread]);
+            return builtin_call(GoBuiltin::Append, vec![buffer, spread]);
         }
         let append = GoFunction { package: GoPackage::Prim, name: "AppendString" };
         call(self.go_function(append), vec![buffer, suffix])

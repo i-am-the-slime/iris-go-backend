@@ -5,7 +5,7 @@
 //! slices.Clip(accumulator)`. An empty literal has no capacity, and the clip does nothing.
 
 use crate::go_traversal::each_block_in_declaration;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType};
 
 pub(super) fn drop_clips_of_fresh_slices(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -24,7 +24,7 @@ pub(super) fn drop_clips_of_fresh_slices(declarations: &mut [GoDeclaration]) {
                     block.remove(next);
                 } else if let Some(capacity) = grown(&block[next], &name) {
                     let made = GoExpression::Call {
-                        function: Box::new(GoExpression::Identifier("make".into())),
+                        function: Box::new(GoExpression::builtin(GoBuiltin::Make)),
                         arguments: vec![
                             GoExpression::Type(type_),
                             GoExpression::Integer(0),

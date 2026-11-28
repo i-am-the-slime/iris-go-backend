@@ -3,9 +3,17 @@ use rustc_hash::FxHashSet;
 use super::aliases::is_named;
 use super::locals::NUMBERED;
 use crate::go_traversal::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, GoUnaryOperator};
 
-const BUILTINS: &[&str] = &["len", "cap", "append", "min", "max", "copy", "make"];
+const BUILTINS: &[GoBuiltin] = &[
+    GoBuiltin::Len,
+    GoBuiltin::Cap,
+    GoBuiltin::Append,
+    GoBuiltin::Min,
+    GoBuiltin::Max,
+    GoBuiltin::Copy,
+    GoBuiltin::Make,
+];
 const RUNTIME_PACKAGES: &[&str] = &["prim", "array", "math", "slices"];
 
 pub(super) fn promote_array_parameters(
@@ -260,7 +268,7 @@ impl Headers<'_> {
     fn is_safe_callee(&self, function: &GoExpression) -> bool {
         match function {
             GoExpression::Identifier(name) => {
-                BUILTINS.contains(&name.as_str()) || self.helpers.contains(name)
+                function.is_one_of(BUILTINS) || self.helpers.contains(name)
             }
             GoExpression::Qualified { package, .. } => RUNTIME_PACKAGES.contains(&package.as_str()),
             GoExpression::Instantiation { function, .. } => self.is_safe_callee(function),

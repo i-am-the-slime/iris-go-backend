@@ -17,7 +17,7 @@
 //! that every operation of the runtime keeps up to date once there is one.
 
 use crate::go_traversal::each_block_in_declaration;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, StructField};
+use crate::syntax::{GoBuiltin, GoDeclaration, GoExpression, GoStatement, GoType, StructField};
 
 pub(super) fn presize_filled_objects(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -81,16 +81,13 @@ fn pokes(statement: &GoStatement, name: &str) -> bool {
 /// The empty table with room for an entry per element of `array`.
 fn presized(values: GoType, array: String) -> GoExpression {
     let length = || GoExpression::Call {
-        function: Box::new(GoExpression::Identifier("len".into())),
+        function: Box::new(GoExpression::builtin(GoBuiltin::Len)),
         arguments: vec![GoExpression::Identifier(array.clone())],
     };
     let make = |type_: GoType, sizes: Vec<GoExpression>| {
         let mut arguments = vec![GoExpression::Type(type_)];
         arguments.extend(sizes);
-        GoExpression::Call {
-            function: Box::new(GoExpression::Identifier("make".into())),
-            arguments,
-        }
+        GoExpression::Call { function: Box::new(GoExpression::builtin(GoBuiltin::Make)), arguments }
     };
     let index = GoType::Named("map[string]int".into());
     let keys = GoType::Slice(Box::new(GoType::String));
