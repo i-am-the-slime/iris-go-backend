@@ -180,6 +180,8 @@ where a result passes 32 bits:
 | `Int.fromString "2147483648"` | `Nothing` | `Just 2147483648` |
 | `Int.fromNumber 1.0e10` | `Nothing` | `Just 10000000000` |
 | `Int.round 1.0e20`, `floor`, `ceil` | `2147483647` | `9223372036854775807`: they clamp to Go's `top` |
+| `Int.round (-2.5)` | `-2`: halves round up | `-3`: halves round away from zero, as Go's `math.Round` |
+| `Int.round infinity`, `floor`, `ceil` | `0` | `9223372036854775807`; `-infinity` gives `bottom` |
 | `Int.rem 5 0` | `NaN` | `0` |
 
 The bit operations of `Data.Int.Bits` work on all 64 bits too:
