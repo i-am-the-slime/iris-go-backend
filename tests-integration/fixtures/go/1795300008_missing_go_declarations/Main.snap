@@ -1,5 +1,5 @@
 ---
-source: tests-integration/src/fixtures.rs
+source: tests-integration/src/fixtures/go_backend.rs
 ---
 cannot specialize Main.main: foreign import Clock.elapsed has no Go implementation in Clock.go (expected func Elapsed)
 cannot specialize Main.main: foreign data type Timer.Timer has no Go representation in Timer.go (expected type TimerType)

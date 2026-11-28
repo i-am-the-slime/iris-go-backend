@@ -1,5 +1,5 @@
 ---
-source: tests-integration/src/fixtures.rs
+source: tests-integration/src/fixtures/go_backend.rs
 ---
 cannot specialize Main.main: foreign import Native.version has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
 cannot specialize Main.report: foreign import Native.label has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)

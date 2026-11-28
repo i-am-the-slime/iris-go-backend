@@ -1,5 +1,5 @@
 ---
-source: tests-integration/src/fixtures.rs
+source: tests-integration/src/fixtures/go_backend.rs
 ---
 // Control/Category/category.go
 package category

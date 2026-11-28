@@ -1,4 +1,4 @@
 ---
-source: tests-integration/src/fixtures.rs
+source: tests-integration/src/fixtures/go_backend.rs
 ---
 the Go structs Header_ffi.Header and Variable_ffi.Variable both represent records with the same fields; a record can have one Go struct
