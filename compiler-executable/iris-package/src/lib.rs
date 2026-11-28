@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
-use iris_spago::{COMPILER_VERSION, SpagoCommand, SpagoError};
+use iris_spago::{SpagoCommand, SpagoError};
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -12,6 +12,10 @@ mod workspace;
 const MAIN_SOURCE: &str = include_str!("../bundled/project/Main.purs");
 const TEST_SOURCE: &str = include_str!("../bundled/project/Test.Main.purs");
 const GITIGNORE: &str = include_str!("../bundled/project/gitignore");
+
+/// The Go package set `googoo new` starts projects on. Bump the tag in it when a release is
+/// checked against a newer set from https://github.com/rowtype-yoga/purescript-go-package-sets.
+pub const GO_PACKAGE_SET: &str = "https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json";
 
 pub struct NewConfig {
     pub name: Option<String>,
@@ -80,8 +84,6 @@ pub fn create(config: NewConfig) -> Result<CreatedPackage, PackageManagerError> 
         return Err(PackageManagerError::ExistingPaths(existing.join(", ")));
     }
 
-    let spago = SpagoCommand::new(&current_directory)?;
-    let package_set = spago.latest_package_set(COMPILER_VERSION)?;
     let manifest = format!(
         r#"package:
   name: {name}
@@ -92,17 +94,18 @@ pub fn create(config: NewConfig) -> Result<CreatedPackage, PackageManagerError> 
   test:
     main: Test.Main
     dependencies:
-      - assert
+      - go-spec
+      - spec
 workspace:
   packageSet:
-    registry: {package_set}
+    url: {GO_PACKAGE_SET}
 "#
     );
     write_file(&targets[0], &manifest)?;
     write_file(&targets[1], MAIN_SOURCE)?;
     write_file(&targets[2], TEST_SOURCE)?;
     write_file(&targets[3], GITIGNORE)?;
-    Ok(CreatedPackage { name, package_set })
+    Ok(CreatedPackage { name, package_set: GO_PACKAGE_SET.to_string() })
 }
 
 pub fn add(config: AddConfig) -> Result<(), PackageManagerError> {

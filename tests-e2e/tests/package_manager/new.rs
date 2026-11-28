@@ -6,18 +6,17 @@ use super::support::{
 };
 
 #[test]
-fn creates_a_spago_project_with_the_latest_supported_package_set() {
+fn creates_a_spago_project_on_the_go_package_set() {
     let workspace = TestWorkspace::empty();
     let output = workspace.command(&["new", "--name", "example"]);
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
     --- stdout
-    Created package `example` with package set 82.1.1.
-    Run `googoo build` to get started.
+    Created package `example` with package set https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json.
+    Run `googoo run` to get started.
     --- stderr
     ");
-    insta::assert_snapshot!(workspace.spago_calls(), @r#".: spago "registry" "package-sets" "--latest" "--json" "--quiet""#);
-    fs::remove_file(workspace.path().join("spago-calls")).unwrap();
+    insta::assert_snapshot!(workspace.spago_calls(), @"");
 
     insta::assert_snapshot!(workspace.summary(), @r#"
     --- .gitignore
@@ -33,10 +32,11 @@ fn creates_a_spago_project_with_the_latest_supported_package_set() {
       test:
         main: Test.Main
         dependencies:
-          - assert
+          - go-spec
+          - spec
     workspace:
       packageSet:
-        registry: 82.1.1
+        url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json
     --- src/Main.purs
     module Main where
 
@@ -54,12 +54,16 @@ fn creates_a_spago_project_with_the_latest_supported_package_set() {
     import Prelude
 
     import Effect (Effect)
-    import Effect.Class.Console (log)
+    import Test.Spec (describe, it)
+    import Test.Spec.Assertions (shouldEqual)
+    import Test.Spec.Reporter.Console (consoleReporter)
+    import Test.Spec.Runner.Go (runSpecAndExitProcess)
 
     main :: Effect Unit
-    main = do
-      log "🍕"
-      log "You should add some tests."
+    main = runSpecAndExitProcess [ consoleReporter ] do
+      describe "addition" do
+        it "adds" do
+          (1 + 1) `shouldEqual` 2
     "#);
 }
 
@@ -68,7 +72,12 @@ fn builds_a_new_project_with_local_spago() {
     let workspace = TestWorkspace::empty();
     let new_output = workspace.command(&["new", "--name", "example"]);
     assert_success(&new_output);
-
+    // The Go package set comes from GitHub; the registry's set keeps this test offline.
+    workspace.write(
+        "spago.yaml",
+        "package:\n  name: example\n  dependencies:\n    - console\n    - effect\n    - prelude\nworkspace:\n  packageSet:\n    registry: 82.1.1\n",
+    );
+    fs::remove_dir_all(workspace.path().join("test")).unwrap();
     install_spago_launcher(
         &workspace.path().join("node_modules/.bin"),
         Path::new(env!("CARGO_BIN_EXE_spago-e2e")),
@@ -81,7 +90,6 @@ fn builds_a_new_project_with_local_spago() {
         std::iter::once(global_directory).chain(env::split_paths(&inherited_path));
     let path = env::join_paths(search_directories).unwrap();
 
-    fs::remove_file(workspace.path().join("spago-calls")).unwrap();
     for current_directory in ["", "src"] {
         let mut command = workspace.command_builder(current_directory, &["build", "--quiet"]);
         command.env("PATH", &path).env_remove("IRIS_SPAGO");
@@ -190,8 +198,15 @@ fn discovers_windows_spago_launchers_and_preserves_explicit_overrides() {
             }
             path_directories.push(directory);
         }
-        let mut command = workspace.command_builder("", &["new", "--name", "example"]);
-        command.env("PATH", env::join_paths(&path_directories).unwrap()).env_remove("IRIS_SPAGO");
+        workspace
+            .write("spago.yaml", "workspace: {}\npackage:\n  name: example\n  dependencies: []\n");
+        workspace.write("src/Main.purs", "module Main where\nvalue = 42\n");
+        // Node.js, which the real Spago runs on, comes after the launchers under test.
+        let inherited_path = env::var_os("PATH").unwrap_or_default();
+        let search_directories =
+            path_directories.iter().cloned().chain(env::split_paths(&inherited_path));
+        let mut command = workspace.command_builder("", &["build", "--quiet"]);
+        command.env("PATH", env::join_paths(search_directories).unwrap()).env_remove("IRIS_SPAGO");
         if case.use_explicit_override {
             install_failing_spago_launcher(&workspace.path().join("node_modules/.bin"));
             command.env("IRIS_SPAGO", &explicit_executable);
@@ -203,10 +218,10 @@ fn discovers_windows_spago_launchers_and_preserves_explicit_overrides() {
             case.name,
             String::from_utf8_lossy(&output.stderr),
         );
-        assert!(workspace.read("spago.yaml").contains("registry: 82.1.1"), "{}", case.name);
+        assert!(workspace.path().join("output/Main/index.js").is_file(), "{}", case.name);
         insta::with_settings!({description => case.name}, {
             insta::allow_duplicates! {
-                insta::assert_snapshot!(workspace.spago_calls(), @r#".: spago "registry" "package-sets" "--latest" "--json" "--quiet""#);
+                insta::assert_snapshot!(workspace.spago_calls(), @r#".: spago "fetch" "-p" "example""#);
             }
         });
         for (index, directory) in path_directories.iter().enumerate() {
@@ -222,21 +237,14 @@ fn discovers_windows_spago_launchers_and_preserves_explicit_overrides() {
 }
 
 #[test]
-fn does_not_create_a_partial_project_when_package_set_discovery_fails() {
+fn creates_a_project_without_running_spago() {
     let workspace = TestWorkspace::empty();
     workspace.set_env("IRIS_E2E_SPAGO_FAIL", "registry unavailable");
 
     let output = workspace.command(&["new", "--name", "example"]);
-    insta::assert_snapshot!(workspace.report(&output), @"
-    status: 1
-    --- stdout
-    --- stderr
-    Spago registry package-sets failed with status exit code: 1
-    registry unavailable
-    ");
-    insta::assert_snapshot!(workspace.spago_calls(), @r#".: spago "registry" "package-sets" "--latest" "--json" "--quiet""#);
-    fs::remove_file(workspace.path().join("spago-calls")).unwrap();
-    insta::assert_snapshot!(workspace.summary(), @"");
+    assert_success(&output);
+    insta::assert_snapshot!(workspace.spago_calls(), @"");
+    assert!(workspace.path().join("spago.yaml").is_file());
 }
 
 #[test]

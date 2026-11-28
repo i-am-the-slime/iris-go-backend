@@ -39,9 +39,9 @@ runtime, a second run of an unchanged program skips the build.
 
 ### A project on the Go package set
 
-`googoo new` starts you on the registry's package set. The Go libraries, like Go's own maps, files
-and HTTP, are in the [Go package set](https://github.com/rowtype-yoga/purescript-go-package-sets).
-Make a project and give it this `spago.yaml`:
+`googoo new` starts you on the [Go package set](https://github.com/rowtype-yoga/purescript-go-package-sets),
+which has the Go libraries, like Go's own maps, files and HTTP. Make a project and add the
+packages this example uses to its `spago.yaml`:
 
 ```bash
 mkdir words && cd words
@@ -71,8 +71,7 @@ workspace:
     url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json
 ```
 
-The test dependencies matter: the `assert` that `googoo new` puts there isn't in the Go set, and
-Spago refuses a package that isn't in the set. Later on, `googoo add go-time` adds one more.
+`googoo add go-time` adds one more later on.
 
 `src/Words.purs` counts words in Go's built-in map:
 

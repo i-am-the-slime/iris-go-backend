@@ -44,7 +44,7 @@ pub fn run() -> i32 {
         cli::Command::New(options) => match iris_package::create(options.into_config()) {
             Ok(package) => {
                 println!(
-                    "Created package `{}` with package set {}.\nRun `googoo build` to get started.",
+                    "Created package `{}` with package set {}.\nRun `googoo run` to get started.",
                     package.name, package.package_set
                 );
                 0

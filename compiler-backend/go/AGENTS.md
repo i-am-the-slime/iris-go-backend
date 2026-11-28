@@ -140,7 +140,9 @@ Only when Mark asks.
 
 1. Tag and push iris-go (`vX.Y.Z`) if the runtime changed.
 2. Set `RUNTIME_VERSION` (`compiler-executable/iris-go/src/program.rs`) and `GO_RUNTIME_VERSION`
-   (`tests-integration/src/fixtures.rs`) to that tag; `just prepare-release 0.1.18-go.N`.
+   (`tests-integration/src/fixtures.rs`) to that tag, and `GO_PACKAGE_SET`
+   (`compiler-executable/iris-package/src/lib.rs`, what `googoo new` starts on) to the newest Go
+   package set tag; `just prepare-release 0.1.18-go.N`.
 3. Commit `Release 0.1.18-go.N against iris-go vX.Y.Z`, get Gates green, move `main` there and
    push it to `fork` (fast-forward).
 4. Tag `v0.1.18-go.N` on that commit and push the tag to `fork`; Cargo Build & Release publishes
