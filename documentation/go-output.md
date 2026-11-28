@@ -12,7 +12,7 @@ To see what the Go for your PureScript looks like, read
 ## Running a program
 
 ```bash
-googoo run --go -- first second
+googoo run -- first second
 ```
 
 That compiles your package to Go, builds it, and runs it with `first second` as its arguments. Its
@@ -25,7 +25,7 @@ gets you one.
 - **An entry that isn't an `Effect`**: an `Int`, `Number`, `Boolean`, `Char` or `String`, or an
   array of them, gets printed, arrays as `[1 2 3]`. Anything else (a record, a `Maybe`, a
   function) is computed but not printed, and `googoo go` says so.
-- **Tests**: there's no `googoo test --go` yet. `googoo run --go --main Test.Main` runs your test suite
+- **Tests**: there's no `googoo test` yet. `googoo run --main Test.Main` runs your test suite
   instead, and a failing test exits with a non-zero status.
 - **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
 - **Packages**: `-p my-app` in a workspace with several.
@@ -33,7 +33,7 @@ gets you one.
   the same Go, it starts right away without building again.
 - **Just the executable**: `googoo go` builds it and prints its path. It lives under
   `.spago/go/<package>/bin/`.
-- **Hacking on the runtime**: `IRIS_GO=~/code/iris-go googoo run --go` builds against your checkout
+- **Hacking on the runtime**: `IRIS_GO=~/code/iris-go googoo run` builds against your checkout
   of [iris-go](https://github.com/i-am-the-slime/iris-go) instead of the release.
 
 Want the Go source in a directory of your own instead? `googoo go out` writes it to `out/`. If
@@ -43,13 +43,13 @@ Want the Go source in a directory of your own instead? `googoo go out` writes it
 ### Profile-guided optimisation
 
 ```bash
-iris run --go --profile -- 4200000
+googoo run --profile -- 4200000
 ```
 
 That runs your program once while recording where it spends its time, keeps the profile in
 `.spago/go/<package>/default.pgo`, and builds it again with Go's
-[profile-guided optimisation](https://go.dev/doc/pgo). Every later `iris run --go` and `iris go`
-builds with that profile, until you record a new one. `iris go --profile -- 4200000` does the same
+[profile-guided optimisation](https://go.dev/doc/pgo). Every later `googoo run` and `googoo go`
+builds with that profile, until you record a new one. `googoo go --profile -- 4200000` does the same
 without running the program a second time, and runs it with your `run.execArgs` when nothing
 follows `--`.
 
@@ -70,7 +70,7 @@ runs often. Go's defaults favour memory over speed: `GOGC=100` collects whenever
 doubled. Setting it higher trades memory for speed:
 
 ```bash
-GOGC=400 iris run --go
+GOGC=400 googoo run
 ```
 
 On the benchmarks we measured, `GOGC=400` made allocation-heavy programs up to 30 % faster, and
@@ -93,7 +93,7 @@ main :: Effect Int
 main = exitWith (at [ 1, 2 ] 2)
 ```
 
-`googoo run --go` crashes with:
+`googoo run` crashes with:
 
 ```
 panic: runtime error: index out of range [2] with length 2 [recovered, repanicked]
@@ -108,7 +108,7 @@ main.main()
 
 When a Go build crashes, the trace names the lines of your `.purs` files, library code under
 `.spago` included, and so do `pprof` profiles and Delve's breakpoints (for Delve, `go build`
-the output of `googoo go out` yourself: `googoo run --go` builds without debug info). That's the
+the output of `googoo go out` yourself: `googoo run` builds without debug info). That's the
 `//line` comments in the generated Go. A function Iris inlines shows up as the line that calls
 it.
 
@@ -220,7 +220,7 @@ Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on am
 
 ### Sums over vectors
 
-On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `googoo run --go` sets for you, simple number
+On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `googoo run` sets for you, simple number
 crunching over `Array Number`, `Array Int` and `Array Int64` runs on SIMD vectors:
 `foldl (+) 0.0 xs`, `sum`, `foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`,
 `sum (zipWith (*) xs ys)`, clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.

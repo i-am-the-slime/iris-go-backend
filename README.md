@@ -24,20 +24,20 @@ googoo now and then runs googoo.
 ```bash
 mkdir my-app && cd my-app
 googoo new
-googoo run --go
+googoo run
 ```
 
 ```
 🍝
 ```
 
-`googoo run --go` compiles your package to Go, builds it and runs it. The second run of an
+`googoo run` compiles your package to Go, builds it and runs it. The second run of an
 unchanged program skips the build. `googoo go` builds the binary and prints where it put it.
 
-There's no `googoo test --go` yet. Run your test suite like any other program:
+There's no `googoo test` yet. Run your test suite like any other program:
 
 ```bash
-googoo run --go --main Test.Main
+googoo run --main Test.Main
 ```
 
 ## Learn more

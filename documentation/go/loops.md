@@ -280,7 +280,7 @@ func foldLanes(xs []float64, initial float64) float64 {
 `withTax` is used twice, so it's built, and each fold over it is a kernel of its own: `foldLanes`
 for the sum, shown above, and `foldLanes2` for the `max`. Next to `main.go` you get one file per
 target: `main_neon.go` for arm64, `main_vector.go` for wasm, and `main_scalar.go`, a plain loop,
-for everything else or when `GOEXPERIMENT=simd` is off. `googoo run --go` turns the experiment on
+for everything else or when `GOEXPERIMENT=simd` is off. `googoo run` turns the experiment on
 for you.
 
 Vectors are for `Number`, `Int`, `Int64` and `UInt64`. An `Array Int` runs on 64-bit integer

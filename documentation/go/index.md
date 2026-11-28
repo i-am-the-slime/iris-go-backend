@@ -26,7 +26,7 @@ googoo go --entry Main.main out
 ```
 
 That writes your program to `out/main.go`, with packages for your modules' foreign code and for the
-types several modules share. To build and run your program in one step, use `googoo run --go`.
+types several modules share. To build and run your program in one step, use `googoo run`.
 
 How a Go build behaves differently from a JavaScript one, and which programs it can't compile yet,
 is in [Go output: differences from the JavaScript backend](../go-output.md).
